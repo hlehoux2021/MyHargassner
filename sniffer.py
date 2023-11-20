@@ -11,7 +11,7 @@
 # 100.84: 100.13	51975->23	$login key 137171BD37643C72131D59797D966A730E\r\n
 # 100.13: 100.84	23->51975	zclient login (7421)\r\n$ack\r\n
 
-import socket
+import socket,select
 import time
 import logging
 import sys
@@ -24,6 +24,7 @@ SRC_IFACE= b"eth0"
 DST_IFACE= b"wlan0" # interface of destination vlan
 LOG_PATH = "/home/pi/harg/" #chemin où enregistrer les logs
 SOCKET_TIMEOUT= 0.2
+BUFF_SIZE= 1024
 
 #----------------------------------------------------------#
 
@@ -103,6 +104,61 @@ def listen_and_resend(lock, src_iface,dst_iface, mode='gateway'):
 				resend.sendto(data, (gw_addr, gw_port) )
 				logger.info('%s resent %d bytes to %s : %d', mode, len(data),  gw_addr, gw_port)
 
+
+def telnet_proxy(lock, src_iface, dst_iface, port):
+	global gw_addr
+	global gwt_port
+	global bl_addr
+
+	logger.debug('telnet started: %s , %s', src_iface, dst_iface)
+	listen= socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+	listen.setsockopt(socket.SOL_SOCKET, socket.SO_BINDTODEVICE, src_iface)
+	listen.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+	listen.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+
+	logger.debug('telnet binding to port %s', port)
+	listen.bind( ('', port) )
+
+	logger.debug('telnet listenning')
+	listen.listen(4)
+
+	logger.debug('telnet accepting a connection')
+	telnet, addr = listen.accept()
+	logger.debug('telnet connection from %s:%d accepted', addr[0], addr[1])
+	if addr[0] !=  gw_addr:
+		logger.error('%s connected to telnet whereas should be the gateway on %s', addr[0], gw_addr)
+	lock.acquire()
+	gwt_port= addr[1] # remember source_port
+	lock.release()
+
+	#we will now create the socket to resend the telnet request
+	resend= socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+	resend.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+	resend.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+	resend.settimeout(SOCKET_TIMEOUT)
+
+	logger.info('connecting to %s:%d', bl_addr.decode(), port) 
+	resend.connect( (bl_addr,port) )
+
+	socket_list= [telnet, resend]
+	while True:
+		read_sockets, write_sockets, error_sockets = select.select(socket_list , [], [])
+		for sock in read_sockets:
+			if sock==telnet:
+				#so we received a request
+				data, addr = telnet.recvfrom(BUFF_SIZE)
+				logger.info('telnet received  request %d bytes from  %s:%d ==>%s', len(data), addr[0], addr[1], data.decode() )
+				#we should resend it
+				logger.info('resending %d bytes to %s:%d', len(data), bl_addr.decode(), port)
+				resend.send(data)
+			if sock==resend:
+				#so we received a reply
+				data, addr = resend.recvfrom(BUFF_SIZE)
+				logger.info('telnet received response %d bytes from  %s:%d ==>%s', len(data), addr[0], addr[1], data.decode() )
+
+				logger.debug('sending %d bytes to %s:%d', len(data), gw_addr.decode(), gwt_port )
+				telnet.send(data)
+				logger.info('telnet sent back response to client')
 
 logger.info('starting')
 
