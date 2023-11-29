@@ -84,7 +84,7 @@ def listen_and_resend(lock, src_iface,dst_iface, src_port, mode='gateway'):
 			# first time we receive a packet, bind from the source port
 			lock.acquire()
 			if mode=='gateway':
-				logger.info('%s discovered  %s:%d',mode,gw_addr,gw_port)
+				logger.info('discovered  %s:%d',addr[0],addr[1])
 				gw_port= addr[1]
 				gw_addr= addr[0]
 			else:

@@ -64,7 +64,7 @@ class ListenerSender(Thread):
             self.handleFirstPacket(data, addr)
             self.reSend(data)
 
-   def run(self):
+    def run(self):
         # Add your thread logic here
         pass
 
@@ -97,7 +97,7 @@ class GatewayListenerSender(ListenerSender):
             self.resend.sendto(data, ('<broadcast>', self.udp_port) )
         logger.info('resent %d bytes to %s : %d', len(data), self.dst_iface.decode(), self.udp_port)
 
-     def run(self):
+    def run(self):
         logger.info('GatewayListenerSender started')
         self.listen.bind( ('',self.udp_port) )
         logger.debug('listener bound to %s, port %d', self.src_iface.decode(), self.udp_port)
@@ -117,19 +117,15 @@ class BoilerListenerSender(ListenerSender):
             logger.info('discovered %s:%d', addr[0], addr[1])
             self.bl_addr = addr[0]
             self.bl_port = addr[1]
-            #self.sq.put('BL_ADDR:'+self.bl_addr)
-            #self.sq.put('BL_PORT:'+str(self.bl_port))
+            self.sq.put('BL_ADDR:'+self.bl_addr)
+            self.sq.put('BL_PORT:'+str(self.bl_port))
             self.resend.bind(('', self.bl_port))
             logger.debug('sender bound to port: %d', self.bl_port)
             self.bound = True
 
     def reSend(self, data):
         logger.debug('resending %d bytes to %s : %d', len(data), self.gw_addr.decode(), self.gw_port)
-        if platform.system() == 'Darwin':
-            # on Darwin, for simulation, we send to port+1
-            self.resend.sendto(data, (self.gw_addr, self.gw_port + 1))
-        else:
-            self.resend.sendto(data, (self.gw_addr, self.gw_port))
+        self.resend.sendto(data, (self.gw_addr, self.gw_port))
         logger.info('resent %d bytes to %s : %d', len(data), self.gw_addr.decode(), self.gw_port)
 
     def run(self):

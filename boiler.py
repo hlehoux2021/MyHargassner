@@ -57,10 +57,7 @@ while True:
 		bound = True
 
 	if bound == True:
-		if platform.system() == 'Linux':
-			resend.sendto(data, (dst_addr, dst_port) )
-		else:
-			resend.sendto(data, (dst_addr, dst_port+1) )
+		resend.sendto(data, (dst_addr, dst_port) )
 		logger.info('resent %d bytes to %s : %d', len(data),  dst_addr, dst_port)
 		#temporarily use broadcast
 		#resend.sendto(data, ('<broadcast>', dst_port) )
