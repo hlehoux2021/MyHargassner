@@ -4,6 +4,8 @@
 from threading import Thread
 import time, logging, queue, socket, select
 import platform
+import argparse
+
 
 #----------------------------------------------------------#
 LOG_PATH = "./" #chemin où enregistrer les logs
@@ -19,13 +21,134 @@ logger.addHandler(handler_debug)
 
 #----------------------------------------------------------#
 SOCKET_TIMEOUT= 0.2
+BUFF_SIZE= 1024
 
+src_iface = b'en0' # network interface connected to the gateway
+dst_iface = b'lo0' # network interface connected to the boiler
+udp_port = 35601 # destination port to which gateway is broadcasting
+
+def parse_command_line():
+    parser = argparse.ArgumentParser(description='Command line parser')
+    parser.add_argument('-s', '--src_iface', type=str, help='Source interface')
+    parser.add_argument('-d', '--dst_iface', type=str, help='Destination interface')
+    parser.add_argument('-p', '--port', type=int, help='Source port')
+
+    args = parser.parse_args()
+    return args
+
+# Utilisation du parseur de ligne de commande
+command_line_args = parse_command_line()
+
+if command_line_args.src_iface is not None:
+    src_iface = command_line_args.src_iface
+
+if command_line_args.dst_iface is not None:
+    dst_iface = command_line_args.dst_iface
+
+if command_line_args.port is not None:
+    udp_port = command_line_args.port
+
+print('command_line_args.src_iface = ', command_line_args.src_iface)
+print('src_iface = ', src_iface)
 #----------------------------------------------------------#
 
-class ListenerSender(Thread):
-    def __init__(self, sq: queue.Queue, src_iface: bytes,dst_iface: bytes, logger: logging.Logger):
+class QueueReceiver(queue.Queue):
+    def __init__(self):
         super().__init__()
-        self.logger = logger
+        self.gw_port = 0    # source port from which gateway is sending
+        self.gw_addr= b''   # to save the gateway ip adress when discovered
+        self.bl_addr= b''   # to save the boiler ip address when discovered
+        self.bl_port= 0     # destination port to which boiler is listening
+
+    def handleReceiveQueue(self):
+        try:
+            msg = self.get(block=True, timeout=10)
+            logger.debug('handleReceiveQueue: received %s', msg)
+            if msg.startswith('GW_ADDR:'):
+                self.gw_addr = msg.split(':')[1]
+                logger.debug('handleReceiveQueue: gw_addr=%s', self.gw_addr)
+            elif msg.startswith('GW_PORT:'):
+                self.gw_port = int(msg.split(':')[1])
+                logger.debug('handleReceiveQueue: gw_port=%d', self.gw_port)
+            elif msg.startswith('BL_ADDR:'):
+                self.bl_addr = msg.split(':')[1]
+                logger.debug('handleReceiveQueue: bl_addr=%s', self.bl_addr)
+            elif msg.startswith('BL_PORT:'):
+                self.bl_port = int(msg.split(':')[1])
+                logger.debug('handleReceiveQueue: bl_port=%d', self.bl_port)
+            else:
+                logger.debug('handleReceiveQueue: unknown message %s', msg)
+        except queue.Empty:
+            logger.debug('handleReceiveQueue: no message received')
+
+class TelnetProxy(Thread, QueueReceiver):
+    def __init__(self, src_iface, dst_iface, port):
+        super().__init__()
+        self.src_iface = src_iface
+        self.dst_iface = dst_iface
+        self.port = port
+        self.listen = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        if platform.system() == 'Linux':
+            self.listen.setsockopt(socket.SOL_SOCKET, socket.SO_BINDTODEVICE, self.src_iface)
+        self.listen.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+        self.listen.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+
+    def run(self):
+        logger.info('telnet proxy started: %s , %s', self.src_iface, self.dst_iface)
+
+        logger.debug('telnet binding to port %s', self.port)
+        self.listen.bind(('', self.port))
+
+        logger.debug('telnet listening')
+        self.listen.listen()
+
+        logger.debug('telnet accepting a connection')
+        self.telnet, self.addr = self.listen.accept()
+        logger.info('telnet connection from %s:%d accepted', self.addr[0], self.addr[1])
+
+        # remember the source port from which gateway is telneting
+        self.gwt_port = self.addr[1]
+ 
+        # we will now create the socket to resend the telnet request
+        self.resend = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.resend.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+        self.resend.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.resend.settimeout(SOCKET_TIMEOUT)
+
+        # wait for the boiler address and port to be discovered
+        while (self.bl_port == 0) or (self.bl_addr == b''):
+                logger.debug('waiting for the discovery of the boiler address and port')  
+                self.handleReceiveQueue()
+
+        # boiler is listening on port 23
+        logger.info('telnet connecting to %s on port 23 :%d', self.bl_addr.decode())
+        self.resend.connect( (self.bl_addr, 23) )
+
+        self.socket_list = [self.telnet, self.resend]
+        while True:
+            logger.debug('telnet waiting data')
+            self.read_sockets, self.write_sockets, self.error_sockets = select.select(self.socket_list, [], [])
+            for self.sock in self.read_sockets:
+                if self.sock == self.telnet:
+                    # so we received a request
+                    self.data, self.addr = self.telnet.recvfrom(BUFF_SIZE)
+                    logger.info('telnet received  request %d bytes from  %s:%d ==>%s', len(self.data), self.addr[0], self.addr[1], self.data.decode())
+                    # we should resend it
+                    logger.info('resending %d bytes to %s:%d', len(self.data), self.bl_addr.decode(), self.port)
+                    self.resend.send(self.data)
+                if self.sock == self.resend:
+                    # so we received a reply
+                    self.data, self.addr = self.resend.recvfrom(BUFF_SIZE)
+                    logger.info('telnet received response %d bytes from  %s:%d ==>%s', len(self.data), self.addr[0], self.addr[1], self.data.decode())
+
+                    logger.debug('sending %d bytes to %s:%d', len(self.data), self.gw_addr.decode(), self.gwt_port)
+                    self.telnet.send(self.data)
+                    logger.info('telnet sent back response to client')
+
+
+class ListenerSender(Thread):
+    def __init__(self, sq: queue.Queue, src_iface: bytes,dst_iface: bytes):
+        super().__init__()
         self.sq = sq        # the queue to send what i discover about the network
         self.gw_port = 0    # source port from which gateway is sending
         self.gw_addr= b''   # to save the gateway ip adress when discovered
@@ -69,8 +192,8 @@ class ListenerSender(Thread):
         pass
 
 class GatewayListenerSender(ListenerSender):
-    def __init__(self, sq: queue.Queue, src_iface: bytes,dst_iface: bytes, udp_port: int, logger: logging.Logger):
-        super().__init__(sq, src_iface, dst_iface, logger)
+    def __init__(self, sq: queue.Queue, src_iface: bytes,dst_iface: bytes, udp_port: int):
+        super().__init__(sq, src_iface, dst_iface)
         # Add any additional initialization logic here
         self.udp_port = udp_port    # destination port to which gateway is broadcasting
 
@@ -104,9 +227,9 @@ class GatewayListenerSender(ListenerSender):
 
         self.loop()
 
-class BoilerListenerSender(ListenerSender):
-    def __init__(self, sq: queue.Queue, src_iface: bytes,dst_iface: bytes, logger: logging.Logger):
-        super().__init__(sq, src_iface, dst_iface, logger)
+class BoilerListenerSender(ListenerSender, QueueReceiver):
+    def __init__(self, sq: queue.Queue, src_iface: bytes,dst_iface: bytes):
+        super().__init__(sq, src_iface, dst_iface)
         # Add any additional initialization logic here
         self.rq = queue.Queue()
 
@@ -163,9 +286,12 @@ class BoilerListenerSender(ListenerSender):
             logger.debug('BoilerListenerSender: no message received')
             pass
 #----------------------------------------------------------#
-sq= queue.Queue()
-bls= BoilerListenerSender(sq, b'en0', b'lo0', logger)
-gls= GatewayListenerSender(bls.getReceiveQueue(), b'lo0', b'en0', 35601, logger)
+#sq= queue.Queue()
+tln= TelnetProxy(src_iface, dst_iface, 23)
+bls= BoilerListenerSender(tln, b'en0', b'lo0')
+gls= GatewayListenerSender(bls.getReceiveQueue(), b'lo0', b'en0', udp_port)
+
+tln.start()
 bls.start()
 gls.start()
 
