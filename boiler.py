@@ -3,6 +3,7 @@
 import socket
 import time
 import logging
+import platform
 
 src_iface=b'wlan0'
 dst_iface=b'wlan0'
@@ -10,7 +11,7 @@ UDP_PORT= 35601
 dst_port=0
 dst_addr=b''
 
-LOG_PATH = "/home/pi/harg/" #chemin où enregistrer les logs
+LOG_PATH = "./" #chemin où enregistrer les logs
 SOCKET_TIMEOUT= 0.2
 
 #----------------------------------------------------------#
@@ -30,13 +31,18 @@ logger.addHandler(handler_debug)
 listen= socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)  # UDP
 listen.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
 listen.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-listen.setsockopt(socket.SOL_SOCKET, socket.SO_BINDTODEVICE, src_iface)
-listen.bind( ('',UDP_PORT) )
+if platform.system() == 'Linux':
+	listen.setsockopt(socket.SOL_SOCKET, socket.SO_BINDTODEVICE, src_iface)
+	listen.bind( ('',UDP_PORT) )
+else:
+	#on Darwin, for simulation
+	listen.bind( ('',UDP_PORT+1) )
 
 resend= socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
 resend.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
 resend.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-resend.setsockopt(socket.SOL_SOCKET, socket.SO_BINDTODEVICE, dst_iface)
+if platform.system() == 'Linux':
+	resend.setsockopt(socket.SOL_SOCKET, socket.SO_BINDTODEVICE, dst_iface)
 resend.settimeout(SOCKET_TIMEOUT)
 
 bound= False
@@ -51,8 +57,11 @@ while True:
 		bound = True
 
 	if bound == True:
-		#resend.sendto(data, (dst_addr, dst_port) )
-		#logger.info('resent %d bytes to %s : %d', len(data),  dst_addr, dst_port)
+		if platform.system() == 'Linux':
+			resend.sendto(data, (dst_addr, dst_port) )
+		else:
+			resend.sendto(data, (dst_addr, dst_port+1) )
+		logger.info('resent %d bytes to %s : %d', len(data),  dst_addr, dst_port)
 		#temporarily use broadcast
-		resend.sendto(data, ('<broadcast>', dst_port) )
-		logger.info('resent %d bytes to <broadcast> : %d', len(data), dst_port)
+		#resend.sendto(data, ('<broadcast>', dst_port) )
+		#logger.info('resent %d bytes to <broadcast> : %d', len(data), dst_port)
