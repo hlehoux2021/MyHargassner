@@ -147,6 +147,10 @@ class TelnetProxy(Thread, QueueReceiver):
 class ListenerSender(Thread, QueueReceiver):
     def __init__(self, sq: queue.Queue, src_iface: bytes,dst_iface: bytes):
         super().__init__()
+        #super(Thread, self).__init__()
+        #Thread().__init__(self)
+        #super(QueueReceiver,self).__init__()
+        QueueReceiver.__init__(self)
         self.sq = sq        # the queue to send what i discover about the network
 #        self.gw_port = 0    # source port from which gateway is sending
 #        self.gw_addr= b''   # to save the gateway ip adress when discovered
@@ -204,7 +208,10 @@ class GatewayListenerSender(ListenerSender):
             self.gw_addr = addr[0]
             self.sq.put('GW_ADDR:'+self.gw_addr)
             self.sq.put('GW_PORT:'+str(self.gw_port))
-            self.resend.bind(('', self.gw_port))
+            if platform.system() == 'Darwin':
+                self.resend.bind(('', self.gw_port+1))
+            else:
+                self.resend.bind(('', self.gw_port))
             logger.debug('sender bound to port: %d', self.gw_port)
             self.bound = True
 
@@ -233,9 +240,9 @@ class BoilerListenerSender(ListenerSender):
 
     def handleFirstPacket(self, data, addr):
         if self.bound == False: 
-            logger.debug('first packet, listener not bound yet') 
+            logger.debug('BoilerListenerSender first packet, listener not bound yet') 
             # first time we receive a packet, bind from the source port
-            logger.info('discovered %s:%d', addr[0], addr[1])
+            logger.info('BoilerListenerSender discovered %s:%d', addr[0], addr[1])
             self.bl_addr = addr[0]
             self.bl_port = addr[1]
             self.sq.put('BL_ADDR:'+self.bl_addr)
@@ -267,6 +274,18 @@ q= QueueReceiver()
 q.handleReceiveQueue()
 gls= GatewayListenerSender(bls, b'lo0', b'en0', udp_port)
 
+class Master(Thread):
+    def __init__(self, value):
+        super(Master, self).__init__()
+        self.value = value
+
+    def run(self):
+        while True:
+            print('Master:' + self.value)
+            time.sleep(1)
+
+#m=Master('test')
+#m.start()
 tln.start()
 bls.start()
 gls.start()
