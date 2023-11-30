@@ -269,23 +269,8 @@ class BoilerListenerSender(ListenerSender):
 #----------------------------------------------------------#
 tln= TelnetProxy(src_iface, dst_iface, 23)
 bls= BoilerListenerSender(tln, b'en0', b'lo0')
-
-q= QueueReceiver()
-q.handleReceiveQueue()
 gls= GatewayListenerSender(bls, b'lo0', b'en0', udp_port)
 
-class Master(Thread):
-    def __init__(self, value):
-        super(Master, self).__init__()
-        self.value = value
-
-    def run(self):
-        while True:
-            print('Master:' + self.value)
-            time.sleep(1)
-
-#m=Master('test')
-#m.start()
 tln.start()
 bls.start()
 gls.start()
