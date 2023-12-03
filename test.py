@@ -10,7 +10,7 @@ import argparse
 #----------------------------------------------------------#
 LOG_PATH = "./" #chemin où enregistrer les logs
 
-formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(threadName)s - %(message)s')
 logger = logging.getLogger('log')
 logger.setLevel(logging.DEBUG) # choisir le niveau de log : DEBUG, INFO, ERROR...
 
@@ -23,8 +23,8 @@ logger.addHandler(handler_debug)
 SOCKET_TIMEOUT= 0.2
 BUFF_SIZE= 1024
 
-src_iface = b'en0' # network interface connected to the gateway
-dst_iface = b'lo0' # network interface connected to the boiler
+src_iface = b'eth0' # network interface connected to the gateway
+dst_iface = b'eth1' # network interface connected to the boiler
 udp_port = 35601 # destination port to which gateway is broadcasting
 
 def parse_command_line():
@@ -63,13 +63,13 @@ class QueueReceiver(queue.Queue):
             msg = self.get(block=True, timeout=10)
             logger.debug('handleReceiveQueue: received %s', msg)
             if msg.startswith('GW_ADDR:'):
-                self.gw_addr = msg.split(':')[1]
+                self.gw_addr = bytes(msg.split(':')[1],'ascii')
                 logger.debug('handleReceiveQueue: gw_addr=%s', self.gw_addr)
             elif msg.startswith('GW_PORT:'):
                 self.gw_port = int(msg.split(':')[1])
                 logger.debug('handleReceiveQueue: gw_port=%d', self.gw_port)
             elif msg.startswith('BL_ADDR:'):
-                self.bl_addr = msg.split(':')[1]
+                self.bl_addr = bytes(msg.split(':')[1],'ascii')
                 logger.debug('handleReceiveQueue: bl_addr=%s', self.bl_addr)
             elif msg.startswith('BL_PORT:'):
                 self.bl_port = int(msg.split(':')[1])
@@ -82,6 +82,8 @@ class QueueReceiver(queue.Queue):
 class TelnetProxy(Thread, QueueReceiver):
     def __init__(self, src_iface, dst_iface, port):
         super().__init__()
+        QueueReceiver.__init__(self)
+
         self.src_iface = src_iface
         self.dst_iface = dst_iface
         self.port = port
@@ -119,7 +121,7 @@ class TelnetProxy(Thread, QueueReceiver):
                 self.handleReceiveQueue()
 
         # boiler is listening on port 23
-        logger.info('telnet connecting to %s on port 23 :%d', self.bl_addr.decode())
+        logger.info('telnet connecting to %s on port 23', self.bl_addr.decode())
         self.resend.connect( (self.bl_addr, 23) )
 
         self.socket_list = [self.telnet, self.resend]
@@ -130,14 +132,19 @@ class TelnetProxy(Thread, QueueReceiver):
                 if self.sock == self.telnet:
                     # so we received a request
                     self.data, self.addr = self.telnet.recvfrom(BUFF_SIZE)
-                    logger.info('telnet received  request %d bytes from  %s:%d ==>%s', len(self.data), self.addr[0], self.addr[1], self.data.decode())
+                    logger.info('telnet received  request %d bytes', len(self.data))
+                    #logger.info('telnet received  request %s', self.addr[0])
+                    #logger.info('telnet received  request %d', self.addr[1])
+                    #logger.debug(......., self.data.decode())
                     # we should resend it
                     logger.info('resending %d bytes to %s:%d', len(self.data), self.bl_addr.decode(), self.port)
                     self.resend.send(self.data)
                 if self.sock == self.resend:
                     # so we received a reply
                     self.data, self.addr = self.resend.recvfrom(BUFF_SIZE)
-                    logger.info('telnet received response %d bytes from  %s:%d ==>%s', len(self.data), self.addr[0], self.addr[1], self.data.decode())
+                    logger.info('telnet received response %d bytes',len(self.data))
+                    # from  %s:%d', len(self.data), self.addr[0], self.addr[1])
+                    #logger.debug(....., self.data.decode())
 
                     logger.debug('sending %d bytes to %s:%d', len(self.data), self.gw_addr.decode(), self.gwt_port)
                     self.telnet.send(self.data)
@@ -268,8 +275,8 @@ class BoilerListenerSender(ListenerSender):
 
 #----------------------------------------------------------#
 tln= TelnetProxy(src_iface, dst_iface, 23)
-bls= BoilerListenerSender(tln, b'en0', b'lo0')
-gls= GatewayListenerSender(bls, b'lo0', b'en0', udp_port)
+bls= BoilerListenerSender(tln, dst_iface, src_iface)
+gls= GatewayListenerSender(bls, src_iface, dst_iface, udp_port)
 
 tln.start()
 bls.start()
