@@ -11,7 +11,7 @@ import QueueReceiver
 #----------------------------------------------------------#
 LOG_PATH = "./" #chemin où enregistrer les logs
 
-logging.basicConfig(filename='trace2.log', level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(threadName)s - %(message)s',mode='a')
+logging.basicConfig(filename='trace2.log', level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(threadName)s - %(message)s', filemode='a')
 logging.info('Started')
 
 

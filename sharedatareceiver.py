@@ -1,23 +1,34 @@
 import queue, logging
-from pydantic import BaseModel, PositiveInt
 from typing import Annotated
 import annotated_types
+from time import sleep
 
 
-
-class QueueReceiver(BaseModel):
-    gw_port: PositiveInt
+class SharedData():
+    gw_port: Annotated[int, annotated_types.Gt(0)]
     bl_port: Annotated[int, annotated_types.Gt(0)]
     gw_addr: Annotated[bytes, annotated_types.MaxLen(15)]
     bl_addr: Annotated[bytes, annotated_types.MaxLen(15)]
-    rq: queue.Queue
 
     def __init__(self):
-        super().__init__()
         self.gw_port = 0    # source port from which gateway is sending
         self.gw_addr= b''   # to save the gateway ip adress when discovered
         self.bl_addr= b''   # to save the boiler ip address when discovered
         self.bl_port= 0     # destination port to which boiler is listening
+
+class SharedDataReceiver(SharedData):
+#    gw_port: Annotated[int, annotated_types.Gt(0)]
+#    bl_port: Annotated[int, annotated_types.Gt(0)]
+#    gw_addr: Annotated[bytes, annotated_types.MaxLen(15)]
+#    bl_addr: Annotated[bytes, annotated_types.MaxLen(15)]
+    rq: queue.Queue
+
+    def __init__(self):
+        super().__init__()
+#        self.gw_port = 0    # source port from which gateway is sending
+#        self.gw_addr= b''   # to save the gateway ip adress when discovered
+#        self.bl_addr= b''   # to save the boiler ip address when discovered
+#        self.bl_port= 0     # destination port to which boiler is listening
         self.rq = queue.Queue()
 
     def handleReceiveQueue(self):
@@ -40,3 +51,23 @@ class QueueReceiver(BaseModel):
                 logging.debug('handleReceiveQueue: unknown message %s', msg)
         except queue.Empty:
             logging.debug('handleReceiveQueue: no message received')
+
+
+#from threading import Thread
+#
+#class Test(Thread, SharedDataReceiver):
+#    def __init__(self):
+#        super().__init__()
+#        self.rq = queue.Queue()
+#
+#    def run(self):
+#        while True:
+#            self.handleReceiveQueue()
+#            sleep(1)
+#----------------------------------------------------------#
+#logging.basicConfig(filename='trace2.log', level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(threadName)s - %(message)s', filemode='a')
+#logging.info('Started')
+#
+# q= SharedDataReceiver()
+
+#t=Test()
