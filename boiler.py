@@ -1,64 +1,75 @@
-#!/usr/bin/env python3
+"""
+This module implements the boiler proxy
+"""
 
-import socket
-import time
 import logging
+import queue
 import platform
+from threading import Thread
 
-src_iface=b'wlan0'
-dst_iface=b'wlan0'
-UDP_PORT= 35601
-dst_port=0
-dst_addr=b''
+from shared import ListenerSender
 
-LOG_PATH = "./" #chemin où enregistrer les logs
-SOCKET_TIMEOUT= 0.2
+class BoilerListenerSender(ListenerSender):
+    """
+    This class implements the boiler proxy
+    """
+    def __init__(self, sq: queue.Queue, src_iface: bytes,dst_iface: bytes):
+        super().__init__(sq, src_iface, dst_iface)
+        # Add any additional initialization logic here
+        self.rq = queue.Queue()
 
-#----------------------------------------------------------#
-#        definition des logs                               #
-#----------------------------------------------------------#
-formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger('log')
-logger.setLevel(logging.DEBUG) # choisir le niveau de log : DEBUG, INFO, ERROR...
+    def handle_first(self, data, addr):
+        if self.bound is False:
+            logging.debug('BoilerListenerSender first packet, listener not bound yet')
+            # first time we receive a packet, bind from the source port
+            logging.info('BoilerListenerSender discovered %s:%d', addr[0], addr[1])
+            self.bl_addr = addr[0]
+            self.bl_port = addr[1]
+            self.sq.put('BL_ADDR:'+self.bl_addr)
+            self.sq.put('BL_PORT:'+str(self.bl_port))
+            self.resend.bind(('', self.bl_port))
+            logging.debug('sender bound to port: %d', self.bl_port)
+            self.bound = True
 
-handler_debug = logging.FileHandler(LOG_PATH + "boiler.log", mode="a", encoding="utf-8")
-handler_debug.setFormatter(formatter)
-handler_debug.setLevel(logging.DEBUG)
-logger.addHandler(handler_debug)
+    def send(self, data):
+        logging.debug('resending %d bytes to %s : %d',
+                      len(data), self.gw_addr.decode(), self.gw_port)
+        self.resend.sendto(data, (self.gw_addr, self.gw_port))
+        logging.info('resent %d bytes to %s : %d',
+                     len(data), self.gw_addr.decode(), self.gw_port)
 
-#----------------------------------------------------------#
+    def discover(self):
+        """ This method discovers the gateway ip address and port. ip address and port."""
+        while self.gw_port == 0:
+            self.handle()
 
-listen= socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)  # UDP
-listen.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
-listen.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-if platform.system() == 'Linux':
-	listen.setsockopt(socket.SOL_SOCKET, socket.SO_BINDTODEVICE, src_iface)
-	listen.bind( ('',UDP_PORT) )
-else:
-	#on Darwin, for simulation
-	listen.bind( ('',UDP_PORT+1) )
+    def bind(self):
+        """ This method binds the listener mimicking the gateway."""
+        if platform.system() == 'Darwin':
+            self.listen.bind( ('',self.gw_port+1) )
+            logging.debug('listener bound to %s, port %d', self.src_iface.decode(), self.gw_port+1)
+        else:
+            self.listen.bind( ('',self.gw_port) )
+            logging.debug('listener bound to %s, port %d', self.src_iface.decode(), self.gw_port)
 
-resend= socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
-resend.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
-resend.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-if platform.system() == 'Linux':
-	resend.setsockopt(socket.SOL_SOCKET, socket.SO_BINDTODEVICE, dst_iface)
-resend.settimeout(SOCKET_TIMEOUT)
+class ThreadedBoilerListenerSender(Thread):
+    """
+    This class implements a Thread to run the boiler proxy
+    """
+    bls: BoilerListenerSender
 
-bound= False
-while True:
-	data, addr = listen.recvfrom(1024)
-	logger.debug('received buffer of %d bytes from %s : %d ==>%s', len(data), addr[0], addr[1], data.decode())
-	dst_port= addr[1]
-	dst_addr= addr[0]
-	if bound == False:
-		resend.bind( ('',dst_port) );
-		logger.debug('sender bound to %s :  %d', dst_iface.decode(), dst_port)
-		bound = True
+    def __init__(self, sq: queue.Queue, src_iface: bytes,dst_iface: bytes):
+        super().__init__()
+        self.bls= BoilerListenerSender(sq, src_iface, dst_iface)
 
-	if bound == True:
-		resend.sendto(data, (dst_addr, dst_port) )
-		logger.info('resent %d bytes to %s : %d', len(data),  dst_addr, dst_port)
-		#temporarily use broadcast
-		#resend.sendto(data, ('<broadcast>', dst_port) )
-		#logger.info('resent %d bytes to <broadcast> : %d', len(data), dst_port)
+    def queue(self) -> queue.Queue:
+        """
+        This method returns the queue to receive data from.
+        """
+        return self.bls.queue()
+
+    def run(self):
+        logging.info('BoilerListenerSender started')
+        self.bls.discover()
+        self.bls.bind()
+        self.bls.loop()

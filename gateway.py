@@ -1,34 +1,113 @@
-#!/usr/bin/env python3
+"""
+This module implements the gateway 
+"""
+import logging
+import platform
+from queue import Queue
 
-import socket
-import time
+from threading import Thread
+from typing import Annotated
+import annotated_types
 
-server = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+from shared import ListenerSender
 
-# Enable port reusage so we will be able to run multiple clients and servers on single (host, port).
-# Do not use socket.SO_REUSEADDR except you using linux(kernel<3.9): goto https://stackoverflow.com/questions/14388706/how-do-so-reuseaddr-and-so-reuseport-differ for more information.
-# For linux hosts all sockets that want to share the same address and port combination must belong to processes that share the same effective user ID!
-# So, on linux(kernel>=3.9) you have to run multiple servers and clients under one user to share the same (host, port).
-# Thanks to @stevenreddie
-server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+class GatewayListenerSender(ListenerSender):
+    """
+    This class extends ListenerSender class to implement the gateway.
+    """
+    udp_port: Annotated[int, annotated_types.Gt(0)]
+    _mq: Queue
 
-# Enable broadcasting mode
-server.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+    def __init__(self, mq: Queue, sq: Queue, src_iface: bytes,dst_iface: bytes, udp_port: int):
+        super().__init__(sq, src_iface, dst_iface)
+        # Add any additional initialization logic here
+        self.udp_port = udp_port    # destination port to which gateway is broadcasting
+        self._mq = mq
+    def handle_first(self, data, addr):
+        """
+        This method handles the discovery of caller's ip address and port.
+        """
+        if self.bound is False:
+            logging.debug('first packet, listener not bound yet')
+            # first time we receive a packet, bind from the source port
+            logging.info('discovered %s:%d', addr[0], addr[1])
+            self.gw_port = addr[1]
+            self.gw_addr = addr[0]
+            self.sq.put('GW_ADDR:'+self.gw_addr)
+            self.sq.put('GW_PORT:'+str(self.gw_port))
+            if platform.system() == 'Darwin':
+                self.resend.bind(('', self.gw_port+1))
+            else:
+                self.resend.bind(('', self.gw_port))
+            logging.debug('sender bound to port: %d', self.gw_port)
+            self.bound = True
 
-# Set a timeout so the socket does not block
-# indefinitely when trying to receive data.
-server.settimeout(0.2)
-server.bind( ('',50000) )
-message1 = b"HargaWebApp v6.4.1\r\nSN:0039808"
-message2 = b"get services"
+    def queue(self) -> Queue:
+        """
+        This method returns the queue to receive data from.
+        """
+        return self.queue()
 
-while True:
-	print("sending:", message1.decode() )
-	server.sendto(message1, ('<broadcast>', 35601))
-	print("message sent!", flush=True)
-	time.sleep(5)
+    def send(self, data):
+        """
+        This method sends received data to the boiler.
+        """
+		#to act as the gateway, we rebroadcast the udp frame
+        logging.debug('resending %d bytes to %s : %d',
+                      len(data), self.dst_iface.decode(), self.udp_port)
+        if platform.system() == 'Darwin':
+            #on Darwin, for simulation, we send to port+1
+            self.resend.sendto(data, ('<broadcast>', self.udp_port+1) )
+        else:
+            self.resend.sendto(data, ('<broadcast>', self.udp_port) )
+        logging.info('resent %d bytes to %s : %d',
+                     len(data), self.dst_iface.decode(), self.udp_port)
 
-	print("sending:", message2.decode() )
-	server.sendto(message2, ('<broadcast>', 35601))
+    def bind(self):
+        """ This method binds the listener mimicking the gateway."""
+        self.listen.bind( ('',self.udp_port) )
+        logging.debug('listener bound to %s, port %d', self.src_iface.decode(), self.udp_port)
 
-	time.sleep(10)
+    def handle_data(self, data: bytes, addr: tuple):
+        """handle udp data"""
+        _str: str = None
+        _subpart: str = None
+        _str_parts: list[str] = None
+
+        logging.debug('handle_data::received %d bytes from %s:%d ==>%s',
+                      len(data), addr[0], addr[1], data.decode())
+
+        _str = data.decode()
+        _str_parts = _str.split('\r\n')
+        for part in _str_parts:
+            if part.startswith('HargaWebApp'):
+                _subpart = part[13:]  # Extract portion after the 13th character
+                logging.debug('_subpart: [%s]', _subpart)
+                self._mq.put('HargaWebApp:'+_subpart)
+
+            if part.startswith('SN:'):
+                _subpart = part[3:]  # Extract portion after the 13th character
+                logging.debug('_subpart: [%s]', _subpart)
+                self._mq.put('SN:'+_subpart)
+
+        if data[0:2].decode() == 'Ha':
+            logging.info('Haaaaaaaaaa')
+
+class ThreadedGatewayListenerSender(Thread):
+    """This class implements a Thread to run the gateway."""
+    gls: GatewayListenerSender
+
+    def __init__(self, mq: Queue, sq: Queue, src_iface: bytes,dst_iface: bytes, udp_port: int):
+        super().__init__()
+        self.gls= GatewayListenerSender(mq, sq, src_iface, dst_iface, udp_port)
+
+    def queue(self) -> Queue:
+        """
+        This method returns the queue to receive data from.
+        """
+        return self.gls.queue()
+
+    def run(self):
+        logging.info('GatewayListenerSender started')
+        self.gls.bind()
+        self.gls.loop()
