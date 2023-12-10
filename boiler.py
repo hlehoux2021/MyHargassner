@@ -52,6 +52,19 @@ class BoilerListenerSender(ListenerSender):
             self.listen.bind( ('',self.gw_port) )
             logging.debug('listener bound to %s, port %d', self.src_iface.decode(), self.gw_port)
 
+    def handle_data(self, data: bytes, addr: tuple):
+        """handle udp data"""
+        _str: str = None
+        _subpart: str = None
+        _str_parts: list[str] = None
+
+        logging.debug('handle_data::received %d bytes from %s:%d ==>%s',
+                      len(data), addr[0], addr[1], data.decode())
+        if data.startswith(b'\x00\x02\x48\x53\x56'):
+            logging.debug('HSV discovered')
+            logging.debug('HSV=%s',data[2:32].decode())
+            logging.debug('Code systeme=%s',data[len(data)-16:len(data)].decode())
+
 class ThreadedBoilerListenerSender(Thread):
     """
     This class implements a Thread to run the boiler proxy

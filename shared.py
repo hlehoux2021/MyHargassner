@@ -60,13 +60,13 @@ class SharedDataReceiver(SharedData):
             msg = self.rq.get(block=True, timeout=10)
             logging.debug('handleReceiveQueue: received %s', msg)
             if msg.startswith('GW_ADDR:'):
-                self.gw_addr = msg.split(':')[1]
+                self.gw_addr = bytes.encode(msg.split(':')[1],'ascii')
                 logging.debug('handleReceiveQueue: gw_addr=%s', self.gw_addr)
             elif msg.startswith('GW_PORT:'):
                 self.gw_port = int(msg.split(':')[1])
                 logging.debug('handleReceiveQueue: gw_port=%d', self.gw_port)
             elif msg.startswith('BL_ADDR:'):
-                self.bl_addr = msg.split(':')[1]
+                self.bl_addr = bytes.encode(msg.split(':')[1],'ascii')
                 logging.debug('handleReceiveQueue: bl_addr=%s', self.bl_addr)
             elif msg.startswith('BL_PORT:'):
                 self.bl_port = int(msg.split(':')[1])
