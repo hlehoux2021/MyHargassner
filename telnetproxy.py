@@ -80,6 +80,12 @@ class TelnetProxy(SharedDataReceiver):
         read_sockets: list[socket.socket]
         write_sockets: list[socket.socket]
         error_sockets: list[socket.socket]
+        _state: str # state of the request/response dialog
+        _str: str = None
+        _subpart: str = None
+        _str_parts: list[str] = None
+        _buffer: bytes = b'' # buffer to store the data received until we have a complete response
+        _pm: bytes = b'' # buffer to store special "pm" response
         while True:
             logging.debug('telnet waiting data')
             read_sockets, write_sockets, error_sockets = select.select([self._telnet, self._resend], [], [])
@@ -87,23 +93,141 @@ class TelnetProxy(SharedDataReceiver):
                 if _socket == self._telnet:
                     # so we received a request
                     _data, _addr = self._telnet.recvfrom(BUFF_SIZE)
-                    logging.info('telnet received  request %d bytes ==>%s',
+                    logging.debug('telnet received  request %d bytes ==>%s',
                                  len(_data), repr(_data))
+
+                    _str_parts= repr(_data).split('\r\n')
+                    for _part in _str_parts:
+                        if _part.startswith('$login token'):
+                            logging.debug('$login token detected')
+                            _state = '$login token'
+                        elif _part.startswith('$login key'):
+                            logging.debug('$login key detected')
+                            _state = '$login key'
+                            _subpart = _part[11:]
+                            logging.debug('subpart:%s', _subpart)
+                        elif _part.startswith('$apiversion'):
+                            logging.debug('$apiversion detected')
+                            _state = '$apiversion'
+                        elif _part.startswith('$setkomm'):
+                            logging.debug('$setkomm detected')
+                            _state = '$setkomm'
+                        elif _part.startswith('$asnr get'):
+                            logging.debug('$asnr get detected')
+                            _state = '$asnr get'
+                        elif _part.startswith('$igw set'):
+                            logging.debug('$igw set detected')
+                            _state = '$igw set'
+                            _subpart = _part[09:]
+                            logging.debug('subpart:%s', _subpart)
+                        elif _part.startswith('$daq stop'):
+                            logging.debug('$daq stop detected')
+                            _state = '$daq stop'
+                        elif _part.startswith('$logging disable'):
+                            logging.debug('$logging disable detected')
+                            _state = '$logging disable'
+                        elif _part.startswith('$daq desc'):
+                            logging.debug('$daq desc detected')
+                            _state = '$daq desc'
+                        elif _part.startswith('$daq start'):
+                            logging.debug('$daq start detected')
+                            _state = '$daq start'
+                        elif _part.startswith('$logging enable'):
+                            logging.debug('$logging enable detected')
+                            _state = '$logging enable'
+                        elif _part.startswith('$bootversion'):
+                            logging.debug('$bootversion detected')
+                            _state = '$bootversion'
+                        elif _part.startswith('$info'):
+                            logging.debug('$info detected')
+                            _state = '$info'
+                        elif _part.startswith('$uptime'):
+                            logging.debug('$uptime detected')
+                            _state = '$uptime'
+                        elif _part.startswith('$rtc get'):
+                            logging.debug('$rtc get detected')
+                            _state = '$rtc get'
+                        elif _part.startswith('$par get all'):
+                            logging.debug('$par get all detected')
+                            _state = '$par get all'
+                        elif _part.startswith('$par get'): # $par get %d
+                            logging.debug('$par get detected')
+                            _state = '$par get'
+                        elif _part.startswith('$par get changed'):
+                            logging.debug('$par get changed detected')
+                            _state = '$par get changed'
+                        elif _part.startswith('$erract'):
+                            logging.debug('$erract detected')
+                            _state = '$erract'
+                        else:
+                            _state = 'unknown'
                     # we should resend it
-                    logging.info('resending %d bytes to %s:%d',
+                    logging.debug('resending %d bytes to %s:%d',
                                  len(_data), repr(self.bl_addr), self.port)
                     self._resend.send(_data)
                 if _socket == self._resend:
                     # so we received a reply
                     _data, _addr = self._resend.recvfrom(BUFF_SIZE)
-                    logging.info('telnet received response %d bytes ==>%s',
+                    logging.debug('telnet received response %d bytes ==>%s',
                                  len(_data), repr(_data))
 
                     logging.debug('sending %d bytes to %s:%d',
                                   len(_data), self.gw_addr.decode(), self.gwt_port)
                     self._telnet.send(_data)
                     logging.info('telnet sent back response to client')
-
+                    # analyse the response
+                    if _data[0:1] == b'pm':
+                        logging.debug('pm response detected')
+                        _pm = _data
+                        if _pm[len(_pm)-1:len(_pm)] == b'\r\n':
+                            logging.debug('pm response is complete')
+                            #todo: analyse the pm response
+                        else:
+                            logging.debug('pm response is not complete')
+                            _mode= 'pm' # switch to mode where we gather the pm response
+                    if _mode == 'pm':
+                        _pm = _pm + _data
+                        if _pm[len(_pm)-1:len(_pm)] == b'\r\n':
+                            logging.debug('pm response is complete')
+                            #todo: analyse the pm response
+                        _mode = ''
+                    if (_data[0:1] != b'pm') and (_mode != 'pm'):
+                        logging.debug('normal response detected')
+                        if _mode == 'buffer':
+                            _buffer = _buffer + _data
+                        else:
+                            _buffer = _data
+                        if _buffer[len(_buffer)-1:len(_buffer)] == b'\r\n':
+                            logging.debug('buffer is complete')
+                            _mode = ''
+                            _str_parts= repr(_buffer).split('\r\n')
+                            for _part in _str_parts:
+                                logging.debug('part:%s', _part)
+                                if _state == '$login token':
+                                    # $wwxxyyzz\r\n
+                                    _subpart = _part[1:]
+                                    logging.debug('subpart:%s', _subpart)
+                                    _state = ''
+                                elif _state == '$login key':
+                                    # zclient login (0)\r\n$ack\r\n
+                                    if _part.startswith('zclient login'):
+                                        logging.debug('zclient login detected')
+                                    if _part.startswith('$ack'):
+                                        logging.debug('$login key $ack detected')
+                                        _state = ''
+                                elif _state == '$apiversion':
+                                    # $1.0.1\r\n
+                                    if _part.startswith('$'):
+                                        logging.debug('$apiversion $ack detected')
+                                        _subpart = _part[1:]
+                                        logging.debug('subpart:%s', _subpart)
+                                        _state = ''
+                                elif _state == '$setkomm':
+                                    # $1234567 ack\r\n
+                                    if _part.startswith('$'):
+                                        pass
+                                        
+                    
 class ThreadedTelnetProxy(Thread):
     """This class implements a Thread to run the TelnetProxy"""
     def __init__(self, src_iface, dst_iface, port):
