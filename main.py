@@ -1,4 +1,6 @@
 #! /usr/bin/env python3
+
+# sudo env "PATH=$PATH VIRTUAL_ENV=$VIRTUAL_ENV" python ./main.py 
 """
 Main program to run the telnet proxy, boiler listener and gateway listener
 """

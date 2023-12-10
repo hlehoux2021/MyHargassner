@@ -68,7 +68,7 @@ class TelnetProxy(SharedDataReceiver):
 
     def connect(self):
         """connect to the boiler"""
-        logging.info('telnet connecting to %s on port 23', self.bl_addr.decode())
+        logging.info('telnet connecting to %s on port 23', repr(self.bl_addr))
         self._resend.connect((self.bl_addr, 23))
 
 
@@ -87,17 +87,17 @@ class TelnetProxy(SharedDataReceiver):
                 if _socket == self._telnet:
                     # so we received a request
                     _data, _addr = self._telnet.recvfrom(BUFF_SIZE)
-                    logging.info('telnet received  request %d bytes ==>%s',
-                                 len(_data), _data.decode('ascii'))
+                    logging.info('telnet received  request %d bytes from  %s:%d ==>%s',
+                                 len(_data), _addr[0], _addr[1], repr(_data))
                     # we should resend it
                     logging.info('resending %d bytes to %s:%d',
-                                 len(_data), self.bl_addr.decode(), self.port)
+                                 len(_data), repr(self.bl_addr), self.port)
                     self._resend.send(_data)
                 if _socket == self._resend:
                     # so we received a reply
                     _data, _addr = self._resend.recvfrom(BUFF_SIZE)
-                    logging.info('telnet received response %d bytes ==>%s',
-                                 len(_data), _data.decode('ascii'))
+                    logging.info('telnet received response %d bytes from  %s:%d ==>%s',
+                                 len(_data), _addr[0], _addr[1], repr(_data))
 
                     logging.debug('sending %d bytes to %s:%d',
                                   len(_data), self.gw_addr.decode(), self.gwt_port)
