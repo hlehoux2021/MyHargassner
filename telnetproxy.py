@@ -77,9 +77,12 @@ class TelnetProxy(SharedDataReceiver):
         _socket: socket.socket
         _data: bytes
         _addr: tuple
+        read_sockets: list[socket.socket]
+        write_sockets: list[socket.socket]
+        error_sockets: list[socket.socket]
         while True:
             logging.debug('telnet waiting data')
-            read_sockets, _, _ = select.select([self._telnet, self._resend], [], [])
+            read_sockets, write_sockets, error_sockets = select.select([self._telnet, self._resend], [], [])
             for _socket in read_sockets:
                 if _socket == self._telnet:
                     # so we received a request
