@@ -81,7 +81,7 @@ while True:
         msg = mq.get(block=True, timeout=10)
         logging.debug('handleReceiveQueue: received %s', msg)
         if msg.startswith('toto:'):
-            logging.debug('ReceiveQueue: gw_addr=%s', msg.split(':')[1])
+            logging.debug('ReceiveQueue=%s', msg.split(':')[1])
         else:
             logging.debug('ReceiveQueue: unknown message %s', msg)
     except Empty:

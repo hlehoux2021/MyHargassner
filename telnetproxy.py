@@ -71,6 +71,75 @@ class TelnetProxy(SharedDataReceiver):
         logging.info('telnet connecting to %s on port 23', repr(self.bl_addr))
         self._resend.connect((self.bl_addr, 23))
 
+    def parse_request(self, data: bytes):
+        """parse the telnet request
+        set _state to the state of the request/response dialog
+        extract _subpart from the request"""
+        _str_parts = repr(data).split('\r\n')
+        for _part in _str_parts:
+            if _part.startswith('$login token'):
+                logging.debug('$login token detected')
+                _state = '$login token'
+            elif _part.startswith('$login key'):
+                logging.debug('$login key detected')
+                _state = '$login key'
+                _subpart = _part[11:]
+                logging.debug('subpart:%s', _subpart)
+            elif _part.startswith('$apiversion'):
+                logging.debug('$apiversion detected')
+                _state = '$apiversion'
+            elif _part.startswith('$setkomm'):
+                logging.debug('$setkomm detected')
+                _state = '$setkomm'
+            elif _part.startswith('$asnr get'):
+                logging.debug('$asnr get detected')
+                _state = '$asnr get'
+            elif _part.startswith('$igw set'):
+                logging.debug('$igw set detected')
+                _state = '$igw set'
+                _subpart = _part[9:]
+                logging.debug('subpart:%s', _subpart)
+            elif _part.startswith('$daq stop'):
+                logging.debug('$daq stop detected')
+                _state = '$daq stop'
+            elif _part.startswith('$logging disable'):
+                logging.debug('$logging disable detected')
+                _state = '$logging disable'
+            elif _part.startswith('$daq desc'):
+                logging.debug('$daq desc detected')
+                _state = '$daq desc'
+            elif _part.startswith('$daq start'):
+                logging.debug('$daq start detected')
+                _state = '$daq start'
+            elif _part.startswith('$logging enable'):
+                logging.debug('$logging enable detected')
+                _state = '$logging enable'
+            elif _part.startswith('$bootversion'):
+                logging.debug('$bootversion detected')
+                _state = '$bootversion'
+            elif _part.startswith('$info'):
+                logging.debug('$info detected')
+                _state = '$info'
+            elif _part.startswith('$uptime'):
+                logging.debug('$uptime detected')
+                _state = '$uptime'
+            elif _part.startswith('$rtc get'):
+                logging.debug('$rtc get detected')
+                _state = '$rtc get'
+            elif _part.startswith('$par get all'):
+                logging.debug('$par get all detected')
+                _state = '$par get all'
+            elif _part.startswith('$par get'): # $par get %d
+                logging.debug('$par get detected')
+                _state = '$par get'
+            elif _part.startswith('$par get changed'):
+                logging.debug('$par get changed detected')
+                _state = '$par get changed'
+            elif _part.startswith('$erract'):
+                logging.debug('$erract detected')
+                _state = '$erract'
+            else:
+                _state = 'unknown'
 
     def loop(self):
         """loop waiting requests and replies"""
@@ -96,71 +165,6 @@ class TelnetProxy(SharedDataReceiver):
                     logging.debug('telnet received  request %d bytes ==>%s',
                                  len(_data), repr(_data))
 
-                    _str_parts= repr(_data).split('\r\n')
-                    for _part in _str_parts:
-                        if _part.startswith('$login token'):
-                            logging.debug('$login token detected')
-                            _state = '$login token'
-                        elif _part.startswith('$login key'):
-                            logging.debug('$login key detected')
-                            _state = '$login key'
-                            _subpart = _part[11:]
-                            logging.debug('subpart:%s', _subpart)
-                        elif _part.startswith('$apiversion'):
-                            logging.debug('$apiversion detected')
-                            _state = '$apiversion'
-                        elif _part.startswith('$setkomm'):
-                            logging.debug('$setkomm detected')
-                            _state = '$setkomm'
-                        elif _part.startswith('$asnr get'):
-                            logging.debug('$asnr get detected')
-                            _state = '$asnr get'
-                        elif _part.startswith('$igw set'):
-                            logging.debug('$igw set detected')
-                            _state = '$igw set'
-                            _subpart = _part[09:]
-                            logging.debug('subpart:%s', _subpart)
-                        elif _part.startswith('$daq stop'):
-                            logging.debug('$daq stop detected')
-                            _state = '$daq stop'
-                        elif _part.startswith('$logging disable'):
-                            logging.debug('$logging disable detected')
-                            _state = '$logging disable'
-                        elif _part.startswith('$daq desc'):
-                            logging.debug('$daq desc detected')
-                            _state = '$daq desc'
-                        elif _part.startswith('$daq start'):
-                            logging.debug('$daq start detected')
-                            _state = '$daq start'
-                        elif _part.startswith('$logging enable'):
-                            logging.debug('$logging enable detected')
-                            _state = '$logging enable'
-                        elif _part.startswith('$bootversion'):
-                            logging.debug('$bootversion detected')
-                            _state = '$bootversion'
-                        elif _part.startswith('$info'):
-                            logging.debug('$info detected')
-                            _state = '$info'
-                        elif _part.startswith('$uptime'):
-                            logging.debug('$uptime detected')
-                            _state = '$uptime'
-                        elif _part.startswith('$rtc get'):
-                            logging.debug('$rtc get detected')
-                            _state = '$rtc get'
-                        elif _part.startswith('$par get all'):
-                            logging.debug('$par get all detected')
-                            _state = '$par get all'
-                        elif _part.startswith('$par get'): # $par get %d
-                            logging.debug('$par get detected')
-                            _state = '$par get'
-                        elif _part.startswith('$par get changed'):
-                            logging.debug('$par get changed detected')
-                            _state = '$par get changed'
-                        elif _part.startswith('$erract'):
-                            logging.debug('$erract detected')
-                            _state = '$erract'
-                        else:
-                            _state = 'unknown'
                     # we should resend it
                     logging.debug('resending %d bytes to %s:%d',
                                  len(_data), repr(self.bl_addr), self.port)
@@ -224,10 +228,95 @@ class TelnetProxy(SharedDataReceiver):
                                         _state = ''
                                 elif _state == '$setkomm':
                                     # $1234567 ack\r\n
+                                    if _part.startswith('$') and _part.endswith('ack'):
+                                        _subpart = _part[1:-4]
+                                        logging.debug('subpart:{%s}', _subpart)
+                                        _state = ''
+                                elif _state == '$asnr get':
+                                    # $1.0.1\r\n
                                     if _part.startswith('$'):
-                                        pass
-                                        
-                    
+                                        logging.debug('$asnr get $ack detected')
+                                        _subpart = _part[1:]
+                                        logging.debug('subpart:%s', _subpart)
+                                        _state = ''
+                                elif _state == '$igw set':
+                                    if _part == '$ack':
+                                        logging.debug('$igw set $ack detected')
+                                        _state = ''
+                                elif _state == '$daq stop':
+                                    if _part == '$daq stopped':
+                                        logging.debug('$daq stop $ack detected')
+                                        _state = ''
+                                elif _state == '$logging disable':
+                                    if _part == '$logging disabled':
+                                        logging.debug('$logging disable $ack detected')
+                                        _state = ''
+                                elif _state == '$daq desc':
+                                    if _part.startswith('$<<') and _part.endswith('>>'):
+                                        logging.debug('$daq desc $ack detected')
+                                        _state = ''
+                                elif _state == '$daq start':
+                                    if _part == '$daq started':
+                                        logging.debug('$daq start $ack detected')
+                                        _state = ''
+                                elif _state == '$logging enable':
+                                    if _part == '$logging enabled':
+                                        logging.debug('$logging enable $ack detected')
+                                        _state = ''
+                                elif _state == '$bootversion':
+                                    if _part.startswith('$'):
+                                        logging.debug('$bootversion $ack detected')
+                                        _subpart = _part[1:]
+                                        logging.debug('subpart:%s', _subpart)
+                                        _state = ''
+                                elif _state == '$info':
+                                    if _part.startswith('$KT:'):
+                                        logging.debug('$KT $ack detected')
+                                        _subpart = _part[5:]
+                                        logging.debug('subpart:%s', _subpart)
+                                    if _part.startswith('$SWV:'):
+                                        logging.debug('$SWV $ack detected')
+                                        _subpart = _part[6:]
+                                        logging.debug('subpart:%s', _subpart)
+                                    if _part.startswith('$FWV I/O:'):
+                                        logging.debug('$FWV I/O $ack detected')
+                                        _subpart = _part[10:]
+                                        logging.debug('subpart:%s', _subpart)
+                                    if _part.startswith('$SN I/O:'):
+                                        logging.debug('$SN I/O $ack detected')
+                                        _subpart = _part[9:]
+                                        logging.debug('subpart:%s', _subpart)
+                                    if _part.startswith('$SN BCE:'):
+                                        logging.debug('$SN BCE $ack detected')
+                                        _subpart = _part[9:]
+                                        logging.debug('subpart:%s', _subpart)
+                                        _state = ''
+                                elif _state == '$uptime':
+                                    if _part.startswith('$'):
+                                        logging.debug('$uptime $ack detected')
+                                        _subpart = _part[1:]
+                                        _state = ''
+                                elif _state == '$rtc get':
+                                    if _part.startswith('$'):
+                                        logging.debug('$rtc get $ack detected')
+                                        _subpart = _part[1:]
+                                        logging.debug('subpart:%s', _subpart)
+                                        _state = ''
+                                elif _state == '$par get changed':
+                                    if _part == '$--':
+                                        logging.debug('$par get changed $ack detected')
+                                        _state = ''
+                                elif _state == '$par get':
+                                    if _part.startswith('$'):
+                                        logging.debug('$par get $ack detected')
+                                        _subpart = _part[1:] # value of the parameter asked by IGW
+                                        _state = ''
+                                elif _state == '$par get all':
+                                    _state = ''
+                                elif _state == '$erract':
+                                    # $no errors OR anything else
+                                    _state = ''
+
 class ThreadedTelnetProxy(Thread):
     """This class implements a Thread to run the TelnetProxy"""
     def __init__(self, src_iface, dst_iface, port):
