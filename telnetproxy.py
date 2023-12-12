@@ -82,6 +82,7 @@ class TelnetProxy(SharedDataReceiver):
 
         _str_parts = repr(data).split('\r\n')
         for _part in _str_parts:
+            logging.debug('_part=%s',_part)
             if _part.startswith('$login token'):
                 logging.debug('$login token detected')
                 _state = '$login token'
@@ -281,9 +282,10 @@ class TelnetProxy(SharedDataReceiver):
         read_sockets: list[socket.socket]
         write_sockets: list[socket.socket]
         error_sockets: list[socket.socket]
-        _state: str # state of the request/response dialog
+        _state: str = '' # state of the request/response dialog
         _buffer: bytes = b'' # buffer to store the data received until we have a complete response
         _pm: bytes = b'' # buffer to store special "pm" response
+        _mode: str = ''
         while True:
             logging.debug('telnet waiting data')
             read_sockets, write_sockets, error_sockets = select.select([self._telnet, self._resend], [], [])
@@ -294,6 +296,7 @@ class TelnetProxy(SharedDataReceiver):
                     logging.debug('telnet received  request %d bytes ==>%s',
                                  len(_data), repr(_data))
                     _state = self.parse_request(_data)
+                    logging.debug('_state-->%s',_state)
                     # we should resend it
                     logging.debug('resending %d bytes to %s:%d',
                                  len(_data), repr(self.bl_addr), self.port)
@@ -325,12 +328,16 @@ class TelnetProxy(SharedDataReceiver):
                             #todo: analyse the pm response
                         _mode = ''
                     if (_data[0:1] != b'pm') and (_mode != 'pm'):
-                        logging.debug('normal response detected')
+                        _buffer= _data
+                        logging.debug('normal response detected %s',repr(_buffer))
+                        logging.debug('len=%d', len(_buffer))
+#                        logging.debug('extract:(%s)', repr(_buffer[len(_buffer)-1:len(_buffer)]))
+                        logging.debug('v2:(%s)', repr(_buffer[-2:]))
                         if _mode == 'buffer':
                             _buffer = _buffer + _data
                         else:
                             _buffer = _data
-                        if _buffer[len(_buffer)-1:len(_buffer)] == b'\r\n':
+                        if _buffer[-2:] == b'\r\n':
                             logging.debug('buffer is complete')
                             _mode = ''
                             _state = self.parse_response_buffer(_buffer)
