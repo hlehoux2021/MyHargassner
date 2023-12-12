@@ -82,7 +82,7 @@ class TelnetProxy(SharedDataReceiver):
         _subpart: str = None
         _str_parts: list[str] = None
 
-        _str_parts = repr(data).split('\r\n')
+        _str_parts = data.decode('ascii').split('\r\n')
         for _part in _str_parts:
             logging.debug('_part=%s',_part)
             if _part.startswith('$login token'):
@@ -139,93 +139,97 @@ class TelnetProxy(SharedDataReceiver):
             elif _part.startswith('$par get all'):
                 logging.debug('$par get all detected')
                 _state = '$par get all'
-            elif _part.startswith('$par get'): # $par get %d
-                logging.debug('$par get detected')
-                _state = '$par get'
             elif _part.startswith('$par get changed'):
                 logging.debug('$par get changed detected')
                 _state = '$par get changed'
+            elif _part.startswith('$par get'): # $par get %d
+                logging.debug('$par get detected')
+                _state = '$par get'
             elif _part.startswith('$erract'):
                 logging.debug('$erract detected')
                 _state = '$erract'
+            elif _part == '':
+                logging.debug('empty _part')
             else:
+                logging.debug('else unknown state')
                 _state = 'unknown'
+        logging.debug('_state/_part: %s/%s', _state, _part)
         return _state
 
-    def parse_response_buffer(self, mq: Queue, buffer: bytes) -> str:
+    def parse_response_buffer(self, mq: Queue, state: str, buffer: bytes) -> str:
         """parse the response buffer sent by boiler"""
-        _state: str = None
+        _state: str = state
         _part: str = None
         _subpart: str = None
         _str_parts: list[str] = None
 
-        _str_parts= repr(buffer).split('\r\n')
+        logging.debug('parse_response input _state=%s',_state)
+        _str_parts= repr(buffer)[2:-1].split('\\r\\n')
         for _part in _str_parts:
             logging.debug('part:%s', _part)
             if _state == '$login token':
-                # $wwxxyyzz\r\n
+                # $wwxxyyzz
                 _subpart = _part[1:]
                 logging.debug('subpart:%s', _subpart)
                 mq.put('$login token:'+_subpart)
                 _state = ''
             elif _state == '$login key':
-                # zclient login (0)\r\n$ack\r\n
-                if _part.startswith('zclient login'):
+                # b'zclient login (0)\r\n$ack\r\n'
+                if "zclient login" in _part:
                     logging.debug('zclient login detected')
                 if _part.startswith('$ack'):
                     logging.debug('$login key $ack detected')
                     _state = ''
             elif _state == '$apiversion':
-                # $1.0.1\r\n
-                if _part.startswith('$'):
+                # $1.0.1
+                if _part.startswith("$"):
                     logging.debug('$apiversion $ack detected')
                     _subpart = _part[1:]
                     logging.debug('subpart:%s', _subpart)
                     mq.put('$apiversion:'+_subpart)
                     _state = ''
             elif _state == '$setkomm':
-                # $1234567 ack\r\n
-                if _part.startswith('$') and _part.endswith('ack'):
+                # $1234567 ack
+                if "ack" in _part:
+                    #replaces _part.startswith("b\'$")  and _part.endswith("ack\\r\\n\'"):
                     _subpart = _part[1:-4]
                     logging.debug('subpart:{%s}', _subpart)
                     mq.put('$setkomm:'+_subpart)
                     _state = ''
             elif _state == '$asnr get':
-                # $1.0.1\r\n
-                if _part.startswith('$'):
+                # $1.0.1
+                if _part.startswith("$"):
                     logging.debug('$asnr get $ack detected')
                     _subpart = _part[1:]
                     logging.debug('subpart:%s', _subpart)
                     mq.put('$asnr get:'+_subpart)
                     _state = ''
             elif _state == '$igw set':
-                if _part == '$ack':
+                if "ack" in _part:
                     logging.debug('$igw set $ack detected')
                     _state = ''
-            elif _state == '$daq stop':
-                if _part == '$daq stopped':
-                    logging.debug('$daq stop $ack detected')
-                    _state = ''
-            elif _state == '$logging disable':
-                if _part == '$logging disabled':
-                    logging.debug('$logging disable $ack detected')
-                    _state = ''
+            elif "$daq stopped" in _part:
+                logging.debug('$daq stop $ack detected')
+                _state = ''
+            elif "logging disabled" in _part:
+                logging.debug('$logging disable $ack detected')
+                _state = ''
             elif _state == '$daq desc':
+                #todo review this since filtered before
                 if _part.startswith('$<<') and _part.endswith('>>'):
                     logging.debug('$daq desc $ack detected')
                     _state = ''
-            elif _state == '$daq start':
-                if _part == '$daq started':
-                    logging.debug('$daq start $ack detected')
-                    _state = ''
-            elif _state == '$logging enable':
-                if _part == '$logging enabled':
-                    logging.debug('$logging enable $ack detected')
-                    _state = ''
+            elif "daq started" in _part:
+                logging.debug('$daq start $ack detected')
+                _state = ''
+            elif "logging enabled" in _part:
+                logging.debug('$logging enable $ack detected')
+                _state = ''
             elif _state == '$bootversion':
-                if _part.startswith('$'):
+                #$V2.18
+                if _part.startswith("$V"):
                     logging.debug('$bootversion $ack detected')
-                    _subpart = _part[1:]
+                    _subpart = _part[2:]
                     logging.debug('subpart:%s', _subpart)
                     mq.put('$bootversion:'+_subpart)
                     _state = ''
@@ -328,10 +332,10 @@ class TelnetProxy(SharedDataReceiver):
                     self._telnet.send(_data)
                     logging.info('telnet sent back response to client')
                     # analyse the response
-                    if _data[0:1] == b'pm':
+                    if len(_data)>1 and repr(_data[0:2])=="b'pm'":
                         logging.debug('pm response detected')
                         _pm = _data
-                        if _pm[len(_pm)-1:len(_pm)] == b'\r\n':
+                        if _pm[-2:] == b'\r\n':
                             logging.debug('pm response is complete')
                             #todo: analyse the pm response
                         else:
@@ -339,16 +343,14 @@ class TelnetProxy(SharedDataReceiver):
                             _mode= 'pm' # switch to mode where we gather the pm response
                     if _mode == 'pm':
                         _pm = _pm + _data
-                        if _pm[len(_pm)-1:len(_pm)] == b'\r\n':
+                        if _pm[-2:] == b'\r\n':
                             logging.debug('pm response is complete')
                             #todo: analyse the pm response
                         _mode = ''
-                    if (_data[0:1] != b'pm') and (_mode != 'pm'):
-                        _buffer= _data
-                        logging.debug('normal response detected %s',repr(_buffer))
-                        logging.debug('len=%d', len(_buffer))
-#                        logging.debug('extract:(%s)', repr(_buffer[len(_buffer)-1:len(_buffer)]))
-                        logging.debug('v2:(%s)', repr(_buffer[-2:]))
+                    if (repr(_data[0:2]) != "b'pm'") and (_mode != 'pm'):
+                        if _data[-2:] != b'\r\n':
+                            _mode='buffer'
+                        logging.debug('normal response detected %s',repr(_data))
                         if _mode == 'buffer':
                             _buffer = _buffer + _data
                         else:
@@ -356,7 +358,11 @@ class TelnetProxy(SharedDataReceiver):
                         if _buffer[-2:] == b'\r\n':
                             logging.debug('buffer is complete')
                             _mode = ''
-                            _state = self.parse_response_buffer(self._mq, _buffer)
+                            if len(_buffer)>4 and repr(_buffer[0:4]) == "b'$<<<'":
+                                logging.debug('dac desq detected, skipping parsing')
+                            else:
+                                _state = self.parse_response_buffer(self._mq, _state, _buffer)
+                            _buffer = b''
 
 class ThreadedTelnetProxy(Thread):
     """This class implements a Thread to run the TelnetProxy"""
