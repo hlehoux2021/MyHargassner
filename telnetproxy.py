@@ -71,10 +71,15 @@ class TelnetProxy(SharedDataReceiver):
         logging.info('telnet connecting to %s on port 23', repr(self.bl_addr))
         self._resend.connect((self.bl_addr, 23))
 
-    def parse_request(self, data: bytes):
+    def parse_request(self, data: bytes) -> str:
         """parse the telnet request
         set _state to the state of the request/response dialog
         extract _subpart from the request"""
+        _state: str = None
+        _part: str = None
+        _subpart: str = None
+        _str_parts: list[str] = None
+
         _str_parts = repr(data).split('\r\n')
         for _part in _str_parts:
             if _part.startswith('$login token'):
@@ -140,6 +145,133 @@ class TelnetProxy(SharedDataReceiver):
                 _state = '$erract'
             else:
                 _state = 'unknown'
+        return _state
+
+    def parse_response_buffer(self, buffer: bytes) -> str:
+        """parse the response buffer sent by boiler"""
+        _state: str = None
+        _part: str = None
+        _subpart: str = None
+        _str_parts: list[str] = None
+
+        _str_parts= repr(buffer).split('\r\n')
+        for _part in _str_parts:
+            logging.debug('part:%s', _part)
+            if _state == '$login token':
+                # $wwxxyyzz\r\n
+                _subpart = _part[1:]
+                logging.debug('subpart:%s', _subpart)
+                _state = ''
+            elif _state == '$login key':
+                # zclient login (0)\r\n$ack\r\n
+                if _part.startswith('zclient login'):
+                    logging.debug('zclient login detected')
+                if _part.startswith('$ack'):
+                    logging.debug('$login key $ack detected')
+                    _state = ''
+            elif _state == '$apiversion':
+                # $1.0.1\r\n
+                if _part.startswith('$'):
+                    logging.debug('$apiversion $ack detected')
+                    _subpart = _part[1:]
+                    logging.debug('subpart:%s', _subpart)
+                    _state = ''
+            elif _state == '$setkomm':
+                # $1234567 ack\r\n
+                if _part.startswith('$') and _part.endswith('ack'):
+                    _subpart = _part[1:-4]
+                    logging.debug('subpart:{%s}', _subpart)
+                    _state = ''
+            elif _state == '$asnr get':
+                # $1.0.1\r\n
+                if _part.startswith('$'):
+                    logging.debug('$asnr get $ack detected')
+                    _subpart = _part[1:]
+                    logging.debug('subpart:%s', _subpart)
+                    _state = ''
+            elif _state == '$igw set':
+                if _part == '$ack':
+                    logging.debug('$igw set $ack detected')
+                    _state = ''
+            elif _state == '$daq stop':
+                if _part == '$daq stopped':
+                    logging.debug('$daq stop $ack detected')
+                    _state = ''
+            elif _state == '$logging disable':
+                if _part == '$logging disabled':
+                    logging.debug('$logging disable $ack detected')
+                    _state = ''
+            elif _state == '$daq desc':
+                if _part.startswith('$<<') and _part.endswith('>>'):
+                    logging.debug('$daq desc $ack detected')
+                    _state = ''
+            elif _state == '$daq start':
+                if _part == '$daq started':
+                    logging.debug('$daq start $ack detected')
+                    _state = ''
+            elif _state == '$logging enable':
+                if _part == '$logging enabled':
+                    logging.debug('$logging enable $ack detected')
+                    _state = ''
+            elif _state == '$bootversion':
+                if _part.startswith('$'):
+                    logging.debug('$bootversion $ack detected')
+                    _subpart = _part[1:]
+                    logging.debug('subpart:%s', _subpart)
+                    _state = ''
+            elif _state == '$info':
+                if _part.startswith('$KT:'):
+                    logging.debug('$KT $ack detected')
+                    _subpart = _part[5:]
+                    logging.debug('subpart:%s', _subpart)
+                if _part.startswith('$SWV:'):
+                    logging.debug('$SWV $ack detected')
+                    _subpart = _part[6:]
+                    logging.debug('subpart:%s', _subpart)
+                if _part.startswith('$FWV I/O:'):
+                    logging.debug('$FWV I/O $ack detected')
+                    _subpart = _part[10:]
+                    logging.debug('subpart:%s', _subpart)
+                if _part.startswith('$SN I/O:'):
+                    logging.debug('$SN I/O $ack detected')
+                    _subpart = _part[9:]
+                    logging.debug('subpart:%s', _subpart)
+                if _part.startswith('$SN BCE:'):
+                    logging.debug('$SN BCE $ack detected')
+                    _subpart = _part[9:]
+                    logging.debug('subpart:%s', _subpart)
+                    _state = ''
+            elif _state == '$uptime':
+                if _part.startswith('$'):
+                    logging.debug('$uptime $ack detected')
+                    _subpart = _part[1:]
+                    _state = ''
+            elif _state == '$rtc get':
+                if _part.startswith('$'):
+                    logging.debug('$rtc get $ack detected')
+                    _subpart = _part[1:]
+                    logging.debug('subpart:%s', _subpart)
+                    _state = ''
+            elif _state == '$par get changed':
+                if _part == '$--':
+                    logging.debug('$par get changed $ack detected')
+                    _state = ''
+            elif _state == '$par get':
+                if _part.startswith('$'):
+                    logging.debug('$par get $ack detected')
+                    _subpart = _part[1:] # value of the parameter asked by IGW
+                    _state = ''
+            elif _state == '$par get all':
+                logging.debug('$par get all $ack detected')
+                _state = ''
+            elif _state == '$erract':
+                # $no errors OR anything else
+                logging.debug('$erract $ack detected')
+                _state = ''
+            else:
+                logging.debug('unknown state:%s', _state)
+                _state = ''
+        return _state
 
     def loop(self):
         """loop waiting requests and replies"""
@@ -150,9 +282,6 @@ class TelnetProxy(SharedDataReceiver):
         write_sockets: list[socket.socket]
         error_sockets: list[socket.socket]
         _state: str # state of the request/response dialog
-        _str: str = None
-        _subpart: str = None
-        _str_parts: list[str] = None
         _buffer: bytes = b'' # buffer to store the data received until we have a complete response
         _pm: bytes = b'' # buffer to store special "pm" response
         while True:
@@ -164,7 +293,7 @@ class TelnetProxy(SharedDataReceiver):
                     _data, _addr = self._telnet.recvfrom(BUFF_SIZE)
                     logging.debug('telnet received  request %d bytes ==>%s',
                                  len(_data), repr(_data))
-
+                    _state = self.parse_request(_data)
                     # we should resend it
                     logging.debug('resending %d bytes to %s:%d',
                                  len(_data), repr(self.bl_addr), self.port)
@@ -204,118 +333,7 @@ class TelnetProxy(SharedDataReceiver):
                         if _buffer[len(_buffer)-1:len(_buffer)] == b'\r\n':
                             logging.debug('buffer is complete')
                             _mode = ''
-                            _str_parts= repr(_buffer).split('\r\n')
-                            for _part in _str_parts:
-                                logging.debug('part:%s', _part)
-                                if _state == '$login token':
-                                    # $wwxxyyzz\r\n
-                                    _subpart = _part[1:]
-                                    logging.debug('subpart:%s', _subpart)
-                                    _state = ''
-                                elif _state == '$login key':
-                                    # zclient login (0)\r\n$ack\r\n
-                                    if _part.startswith('zclient login'):
-                                        logging.debug('zclient login detected')
-                                    if _part.startswith('$ack'):
-                                        logging.debug('$login key $ack detected')
-                                        _state = ''
-                                elif _state == '$apiversion':
-                                    # $1.0.1\r\n
-                                    if _part.startswith('$'):
-                                        logging.debug('$apiversion $ack detected')
-                                        _subpart = _part[1:]
-                                        logging.debug('subpart:%s', _subpart)
-                                        _state = ''
-                                elif _state == '$setkomm':
-                                    # $1234567 ack\r\n
-                                    if _part.startswith('$') and _part.endswith('ack'):
-                                        _subpart = _part[1:-4]
-                                        logging.debug('subpart:{%s}', _subpart)
-                                        _state = ''
-                                elif _state == '$asnr get':
-                                    # $1.0.1\r\n
-                                    if _part.startswith('$'):
-                                        logging.debug('$asnr get $ack detected')
-                                        _subpart = _part[1:]
-                                        logging.debug('subpart:%s', _subpart)
-                                        _state = ''
-                                elif _state == '$igw set':
-                                    if _part == '$ack':
-                                        logging.debug('$igw set $ack detected')
-                                        _state = ''
-                                elif _state == '$daq stop':
-                                    if _part == '$daq stopped':
-                                        logging.debug('$daq stop $ack detected')
-                                        _state = ''
-                                elif _state == '$logging disable':
-                                    if _part == '$logging disabled':
-                                        logging.debug('$logging disable $ack detected')
-                                        _state = ''
-                                elif _state == '$daq desc':
-                                    if _part.startswith('$<<') and _part.endswith('>>'):
-                                        logging.debug('$daq desc $ack detected')
-                                        _state = ''
-                                elif _state == '$daq start':
-                                    if _part == '$daq started':
-                                        logging.debug('$daq start $ack detected')
-                                        _state = ''
-                                elif _state == '$logging enable':
-                                    if _part == '$logging enabled':
-                                        logging.debug('$logging enable $ack detected')
-                                        _state = ''
-                                elif _state == '$bootversion':
-                                    if _part.startswith('$'):
-                                        logging.debug('$bootversion $ack detected')
-                                        _subpart = _part[1:]
-                                        logging.debug('subpart:%s', _subpart)
-                                        _state = ''
-                                elif _state == '$info':
-                                    if _part.startswith('$KT:'):
-                                        logging.debug('$KT $ack detected')
-                                        _subpart = _part[5:]
-                                        logging.debug('subpart:%s', _subpart)
-                                    if _part.startswith('$SWV:'):
-                                        logging.debug('$SWV $ack detected')
-                                        _subpart = _part[6:]
-                                        logging.debug('subpart:%s', _subpart)
-                                    if _part.startswith('$FWV I/O:'):
-                                        logging.debug('$FWV I/O $ack detected')
-                                        _subpart = _part[10:]
-                                        logging.debug('subpart:%s', _subpart)
-                                    if _part.startswith('$SN I/O:'):
-                                        logging.debug('$SN I/O $ack detected')
-                                        _subpart = _part[9:]
-                                        logging.debug('subpart:%s', _subpart)
-                                    if _part.startswith('$SN BCE:'):
-                                        logging.debug('$SN BCE $ack detected')
-                                        _subpart = _part[9:]
-                                        logging.debug('subpart:%s', _subpart)
-                                        _state = ''
-                                elif _state == '$uptime':
-                                    if _part.startswith('$'):
-                                        logging.debug('$uptime $ack detected')
-                                        _subpart = _part[1:]
-                                        _state = ''
-                                elif _state == '$rtc get':
-                                    if _part.startswith('$'):
-                                        logging.debug('$rtc get $ack detected')
-                                        _subpart = _part[1:]
-                                        logging.debug('subpart:%s', _subpart)
-                                        _state = ''
-                                elif _state == '$par get changed':
-                                    if _part == '$--':
-                                        logging.debug('$par get changed $ack detected')
-                                        _state = ''
-                                elif _state == '$par get':
-                                    if _part.startswith('$'):
-                                        logging.debug('$par get $ack detected')
-                                        _subpart = _part[1:] # value of the parameter asked by IGW
-                                        _state = ''
-                                elif _state == '$par get all':
-                                    _state = ''
-                                elif _state == '$erract':
-                                    # $no errors OR anything else
-                                    _state = ''
+                            _state = self.parse_response_buffer(_buffer)
 
 class ThreadedTelnetProxy(Thread):
     """This class implements a Thread to run the TelnetProxy"""
