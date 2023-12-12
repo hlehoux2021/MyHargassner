@@ -68,7 +68,7 @@ logging.info('Started')
 from queue import Queue,Empty
 mq = Queue()
 
-tln= ThreadedTelnetProxy(GW_IFACE, BL_IFACE, 23)
+tln= ThreadedTelnetProxy(mq, GW_IFACE, BL_IFACE, 23)
 bls= ThreadedBoilerListenerSender(tln.queue(), BL_IFACE, GW_IFACE)
 gls= ThreadedGatewayListenerSender(mq, bls.queue(), GW_IFACE, BL_IFACE, UDP_PORT)
 

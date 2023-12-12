@@ -3,7 +3,7 @@ This module implments the TelnetProxy
 """
 import socket
 import select
-import queue
+from queue import Queue
 import platform
 import logging
 from threading import Thread
@@ -22,12 +22,14 @@ class TelnetProxy(SharedDataReceiver):
     _listen: socket.socket
     _resend: socket.socket
     _telnet: socket.socket
+    _mq: Queue
 
-    def __init__(self, src_iface, dst_iface, port):
+    def __init__(self, mq: Queue, src_iface, dst_iface, port):
         super().__init__()
         self.src_iface = src_iface
         self.dst_iface = dst_iface
         self.port = port
+        self._mq = mq
         self._listen = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         if platform.system() == 'Linux':
             self._listen.setsockopt(socket.SOL_SOCKET, socket.SO_BINDTODEVICE, self.src_iface)
@@ -71,7 +73,7 @@ class TelnetProxy(SharedDataReceiver):
         logging.info('telnet connecting to %s on port 23', repr(self.bl_addr))
         self._resend.connect((self.bl_addr, 23))
 
-    def parse_request(self, data: bytes) -> str:
+    def parse_request(self, mq: Queue, data: bytes) -> str:
         """parse the telnet request
         set _state to the state of the request/response dialog
         extract _subpart from the request"""
@@ -89,6 +91,7 @@ class TelnetProxy(SharedDataReceiver):
                 logging.debug('$login key detected')
                 _state = '$login key'
                 _subpart = _part[11:]
+                mq.put('$login key:'+_subpart)
                 logging.debug('subpart:%s', _subpart)
             elif _part.startswith('$apiversion'):
                 logging.debug('$apiversion detected')
@@ -103,6 +106,7 @@ class TelnetProxy(SharedDataReceiver):
                 logging.debug('$igw set detected')
                 _state = '$igw set'
                 _subpart = _part[9:]
+                mq.put('$igw set:'+_subpart)
                 logging.debug('subpart:%s', _subpart)
             elif _part.startswith('$daq stop'):
                 logging.debug('$daq stop detected')
@@ -147,7 +151,7 @@ class TelnetProxy(SharedDataReceiver):
                 _state = 'unknown'
         return _state
 
-    def parse_response_buffer(self, buffer: bytes) -> str:
+    def parse_response_buffer(self, mq: Queue, buffer: bytes) -> str:
         """parse the response buffer sent by boiler"""
         _state: str = None
         _part: str = None
@@ -161,6 +165,7 @@ class TelnetProxy(SharedDataReceiver):
                 # $wwxxyyzz\r\n
                 _subpart = _part[1:]
                 logging.debug('subpart:%s', _subpart)
+                mq.put('$login token:'+_subpart)
                 _state = ''
             elif _state == '$login key':
                 # zclient login (0)\r\n$ack\r\n
@@ -175,12 +180,14 @@ class TelnetProxy(SharedDataReceiver):
                     logging.debug('$apiversion $ack detected')
                     _subpart = _part[1:]
                     logging.debug('subpart:%s', _subpart)
+                    mq.put('$apiversion:'+_subpart)
                     _state = ''
             elif _state == '$setkomm':
                 # $1234567 ack\r\n
                 if _part.startswith('$') and _part.endswith('ack'):
                     _subpart = _part[1:-4]
                     logging.debug('subpart:{%s}', _subpart)
+                    mq.put('$setkomm:'+_subpart)
                     _state = ''
             elif _state == '$asnr get':
                 # $1.0.1\r\n
@@ -188,6 +195,7 @@ class TelnetProxy(SharedDataReceiver):
                     logging.debug('$asnr get $ack detected')
                     _subpart = _part[1:]
                     logging.debug('subpart:%s', _subpart)
+                    mq.put('$asnr get:'+_subpart)
                     _state = ''
             elif _state == '$igw set':
                 if _part == '$ack':
@@ -218,39 +226,47 @@ class TelnetProxy(SharedDataReceiver):
                     logging.debug('$bootversion $ack detected')
                     _subpart = _part[1:]
                     logging.debug('subpart:%s', _subpart)
+                    mq.put('$bootversion:'+_subpart)
                     _state = ''
             elif _state == '$info':
                 if _part.startswith('$KT:'):
                     logging.debug('$KT $ack detected')
                     _subpart = _part[5:]
                     logging.debug('subpart:%s', _subpart)
+                    mq.put('$KT:'+_subpart)
                 if _part.startswith('$SWV:'):
                     logging.debug('$SWV $ack detected')
                     _subpart = _part[6:]
                     logging.debug('subpart:%s', _subpart)
+                    mq.put('$SWV:'+_subpart)
                 if _part.startswith('$FWV I/O:'):
                     logging.debug('$FWV I/O $ack detected')
                     _subpart = _part[10:]
                     logging.debug('subpart:%s', _subpart)
+                    mq.put('$FWV I/O:'+_subpart)
                 if _part.startswith('$SN I/O:'):
                     logging.debug('$SN I/O $ack detected')
                     _subpart = _part[9:]
                     logging.debug('subpart:%s', _subpart)
+                    mq.put('$SN I/O:'+_subpart)
                 if _part.startswith('$SN BCE:'):
                     logging.debug('$SN BCE $ack detected')
                     _subpart = _part[9:]
                     logging.debug('subpart:%s', _subpart)
+                    mq.put('$SN BCE:'+_subpart)
                     _state = ''
             elif _state == '$uptime':
                 if _part.startswith('$'):
                     logging.debug('$uptime $ack detected')
                     _subpart = _part[1:]
+                    mq.put('$uptime:'+_subpart)
                     _state = ''
             elif _state == '$rtc get':
                 if _part.startswith('$'):
                     logging.debug('$rtc get $ack detected')
                     _subpart = _part[1:]
                     logging.debug('subpart:%s', _subpart)
+                    mq.put('$rtc get:'+_subpart)
                     _state = ''
             elif _state == '$par get changed':
                 if _part == '$--':
@@ -293,7 +309,7 @@ class TelnetProxy(SharedDataReceiver):
                     _data, _addr = self._telnet.recvfrom(BUFF_SIZE)
                     logging.debug('telnet received  request %d bytes ==>%s',
                                  len(_data), repr(_data))
-                    _state = self.parse_request(_data)
+                    _state = self.parse_request(self._mq, _data)
                     # we should resend it
                     logging.debug('resending %d bytes to %s:%d',
                                  len(_data), repr(self.bl_addr), self.port)
@@ -333,16 +349,16 @@ class TelnetProxy(SharedDataReceiver):
                         if _buffer[len(_buffer)-1:len(_buffer)] == b'\r\n':
                             logging.debug('buffer is complete')
                             _mode = ''
-                            _state = self.parse_response_buffer(_buffer)
+                            _state = self.parse_response_buffer(self._mq, _buffer)
 
 class ThreadedTelnetProxy(Thread):
     """This class implements a Thread to run the TelnetProxy"""
-    def __init__(self, src_iface, dst_iface, port):
+    def __init__(self, mq: Queue, src_iface, dst_iface, port):
         super().__init__()
-        self.tp= TelnetProxy(src_iface, dst_iface, port)
+        self.tp= TelnetProxy(mq, src_iface, dst_iface, port)
         # Add any additional initialization logic here
 
-    def queue(self) -> queue.Queue:
+    def queue(self) -> Queue:
         """
         This method returns the queue to receive data from.
         """
