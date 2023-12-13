@@ -93,7 +93,7 @@ class TelnetProxy(SharedDataReceiver):
                 _state = '$login key'
                 _subpart = _part[11:]
                 mq.put('$login key:'+_subpart)
-                logging.debug('subpart:%s', _subpart)
+                logging.info('$login key:%s', _subpart)
             elif _part.startswith('$apiversion'):
                 logging.debug('$apiversion detected')
                 _state = '$apiversion'
@@ -108,7 +108,7 @@ class TelnetProxy(SharedDataReceiver):
                 _state = '$igw set'
                 _subpart = _part[9:]
                 mq.put('$igw set:'+_subpart)
-                logging.debug('subpart:%s', _subpart)
+                logging.info('$igw set:%s', _subpart)
             elif _part.startswith('$daq stop'):
                 logging.debug('$daq stop detected')
                 _state = '$daq stop'
@@ -170,7 +170,7 @@ class TelnetProxy(SharedDataReceiver):
             if _state == '$login token':
                 # $wwxxyyzz
                 _subpart = _part[1:]
-                logging.debug('subpart:%s', _subpart)
+                logging.info('$login token:%s', _subpart)
                 mq.put('$login token:'+_subpart)
                 _state = ''
             elif _state == '$login key':
@@ -185,15 +185,14 @@ class TelnetProxy(SharedDataReceiver):
                 if _part.startswith("$"):
                     logging.debug('$apiversion $ack detected')
                     _subpart = _part[1:]
-                    logging.debug('subpart:%s', _subpart)
+                    logging.info('$apiversion:%s', _subpart)
                     mq.put('$apiversion:'+_subpart)
                     _state = ''
             elif _state == '$setkomm':
                 # $1234567 ack
                 if "ack" in _part:
-                    #replaces _part.startswith("b\'$")  and _part.endswith("ack\\r\\n\'"):
                     _subpart = _part[1:-4]
-                    logging.debug('subpart:{%s}', _subpart)
+                    logging.info('$setkomm:%s', _subpart)
                     mq.put('$setkomm:'+_subpart)
                     _state = ''
             elif _state == '$asnr get':
@@ -209,10 +208,10 @@ class TelnetProxy(SharedDataReceiver):
                     logging.debug('$igw set $ack detected')
                     _state = ''
             elif "$daq stopped" in _part:
-                logging.debug('$daq stop $ack detected')
+                logging.info('$daq stopped')
                 _state = ''
             elif "logging disabled" in _part:
-                logging.debug('$logging disable $ack detected')
+                logging.info('$logging disabled')
                 _state = ''
             elif _state == '$daq desc':
                 #todo review this since filtered before
@@ -220,57 +219,58 @@ class TelnetProxy(SharedDataReceiver):
                     logging.debug('$daq desc $ack detected')
                     _state = ''
             elif "daq started" in _part:
-                logging.debug('$daq start $ack detected')
+                logging.info('$daq started')
                 _state = ''
             elif "logging enabled" in _part:
-                logging.debug('$logging enable $ack detected')
+                logging.info('$logging enabled')
                 _state = ''
             elif _state == '$bootversion':
                 #$V2.18
                 if _part.startswith("$V"):
                     logging.debug('$bootversion $ack detected')
                     _subpart = _part[2:]
-                    logging.debug('subpart:%s', _subpart)
+                    logging.info('$bootversion:%s', _subpart)
                     mq.put('$bootversion:'+_subpart)
                     _state = ''
             elif _state == '$info':
                 if _part.startswith('$KT:'):
                     logging.debug('$KT $ack detected')
                     _subpart = _part[5:]
-                    logging.debug('subpart:%s', _subpart)
+                    logging.info('$KT:%s', _subpart)
                     mq.put('$KT:'+_subpart)
                 if _part.startswith('$SWV:'):
                     logging.debug('$SWV $ack detected')
                     _subpart = _part[6:]
-                    logging.debug('subpart:%s', _subpart)
+                    logging.info('$SWV:%s', _subpart)
                     mq.put('$SWV:'+_subpart)
                 if _part.startswith('$FWV I/O:'):
                     logging.debug('$FWV I/O $ack detected')
                     _subpart = _part[10:]
-                    logging.debug('subpart:%s', _subpart)
+                    logging.info('$FWV I/O:%s', _subpart)
                     mq.put('$FWV I/O:'+_subpart)
                 if _part.startswith('$SN I/O:'):
                     logging.debug('$SN I/O $ack detected')
                     _subpart = _part[9:]
-                    logging.debug('subpart:%s', _subpart)
+                    logging.info('$SN I/O:%s', _subpart)
                     mq.put('$SN I/O:'+_subpart)
                 if _part.startswith('$SN BCE:'):
                     logging.debug('$SN BCE $ack detected')
                     _subpart = _part[9:]
-                    logging.debug('subpart:%s', _subpart)
+                    logging.info('$SN BCE:%s', _subpart)
                     mq.put('$SN BCE:'+_subpart)
                     _state = ''
             elif _state == '$uptime':
                 if _part.startswith('$'):
                     logging.debug('$uptime $ack detected')
                     _subpart = _part[1:]
+                    logging.info('$uptime:%s', _subpart)
                     mq.put('$uptime:'+_subpart)
                     _state = ''
             elif _state == '$rtc get':
                 if _part.startswith('$'):
                     logging.debug('$rtc get $ack detected')
                     _subpart = _part[1:]
-                    logging.debug('subpart:%s', _subpart)
+                    logging.info('$rtc:%s', _subpart)
                     mq.put('$rtc get:'+_subpart)
                     _state = ''
             elif _state == '$par get changed':
@@ -330,7 +330,7 @@ class TelnetProxy(SharedDataReceiver):
                     logging.debug('sending %d bytes to %s:%d',
                                   len(_data), self.gw_addr.decode(), self.gwt_port)
                     self._telnet.send(_data)
-                    logging.info('telnet sent back response to client')
+                    logging.debug('telnet sent back response to client')
                     # analyse the response
                     if len(_data)>1 and repr(_data[0:2])=="b'pm'":
                         logging.debug('pm response detected')
@@ -344,7 +344,7 @@ class TelnetProxy(SharedDataReceiver):
                     if _mode == 'pm':
                         _pm = _pm + _data
                         if _pm[-2:] == b'\r\n':
-                            logging.debug('pm response is complete')
+                            logging.debug('pm detected (%d bytes)',len(_pm))
                             #todo: analyse the pm response
                         _mode = ''
                     if (repr(_data[0:2]) != "b'pm'") and (_mode != 'pm'):
@@ -359,7 +359,7 @@ class TelnetProxy(SharedDataReceiver):
                             logging.debug('buffer is complete')
                             _mode = ''
                             if len(_buffer)>4 and repr(_buffer[0:4]) == "b'$<<<'":
-                                logging.debug('dac desq detected, skipping parsing')
+                                logging.info('dac desq detected (%d bytes), skipped',len(_buffer))
                             else:
                                 _state = self.parse_response_buffer(self._mq, _state, _buffer)
                             _buffer = b''

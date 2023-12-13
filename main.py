@@ -1,6 +1,4 @@
-#! /usr/bin/env python3
-
-# sudo env "PATH=$PATH VIRTUAL_ENV=$VIRTUAL_ENV" python ./main.py
+#! /usr/bin/sudo /usr/bin/env "PATH=$PATH VIRTUAL_ENV=$VIRTUAL_ENV" python
 """
 Main program to run the telnet proxy, boiler listener and gateway listener
 """
@@ -24,13 +22,8 @@ from gateway import ThreadedGatewayListenerSender
 
 #----------------------------------------------------------#
 LOG_PATH = "./" #chemin où enregistrer les logs
+LOG_LEVEL= logging.INFO
 
-logging.basicConfig(filename='trace.log', level=logging.DEBUG,
-                    format='%(asctime)s - %(levelname)s - %(threadName)s - %(message)s',
-                    filemode='a')
-
-
-#----------------------------------------------------------#
 SOCKET_TIMEOUT= 0.2
 BUFF_SIZE= 1024
 
@@ -38,12 +31,19 @@ GW_IFACE = b'eth0' # network interface connected to the gateway
 BL_IFACE = b'eth1' # network interface connected to the boiler
 UDP_PORT = 35601 # destination port to which gateway is broadcasting
 
+#----------------------------------------------------------#
+
 def parse_command_line():
     """this method parses the command line arguments"""
     parser = argparse.ArgumentParser(description='Command line parser')
-    parser.add_argument('-s', '--GW_IFACE', type=str, help='Source interface')
-    parser.add_argument('-d', '--BL_IFACE', type=str, help='Destination interface')
+    parser.add_argument('-g', '--GW_IFACE', type=str, help='Source interface')
+    parser.add_argument('-b', '--BL_IFACE', type=str, help='Destination interface')
     parser.add_argument('-p', '--port', type=int, help='Source port')
+    parser.add_argument('-d', '--debug', type=int, help='debug logging level')
+    parser.add_argument('-i', '--info', type=int, help='info logging level')
+    parser.add_argument('-w', '--warning', type=int, help='warning logging level')
+    parser.add_argument('-e', '--error', type=int, help='error logging level')
+    parser.add_argument('-c', '--critical', type=int, help='critical logging level')
 
     args = parser.parse_args()
     return args
@@ -60,7 +60,24 @@ if command_line_args.BL_IFACE is not None:
 if command_line_args.port is not None:
     UDP_PORT = int(command_line_args.port)
 
+if command_line_args.debug is not None:
+    LOG_LEVEL = logging.DEBUG
+
+if command_line_args.info is not None:
+    LOG_LEVEL = logging.INFO
+if command_line_args.warning is not None:
+    LOG_LEVEL = logging.WARNING
+if command_line_args.error is not None:
+    LOG_LEVEL = logging.ERROR
+if command_line_args.critical is not None:
+    LOG_LEVEL = logging.CRITICAL
+
+
 #----------------------------------------------------------#
+logging.basicConfig(filename='trace.log', level=LOG_LEVEL,
+                    format='%(asctime)s - %(levelname)s - %(threadName)s - %(message)s',
+                    filemode='a')
+
 logging.info('Started')
 
 #----------------------------------------------------------#

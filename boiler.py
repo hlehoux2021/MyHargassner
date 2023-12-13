@@ -22,7 +22,7 @@ class BoilerListenerSender(ListenerSender):
         if self.bound is False:
             logging.debug('BoilerListenerSender first packet, listener not bound yet')
             # first time we receive a packet, bind from the source port
-            logging.info('BoilerListenerSender discovered %s:%d', addr[0], addr[1])
+            logging.info('Boiler discovered %s:%d', addr[0], addr[1])
             self.bl_addr = addr[0]
             self.bl_port = addr[1]
             self.sq.put('BL_ADDR:'+self.bl_addr)
@@ -35,7 +35,7 @@ class BoilerListenerSender(ListenerSender):
         logging.debug('resending %d bytes to %s : %d',
                       len(data), self.gw_addr.decode(), self.gw_port)
         self.resend.sendto(data, (self.gw_addr, self.gw_port))
-        logging.info('resent %d bytes to %s : %d',
+        logging.debug('resent %d bytes to %s : %d',
                      len(data), self.gw_addr.decode(), self.gw_port)
 
     def discover(self):
@@ -61,9 +61,9 @@ class BoilerListenerSender(ListenerSender):
         logging.debug('handle_data::received %d bytes from %s:%d ==>%s',
                       len(data), addr[0], addr[1], data.decode())
         if data.startswith(b'\x00\x02\x48\x53\x56'):
-            logging.debug('HSV discovered')
-            logging.debug('HSV=%s',data[2:32].decode())
-            logging.debug('Code systeme=%s',data[len(data)-16:len(data)].decode())
+            logging.info('HSV discovered')
+            logging.info('HSV=%s',data[2:32].decode())
+            logging.info('Code systeme=%s',data[len(data)-16:len(data)].decode())
 
 class ThreadedBoilerListenerSender(Thread):
     """

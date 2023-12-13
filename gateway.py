@@ -60,7 +60,7 @@ class GatewayListenerSender(ListenerSender):
             self.resend.sendto(data, ('<broadcast>', self.udp_port+1) )
         else:
             self.resend.sendto(data, ('<broadcast>', self.udp_port) )
-        logging.info('resent %d bytes to %s : %d',
+        logging.debug('resent %d bytes to %s : %d',
                      len(data), self.dst_iface.decode(), self.udp_port)
 
     def bind(self):
@@ -82,16 +82,13 @@ class GatewayListenerSender(ListenerSender):
         for part in _str_parts:
             if part.startswith('HargaWebApp'):
                 _subpart = part[13:]  # Extract portion after the 13th character
-                logging.debug('_subpart: [%s]', _subpart)
+                logging.info('HargaWebApp:%s', _subpart)
                 self._mq.put('HargaWebApp:'+_subpart)
 
             if part.startswith('SN:'):
                 _subpart = part[3:]  # Extract portion after the 13th character
-                logging.debug('_subpart: [%s]', _subpart)
+                logging.info('SN: [%s]', _subpart)
                 self._mq.put('SN:'+_subpart)
-
-        if data[0:2].decode() == 'Ha':
-            logging.info('Haaaaaaaaaa')
 
 class ThreadedGatewayListenerSender(Thread):
     """This class implements a Thread to run the gateway."""

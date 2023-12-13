@@ -140,7 +140,7 @@ class ListenerSender(SharedDataReceiver):
         while True:
             logging.debug('waiting data')
             data, addr = self.listen.recvfrom(BUFF_SIZE)
-            logging.info('received buffer of %d bytes from %s : %d', len(data), addr[0], addr[1])
+            logging.debug('received buffer of %d bytes from %s : %d', len(data), addr[0], addr[1])
             logging.debug('%s', data)
             self.handle_first(data, addr)
             self.handle_data(data, addr)
