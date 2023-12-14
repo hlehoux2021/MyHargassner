@@ -1,17 +1,16 @@
-#!/usr/bin/python
-# -*- coding: utf-8 -*-
-
-from threading import Thread
-import time, logging, queue, socket, select
-import platform
+"""Module providing the main function To Test the queue receiver."""
+import logging
 import argparse
 
-import QueueReceiver
+from shared import QueueReceiver
 
 #----------------------------------------------------------#
 LOG_PATH = "./" #chemin où enregistrer les logs
 
-logging.basicConfig(filename='trace2.log', level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(threadName)s - %(message)s',mode='a')
+logging.basicConfig(filename='trace2.log',
+                    level=logging.DEBUG,
+                    format='%(asctime)s - %(levelname)s - %(threadName)s - %(message)s',
+                    mode='a')
 logging.info('Started')
 
 
@@ -19,11 +18,18 @@ logging.info('Started')
 SOCKET_TIMEOUT= 0.2
 BUFF_SIZE= 1024
 
-src_iface = b'en0' # network interface connected to the gateway
-dst_iface = b'lo0' # network interface connected to the boiler
-udp_port = 35601 # destination port to which gateway is broadcasting
+SRC_IFACE = b'en0' # network interface connected to the gateway
+DST_IFACE = b'lo0' # network interface connected to the boiler
+UDP_PORT = 35601 # destination port to which gateway is broadcasting
 
+#----------------------------------------------------------#
 def parse_command_line():
+    """
+    Parse the command line arguments.
+
+    Returns:
+        args (argparse.Namespace): Parsed command line arguments.
+    """
     parser = argparse.ArgumentParser(description='Command line parser')
     parser.add_argument('-s', '--src_iface', type=str, help='Source interface')
     parser.add_argument('-d', '--dst_iface', type=str, help='Destination interface')
@@ -48,4 +54,4 @@ if command_line_args.port is not None:
 
 #----------------------------------------------------------#
 q= QueueReceiver.QueueReceiver()
-
+q.gw_port= -1    # source port from which gateway is sending
