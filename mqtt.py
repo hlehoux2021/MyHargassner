@@ -25,6 +25,7 @@ class MqttInformer():
     _info_queue: Queue = None
     _dict: dict = None
     _web_app: Text = None
+    _login_key: Text = None
 
     def __init__(self, queue: Queue):
         self.mqtt_settings= Settings.MQTT(host="192.168.100.8",
@@ -34,6 +35,9 @@ class MqttInformer():
         self._dict = {}
         self._web_app = Text(Settings(mqtt=self.mqtt_settings,
                                       entity=TextInfo(name="HargaWebApp", state="0")),
+                             lambda *_: None)
+        self._kt = Text(Settings(mqtt=self.mqtt_settings,
+                                      entity=TextInfo(name="KT", state="0")),
                              lambda *_: None)
 
     def start(self):
@@ -63,14 +67,23 @@ class MqttInformer():
                 self.device_info = DeviceInfo(name=self._dict['BL_ADDR'],
                                               identifiers=lstr)
                 _stage = 'device_info_ok'
+                # we need to init first value of sensors
+                if '$KT' in self._dict:
+                    logging.debug('$KT in dict --> set_text')
+                    self._kt.set_text(self._dict['$KT'])
 
             if _stage == 'device_info_ok':
                 if ((_str_parts[0] in self._dict) and (_str_parts[1] != self._dict[_str_parts[0]])) or (not _str_parts[0] in self._dict):
                     # the value is new or has changed
+                    logging.debug('new value:[%s/%s]', _str_parts[0], _str_parts[1])
                     self._dict[_str_parts[0]] = _str_parts[1]
                     if _str_parts[0] == 'HargaWebApp':
                         self._web_app.set_text(_str_parts[1])
-
+                    if _str_parts[0] == '$KT':
+                        self._kt.set_text(_str_parts[1])
+                else:
+                    logging.debug('ignored [%s/%s]', _str_parts[0], _str_parts[1])
+                    logging.debug('in dict:%s', (_str_parts[0] in self._dict) )
 
 
             logging.debug('MqttInformer stage is now %s', _stage)

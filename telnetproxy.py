@@ -67,7 +67,9 @@ class TelnetProxy(SharedDataReceiver):
         while (self.bl_port == 0) or (self.bl_addr == b''):
             logging.debug('waiting for the discovery of the boiler address and port')
             self.handle()
-
+        # redistribute BL info to the mq Queue for further use
+        self._mq.put('BL_ADDR:'+str(self.bl_addr,'ascii'))
+        self._mq.put('BL_PORT:'+str(self.bl_port))
     def connect(self):
         """connect to the boiler"""
         logging.info('telnet connecting to %s on port 23', repr(self.bl_addr))
