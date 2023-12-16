@@ -26,19 +26,13 @@ class MqttInformer():
     _dict: dict = None
     _web_app: Text = None
     _login_key: Text = None
-
+    _kt: Text = None
     def __init__(self, queue: Queue):
         self.mqtt_settings= Settings.MQTT(host="192.168.100.8",
-                                                 username="jeedom",
-                                                 password="0y96wXQJ0E8KHjEyLdacPq95RGQEOdjpCLDskj7LWWC9EihjCJXbZOFZ9m4KCMWu")
+                                          username="jeedom",
+                                          password="0y96wXQJ0E8KHjEyLdacPq95RGQEOdjpCLDskj7LWWC9EihjCJXbZOFZ9m4KCMWu")
         self._info_queue= queue
         self._dict = {}
-        self._web_app = Text(Settings(mqtt=self.mqtt_settings,
-                                      entity=TextInfo(name="HargaWebApp", state="0")),
-                             lambda *_: None)
-        self._kt = Text(Settings(mqtt=self.mqtt_settings,
-                                      entity=TextInfo(name="KT", state="0")),
-                             lambda *_: None)
 
     def _init_sensors(self):
         """This method init the sensors"""
@@ -84,6 +78,12 @@ class MqttInformer():
                         if '$setkomm' in self._dict:
                             lstr.append(self._dict["$setkomm"])
                         self.device_info = DeviceInfo(name=self._dict['BL_ADDR'], identifiers=lstr)
+                        self._web_app = Text(Settings(mqtt=self.mqtt_settings,
+                                      entity=TextInfo(name="HargaWebApp", state="0", device=self.device_info)),
+                             lambda *_: None)
+                        self._kt = Text(Settings(mqtt=self.mqtt_settings,
+                                      entity=TextInfo(name="KT", state="0", device=self.device_info)),
+                             lambda *_: None)
                         _stage = 'device_info_ok'
                         # now we init the already available sensors
                         self._init_sensors()
