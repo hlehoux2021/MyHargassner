@@ -64,7 +64,7 @@ class MqttInformer():
                         self._dict[_str_parts[0]] = _str_parts[1]
                         if _str_parts[0] == 'HargaWebApp':
                             self._web_app.set_text(_str_parts[1])
-                        if _str_parts[0] == 'KT':
+                        if _str_parts[0] == '$KT':
                             self._kt.set_text(_str_parts[1])
                     else:
                         logging.debug('ignored [%s/%s]', _str_parts[0], _str_parts[1])
