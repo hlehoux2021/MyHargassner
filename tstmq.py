@@ -3,7 +3,7 @@ from ha_mqtt_discoverable import Settings, DeviceInfo
 from ha_mqtt_discoverable.sensors import BinarySensor, BinarySensorInfo
 
 # Configure the required parameters for the MQTT broker
-mqtt_settings = Settings.MQTT(host="localhost",username="jeedom",password="0y96wXQJ0E8KHjEyLdacPq95RGQEOdjpCLDskj7LWWC9EihjCJXbZOFZ9m4KCMWu")
+mqtt_settings = Settings.MQTT(host="192.168.100.8",username="jeedom",password="0y96wXQJ0E8KHjEyLdacPq95RGQEOdjpCLDskj7LWWC9EihjCJXbZOFZ9m4KCMWu")
 
 # Define the device. At least one of `identifiers` or `connections` must be supplied
 device_info = DeviceInfo(name="My device", identifiers="device_id")
