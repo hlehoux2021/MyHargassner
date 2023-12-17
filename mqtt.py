@@ -79,10 +79,10 @@ class MqttInformer():
                             lstr.append(self._dict["$setkomm"])
                         self.device_info = DeviceInfo(name=self._dict['BL_ADDR'], identifiers=lstr)
                         self._web_app = Text(Settings(mqtt=self.mqtt_settings,
-                                      entity=TextInfo(name="HargaWebApp", state="0", device=self.device_info)),
+                                      entity=TextInfo(name="HargaWebApp", state="0", unique_id="web_app", device=self.device_info)),
                              lambda *_: None)
                         self._kt = Text(Settings(mqtt=self.mqtt_settings,
-                                      entity=TextInfo(name="KT", state="0", device=self.device_info)),
+                                      entity=TextInfo(name="KT", state="0", unique_id="kt", device=self.device_info)),
                              lambda *_: None)
                         _stage = 'device_info_ok'
                         # now we init the already available sensors
