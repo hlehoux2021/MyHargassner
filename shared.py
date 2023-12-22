@@ -105,12 +105,14 @@ class ListenerSender(SharedDataReceiver):
         self.listen.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
         self.listen.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
         if platform.system() == 'Linux':
+            # pylint: disable=no-member
             self.listen.setsockopt(socket.SOL_SOCKET, socket.SO_BINDTODEVICE, src_iface)
 
         self.resend= socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
         self.resend.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
         self.resend.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
         if platform.system() == 'Linux':
+            # pylint: disable=no-member
             self.resend.setsockopt(socket.SOL_SOCKET, socket.SO_BINDTODEVICE, dst_iface)
         self.resend.settimeout(SOCKET_TIMEOUT)
 
