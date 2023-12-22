@@ -19,10 +19,11 @@ import argparse
 from telnetproxy import ThreadedTelnetProxy
 from boiler import ThreadedBoilerListenerSender
 from gateway import ThreadedGatewayListenerSender
+from mqtt import MqttInformer
 
 #----------------------------------------------------------#
 LOG_PATH = "./" #chemin où enregistrer les logs
-LOG_LEVEL= logging.INFO
+LOG_LEVEL= logging.DEBUG
 
 SOCKET_TIMEOUT= 0.2
 BUFF_SIZE= 1024
@@ -34,16 +35,16 @@ UDP_PORT = 35601 # destination port to which gateway is broadcasting
 #----------------------------------------------------------#
 
 def parse_command_line():
-    """this method parses the command line arguments"""
+    """This method parses the command line arguments"""
     parser = argparse.ArgumentParser(description='Command line parser')
     parser.add_argument('-g', '--GW_IFACE', type=str, help='Source interface')
     parser.add_argument('-b', '--BL_IFACE', type=str, help='Destination interface')
     parser.add_argument('-p', '--port', type=int, help='Source port')
-    parser.add_argument('-d', '--debug', type=int, help='debug logging level')
-    parser.add_argument('-i', '--info', type=int, help='info logging level')
-    parser.add_argument('-w', '--warning', type=int, help='warning logging level')
-    parser.add_argument('-e', '--error', type=int, help='error logging level')
-    parser.add_argument('-c', '--critical', type=int, help='critical logging level')
+#    parser.add_argument('-d', '--debug', action='store_true', help='Enable debug logging')
+#    parser.add_argument('-i', '--info', action='store_true', help='info logging level')
+#    parser.add_argument('-w', '--warning', action='store_true', help='warning logging level')
+#    parser.add_argument('-e', '--error', action='store_true', help='error logging level')
+#    parser.add_argument('-c', '--critical', action='store_true', help='critical logging level')
 
     args = parser.parse_args()
     return args
@@ -57,20 +58,20 @@ if command_line_args.GW_IFACE is not None:
 if command_line_args.BL_IFACE is not None:
     BL_IFACE = bytes(command_line_args.BL_IFACE,'ascii')
 
-if command_line_args.port is not None:
-    UDP_PORT = int(command_line_args.port)
+#if command_line_args.port is not None:
+#    UDP_PORT = int(command_line_args.port)
 
-if command_line_args.debug is not None:
-    LOG_LEVEL = logging.DEBUG
+#if command_line_args.debug is not None:
+#    LOG_LEVEL = logging.DEBUG
 
-if command_line_args.info is not None:
-    LOG_LEVEL = logging.INFO
-if command_line_args.warning is not None:
-    LOG_LEVEL = logging.WARNING
-if command_line_args.error is not None:
-    LOG_LEVEL = logging.ERROR
-if command_line_args.critical is not None:
-    LOG_LEVEL = logging.CRITICAL
+#if command_line_args.info is not None:
+#    LOG_LEVEL = logging.INFO
+#if command_line_args.warning is not None:
+#    LOG_LEVEL = logging.WARNING
+#if command_line_args.error is not None:
+#    LOG_LEVEL = logging.ERROR
+#if command_line_args.critical is not None:
+#    LOG_LEVEL = logging.CRITICAL
 
 
 #----------------------------------------------------------#
@@ -93,13 +94,16 @@ tln.start()
 bls.start()
 gls.start()
 
+mi = MqttInformer(mq)
+mi.start()
+
 while True:
     try:
         msg = mq.get(block=True, timeout=10)
-        logging.debug('handleReceiveQueue: received %s', msg)
+        logging.info('handleReceiveQueue: received %s', msg)
         if msg.startswith('toto:'):
-            logging.debug('ReceiveQueue=%s', msg.split(':')[1])
+            logging.info('ReceiveQueue=%s', msg.split(':')[1])
         else:
-            logging.debug('ReceiveQueue: unknown message %s', msg)
+            logging.warning('ReceiveQueue: unknown message %s', msg)
     except Empty:
         logging.debug('handleReceiveQueue: no message received')

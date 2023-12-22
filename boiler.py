@@ -49,7 +49,7 @@ class BoilerListenerSender(ListenerSender):
             self.listen.bind( ('',self.gw_port+1) )
             logging.debug('listener bound to %s, port %d', self.src_iface.decode(), self.gw_port+1)
         else:
-            self.listen.bind( ('',self.gw_port) )
+            self.listen.bind( ('10.0.4.1',self.gw_port) )
             logging.debug('listener bound to %s, port %d', self.src_iface.decode(), self.gw_port)
 
     def handle_data(self, data: bytes, addr: tuple):

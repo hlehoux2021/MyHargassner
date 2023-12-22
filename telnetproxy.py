@@ -7,7 +7,7 @@ from queue import Queue
 import platform
 import logging
 from threading import Thread
-from typing import Annotated
+from typing import Annotated, Tuple
 import annotated_types
 
 from shared import SharedDataReceiver,SOCKET_TIMEOUT,BUFF_SIZE
@@ -67,7 +67,9 @@ class TelnetProxy(SharedDataReceiver):
         while (self.bl_port == 0) or (self.bl_addr == b''):
             logging.debug('waiting for the discovery of the boiler address and port')
             self.handle()
-
+        # redistribute BL info to the mq Queue for further use
+        self._mq.put('BL_ADDR:'+str(self.bl_addr,'ascii'))
+        self._mq.put('BL_PORT:'+str(self.bl_port))
     def connect(self):
         """connect to the boiler"""
         logging.info('telnet connecting to %s on port 23', repr(self.bl_addr))
@@ -294,6 +296,112 @@ class TelnetProxy(SharedDataReceiver):
                 _state = ''
         return _state
 
+    def analyse_data_buffer(self, _data: bytes,
+                            pm: bytes, buffer: bytes,
+                            mode: str, state: str) -> Tuple[bytes, bytes, str, str]:
+        """analyse the data buffer"""
+        _mode: str = mode
+        _state: str = state
+        _pm: bytes = pm
+        _buffer: bytes = buffer
+
+        if len(_data)>1 and repr(_data[0:2])=="b'pm'":
+            logging.debug('pm response detected')
+            _pm = _data
+            if _pm[-2:] == b'\r\n':
+                logging.debug('pm response is complete')
+                #todo: analyse the pm response
+            else:
+                logging.debug('pm response is not complete')
+                _mode= 'pm' # switch to mode where we gather the pm response
+        if _mode == 'pm':
+            _pm = _pm + _data
+            if _pm[-2:] == b'\r\n':
+                logging.debug('pm detected (%d bytes)',len(_pm))
+                #todo: analyse the pm response
+            #todo verify if _mode should be set to '' only if pm is complete
+            _mode = ''
+        if (repr(_data[0:2]) != "b'pm'") and (_mode != 'pm'):
+            if _data[-2:] != b'\r\n':
+                _mode='buffer'
+            logging.debug('normal response detected %s',repr(_data))
+            if _mode == 'buffer':
+                _buffer = _buffer + _data
+            else:
+                _buffer = _data
+            if _buffer[-2:] == b'\r\n':
+                logging.debug('buffer is complete')
+                _mode = ''
+                if len(_buffer)>4 and repr(_buffer[0:4]) == "b'$<<<'":
+                    logging.info('dac desq detected (%d bytes), skipped',len(_buffer))
+                else:
+                    _state = self.parse_response_buffer(self._mq, _state, _buffer)
+                _buffer = b''
+
+        return _pm, _buffer, _mode, _state
+
+    def is_pm_response(self, _data: bytes) -> bool:
+        """check if the data is a pm response"""
+        if len(_data)>1 and repr(_data[0:2])=="b'pm'":
+            return True
+        return False
+
+    def is_daq_desc(self, _buffer: bytes) -> bool:
+        """check if the data is a daq description"""
+        if len(_buffer)>4 and repr(_buffer[0:4]) == "b'$<<<'":
+            return True
+        return False
+
+    def analyse_data_buffer_v2(self, _mq: Queue, _data: bytes,
+                               pm: bytes, buffer: bytes,
+                               mode: str, state: str) -> Tuple[bytes, bytes, str, str]:
+        """analyse the data buffer
+        _mode can have the following values:
+        - '' : normal mode
+        - 'pm' : special mode for pm response : modify _pm 
+        - 'buffer' : special mode for buffer response : modify _buffer
+        """
+        _mode: str = mode
+        _state: str = state
+        _pm: bytes = pm
+        _buffer: bytes = buffer
+
+        if self.is_pm_response(_data):
+            logging.debug('pm response detected')
+            _mode= 'pm'
+
+        if _mode == 'pm':
+            if _data[-2:] == b'\r\n':
+                _pm = _data
+                logging.debug('pm detected (%d bytes)',len(_pm))
+                #todo: analyse the pm response
+                _mode = ''
+            else:
+                _pm = _pm + _data
+            #return after processing _pm
+            return _pm, _buffer, _mode, _state
+
+        #here _mode is not 'pm'
+        logging.debug('normal response detected')
+        if _data[-2:] != b'\r\n':
+            _mode='buffer'
+
+        if _mode == 'buffer':
+            _buffer = _buffer + _data
+        else:
+            _buffer = _data
+
+        if _buffer[-2:] == b'\r\n':
+            logging.debug('buffer is complete')
+            _mode = '' # revert to normal mode for next data
+            if self.is_daq_desc(_buffer):
+                logging.info('dac desq detected (%d bytes), skipped',len(_buffer))
+            else:
+                _state = self.parse_response_buffer(self._mq, _state, _buffer)
+            _buffer = b'' #clear working buffer
+        #return after processing _buffer
+        return _pm, _buffer, _mode, _state
+
     def loop(self):
         """loop waiting requests and replies"""
         _socket: socket.socket
@@ -332,37 +440,8 @@ class TelnetProxy(SharedDataReceiver):
                     self._telnet.send(_data)
                     logging.debug('telnet sent back response to client')
                     # analyse the response
-                    if len(_data)>1 and repr(_data[0:2])=="b'pm'":
-                        logging.debug('pm response detected')
-                        _pm = _data
-                        if _pm[-2:] == b'\r\n':
-                            logging.debug('pm response is complete')
-                            #todo: analyse the pm response
-                        else:
-                            logging.debug('pm response is not complete')
-                            _mode= 'pm' # switch to mode where we gather the pm response
-                    if _mode == 'pm':
-                        _pm = _pm + _data
-                        if _pm[-2:] == b'\r\n':
-                            logging.debug('pm detected (%d bytes)',len(_pm))
-                            #todo: analyse the pm response
-                        _mode = ''
-                    if (repr(_data[0:2]) != "b'pm'") and (_mode != 'pm'):
-                        if _data[-2:] != b'\r\n':
-                            _mode='buffer'
-                        logging.debug('normal response detected %s',repr(_data))
-                        if _mode == 'buffer':
-                            _buffer = _buffer + _data
-                        else:
-                            _buffer = _data
-                        if _buffer[-2:] == b'\r\n':
-                            logging.debug('buffer is complete')
-                            _mode = ''
-                            if len(_buffer)>4 and repr(_buffer[0:4]) == "b'$<<<'":
-                                logging.info('dac desq detected (%d bytes), skipped',len(_buffer))
-                            else:
-                                _state = self.parse_response_buffer(self._mq, _state, _buffer)
-                            _buffer = b''
+                    _pm, _buffer, _mode, _state = self.analyse_data_buffer_v2(self._mq, _data,
+                               _pm, _buffer, _mode, _state)
 
 class ThreadedTelnetProxy(Thread):
     """This class implements a Thread to run the TelnetProxy"""
