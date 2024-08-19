@@ -1,5 +1,7 @@
 """
-This module implements the gateway 
+This module implements the gateway listener
+it discovers the IGW when receiving broadcasted udp messages
+it forwards messages from the IGW to the boiler
 """
 import logging
 import platform
@@ -13,7 +15,7 @@ from shared import ListenerSender
 
 class GatewayListenerSender(ListenerSender):
     """
-    This class extends ListenerSender class to implement the gateway.
+    This class extends ListenerSender class to implement the gateway listener.
     """
     udp_port: Annotated[int, annotated_types.Gt(0)]
     _mq: Queue
@@ -69,7 +71,9 @@ class GatewayListenerSender(ListenerSender):
         logging.debug('listener bound to %s, port %d', self.src_iface.decode(), self.udp_port)
 
     def handle_data(self, data: bytes, addr: tuple):
-        """handle udp data"""
+        """handle udp data
+            
+        """
         _str: str = None
         _subpart: str = None
         _str_parts: list[str] = None
@@ -81,12 +85,12 @@ class GatewayListenerSender(ListenerSender):
         _str_parts = _str.split('\r\n')
         for part in _str_parts:
             if part.startswith('HargaWebApp'):
-                _subpart = part[13:]  # Extract portion after the 13th character
+                _subpart = part[13:]  # Extract portion after the key
                 logging.info('HargaWebApp:%s', _subpart)
                 self._mq.put('HargaWebApp:'+_subpart)
 
             if part.startswith('SN:'):
-                _subpart = part[3:]  # Extract portion after the 13th character
+                _subpart = part[3:]  # Extract portion after the key
                 logging.info('SN: [%s]', _subpart)
                 self._mq.put('SN:'+_subpart)
 

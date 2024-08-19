@@ -3,7 +3,7 @@ This module implements the boiler proxy
 """
 
 import logging
-import queue
+from queue import Queue
 import platform
 from threading import Thread
 
@@ -13,11 +13,12 @@ class BoilerListenerSender(ListenerSender):
     """
     This class implements the boiler proxy
     """
-    def __init__(self, sq: queue.Queue, src_iface: bytes,dst_iface: bytes):
+    _mq: Queue
+    def __init__(self, mq: Queue, sq: Queue, src_iface: bytes,dst_iface: bytes):
         super().__init__(sq, src_iface, dst_iface)
         # Add any additional initialization logic here
-        self.rq = queue.Queue()
-
+        self.rq = Queue()
+        self._mq = mq
     def handle_first(self, data, addr):
         if self.bound is False:
             logging.debug('BoilerListenerSender first packet, listener not bound yet')
@@ -49,7 +50,7 @@ class BoilerListenerSender(ListenerSender):
             self.listen.bind( ('',self.gw_port+1) )
             logging.debug('listener bound to %s, port %d', self.src_iface.decode(), self.gw_port+1)
         else:
-            self.listen.bind( ('10.0.4.1',self.gw_port) )
+            self.listen.bind( ('',self.gw_port) )
             logging.debug('listener bound to %s, port %d', self.src_iface.decode(), self.gw_port)
 
     def handle_data(self, data: bytes, addr: tuple):
@@ -63,7 +64,9 @@ class BoilerListenerSender(ListenerSender):
         if data.startswith(b'\x00\x02\x48\x53\x56'):
             logging.info('HSV discovered')
             logging.info('HSV=%s',data[2:32].decode())
+            self._mq.put('HSV:' + data[2:32].decode())
             logging.info('Code systeme=%s',data[len(data)-16:len(data)].decode())
+            self._mq.put('SYS:' + data[len(data)-16:len(data)].decode())
 
 class ThreadedBoilerListenerSender(Thread):
     """
@@ -71,11 +74,11 @@ class ThreadedBoilerListenerSender(Thread):
     """
     bls: BoilerListenerSender
 
-    def __init__(self, sq: queue.Queue, src_iface: bytes,dst_iface: bytes):
+    def __init__(self, mq: Queue, sq: Queue, src_iface: bytes,dst_iface: bytes):
         super().__init__()
-        self.bls= BoilerListenerSender(sq, src_iface, dst_iface)
+        self.bls= BoilerListenerSender(mq, sq, src_iface, dst_iface)
 
-    def queue(self) -> queue.Queue:
+    def queue(self) -> Queue:
         """
         This method returns the queue to receive data from.
         """

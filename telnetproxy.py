@@ -1,8 +1,9 @@
 """
-This module implments the TelnetProxy
+This module implements the TelnetProxy
 """
 import socket
 import select
+import time
 from queue import Queue
 import platform
 import logging
@@ -11,6 +12,68 @@ from typing import Annotated, Tuple
 import annotated_types
 
 from shared import SharedDataReceiver,SOCKET_TIMEOUT,BUFF_SIZE
+
+# $login token
+#   $00A000A0
+# $login key
+#   zclient login (x)
+#   $ack
+# $apiversion
+#   $1.0.1
+# $setkomm
+#   $1234567 ack
+# $asnr get
+#   $
+# $igw set 1234567
+#   $ack
+# $daq stop
+#   $daq stopped
+# $logging disable
+#   $logging disabled
+# $daq desc
+#   $<<<DAQPRJ> .... (long)
+# $daq start
+#   $daq started
+# $logging enable
+#   $logging enabled
+# $bootversion
+#   $V0.00
+# $info
+#   $KT: 'Nano.....'
+#   $SWV: 'V00.0n0'
+#   $FWV I/O: 'V0.0.0'
+#   $SN I/O: '1234567'
+#   $SN BCE: '1234567'
+# $uptime
+#   $0000
+# $rtc get
+#   $YYYY-MM-DD HH:MM:SS
+# $par get changed "YYYY-MM-DD HH:MM:SS"
+#   $--
+# $erract
+#   $no errors
+
+# dictionnary
+# BL_ADDR: boiler ip
+# BL_PORT: boiler port
+# HSV: eg HSV/CL 9-60KW V14.0n3
+# SYS: code system
+# KEY: login key
+# TOKEN: login token
+# IGW: internet gateway number
+# API: api version
+# SETKOMM: setkomm value
+# ASNR: asnr version number
+# BOOT: bott version nulmber
+# KT: kt description
+# SWV: software version
+# FWV: firmware i/o version
+# SNIO: sn i/o
+# SNBCE: sn bce
+# UPTIME: uptime
+# RTC: real time count
+
+
 
 class TelnetProxy(SharedDataReceiver):
     """
@@ -23,7 +86,11 @@ class TelnetProxy(SharedDataReceiver):
     _resend: socket.socket
     _telnet: socket.socket
     _mq: Queue
-
+    _pm: bytes
+    _pmstamp: int = 0
+    _dict: dict = None
+    _values: dict = None # telnet pm values
+#    _convert: dict = None # values converted independent from telnet order (firmware specific)
     def __init__(self, mq: Queue, src_iface, dst_iface, port):
         super().__init__()
         self.src_iface = src_iface
@@ -41,7 +108,26 @@ class TelnetProxy(SharedDataReceiver):
         self._resend.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
         self._resend.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self._resend.settimeout(SOCKET_TIMEOUT)
-
+        self._values= dict()
+        self._convert= dict()
+        self._dict= dict()
+        self._dict = {
+			 0 :'c0'  ,  1:'c1'  ,  2:'c2'  ,  3:'c3'  ,  4:'c4'  ,  5:'c12' ,  6:'c13' ,  7:'c176',  8:'c5'  ,  9:'c53',
+			10 :'c52' , 11:'c8'  , 12:'c9'  , 13:'c10' , 14:'c180', 15:'c96' , 16:'c106', 17:'c95' , 18:'c110', 19:'c11',
+			20 :'c134', 21:'c56' , 22:'c48' , 23:'c49' , 24:'c50' , 25:'c51' , 26:'c55' , 27:'c160', 28:'c54' , 29:'c121',
+			30 :'c97' , 31:'c57' , 32:'c58' , 33:'c59' , 34:'c60' , 35:'c61' , 36:'c112', 37:'c111', 38:'c113', 39:'c114',
+			40 :'c115', 41:'c99' , 42:'c154', 43:'c130', 44:'c136', 45:'c62' , 46:'c79' , 47:'c73' , 48:'c129', 49:'c15',
+			50 :'c76' , 51:'c119', 52:'c128', 53:'c6'  , 54:'c7'  , 55:'c107', 56:'c16' , 57:'c17' , 58:'c137', 59:'c45',
+			60 :'c84' , 61:'c100', 62:'c21' , 63:'c23' , 64:'c138', 65:'c46' , 66:'c85' , 67:'c101', 68:'c22' , 69:'c24',
+			70 :'c139', 71:'c47' , 72:'c86' , 73:'c102', 74:'c120', 75:'c41' , 76:'c187', 77:'c42' , 78:'c186', 79:'c188',
+			80 :'c19' , 81:'c20' , 82:'c27' , 83:'c28' , 84:'c92' , 85:'c80' , 86:'c118', 87:'c145', 88:'c168', 89:'c146',
+			90 :'c147', 91:'c148', 92:'c149', 93:'c150', 94:'c151', 95:'c152', 96:'c153', 97:'c169', 98:'c170', 99:'c171',
+			100:'c172',101:'c173',102:'c174',103:'c182',104:'c181' ,105:'c165',106:'c166',107:'c167' 
+        }
+        self._dict = {
+			 0 :'c0'  ,  3:'c3'  ,  8:'c5'  , 15:'c96' , 20:'c134', 53:'c6'  , 54:'c7'  , 62:'c21' , 64:'c138', 82:'c27' 
+        }
+    
     def bind(self):
         """bind the telnet socket"""
         logging.debug('telnet binding to port %s', self.port)
@@ -68,14 +154,14 @@ class TelnetProxy(SharedDataReceiver):
             logging.debug('waiting for the discovery of the boiler address and port')
             self.handle()
         # redistribute BL info to the mq Queue for further use
-        self._mq.put('BL_ADDR:'+str(self.bl_addr,'ascii'))
-        self._mq.put('BL_PORT:'+str(self.bl_port))
+        self._put('BL_ADDR',str(self.bl_addr,'ascii'))
+        self._put('BL_PORT',str(self.bl_port))
     def connect(self):
         """connect to the boiler"""
         logging.info('telnet connecting to %s on port 23', repr(self.bl_addr))
         self._resend.connect((self.bl_addr, 23))
 
-    def parse_request(self, mq: Queue, data: bytes) -> str:
+    def parse_request(self, data: bytes) -> str:
         """parse the telnet request
         set _state to the state of the request/response dialog
         extract _subpart from the request"""
@@ -94,8 +180,7 @@ class TelnetProxy(SharedDataReceiver):
                 logging.debug('$login key detected')
                 _state = '$login key'
                 _subpart = _part[11:]
-                mq.put('$login key:'+_subpart)
-                logging.info('$login key:%s', _subpart)
+                self._put('KEY', _subpart)
             elif _part.startswith('$apiversion'):
                 logging.debug('$apiversion detected')
                 _state = '$apiversion'
@@ -109,8 +194,7 @@ class TelnetProxy(SharedDataReceiver):
                 logging.debug('$igw set detected')
                 _state = '$igw set'
                 _subpart = _part[9:]
-                mq.put('$igw set:'+_subpart)
-                logging.info('$igw set:%s', _subpart)
+                self._put('IGW', _subpart)
             elif _part.startswith('$daq stop'):
                 logging.debug('$daq stop detected')
                 _state = '$daq stop'
@@ -157,8 +241,11 @@ class TelnetProxy(SharedDataReceiver):
                 _state = 'unknown'
         logging.debug('_state/_part: %s/%s', _state, _part)
         return _state
+    def _put(self, key: str, subpart: str):
+        logging.debug("put %s:%s", key, subpart)
+        self._mq.put(key + ":" + subpart)
 
-    def parse_response_buffer(self, mq: Queue, state: str, buffer: bytes) -> str:
+    def parse_response_buffer(self, state: str, buffer: bytes) -> str:
         """parse the response buffer sent by boiler"""
         _state: str = state
         _part: str = None
@@ -172,8 +259,7 @@ class TelnetProxy(SharedDataReceiver):
             if _state == '$login token':
                 # $wwxxyyzz
                 _subpart = _part[1:]
-                logging.info('$login token:%s', _subpart)
-                mq.put('$login token:'+_subpart)
+                self._put('TOKEN', _subpart)
                 _state = ''
             elif _state == '$login key':
                 # b'zclient login (0)\r\n$ack\r\n'
@@ -187,23 +273,20 @@ class TelnetProxy(SharedDataReceiver):
                 if _part.startswith("$"):
                     logging.debug('$apiversion $ack detected')
                     _subpart = _part[1:]
-                    logging.info('$apiversion:%s', _subpart)
-                    mq.put('$apiversion:'+_subpart)
+                    self._put('API', _subpart)
                     _state = ''
             elif _state == '$setkomm':
                 # $1234567 ack
                 if "ack" in _part:
                     _subpart = _part[1:-4]
-                    logging.info('$setkomm:%s', _subpart)
-                    mq.put('$setkomm:'+_subpart)
+                    self._put('SETKOMM', _subpart)
                     _state = ''
             elif _state == '$asnr get':
                 # $1.0.1
                 if _part.startswith("$"):
                     logging.debug('$asnr get $ack detected')
                     _subpart = _part[1:]
-                    logging.debug('subpart:%s', _subpart)
-                    mq.put('$asnr get:'+_subpart)
+                    self._put('ASNR', _subpart)
                     _state = ''
             elif _state == '$igw set':
                 if "ack" in _part:
@@ -231,49 +314,41 @@ class TelnetProxy(SharedDataReceiver):
                 if _part.startswith("$V"):
                     logging.debug('$bootversion $ack detected')
                     _subpart = _part[2:]
-                    logging.info('$bootversion:%s', _subpart)
-                    mq.put('$bootversion:'+_subpart)
+                    self._put('BOOT', _subpart)
                     _state = ''
             elif _state == '$info':
                 if _part.startswith('$KT:'):
                     logging.debug('$KT $ack detected')
                     _subpart = _part[5:]
-                    logging.info('$KT:%s', _subpart)
-                    mq.put('$KT:'+_subpart)
+                    self._put('KT', _subpart)
                 if _part.startswith('$SWV:'):
                     logging.debug('$SWV $ack detected')
                     _subpart = _part[6:]
-                    logging.info('$SWV:%s', _subpart)
-                    mq.put('$SWV:'+_subpart)
+                    self._put('SWV', _subpart)
                 if _part.startswith('$FWV I/O:'):
                     logging.debug('$FWV I/O $ack detected')
                     _subpart = _part[10:]
-                    logging.info('$FWV I/O:%s', _subpart)
-                    mq.put('$FWV I/O:'+_subpart)
+                    self._put('FWV', _subpart)
                 if _part.startswith('$SN I/O:'):
                     logging.debug('$SN I/O $ack detected')
                     _subpart = _part[9:]
-                    logging.info('$SN I/O:%s', _subpart)
-                    mq.put('$SN I/O:'+_subpart)
+                    self._put('SNIO', _subpart)
                 if _part.startswith('$SN BCE:'):
                     logging.debug('$SN BCE $ack detected')
                     _subpart = _part[9:]
-                    logging.info('$SN BCE:%s', _subpart)
-                    mq.put('$SN BCE:'+_subpart)
+                    self._put('SNBCE', _subpart)
                     _state = ''
             elif _state == '$uptime':
                 if _part.startswith('$'):
                     logging.debug('$uptime $ack detected')
                     _subpart = _part[1:]
-                    logging.info('$uptime:%s', _subpart)
-                    mq.put('$uptime:'+_subpart)
+                    self._put('UPTIME', _subpart)
                     _state = ''
             elif _state == '$rtc get':
                 if _part.startswith('$'):
                     logging.debug('$rtc get $ack detected')
                     _subpart = _part[1:]
-                    logging.info('$rtc:%s', _subpart)
-                    mq.put('$rtc get:'+_subpart)
+                    self._put('RTC', _subpart)
                     _state = ''
             elif _state == '$par get changed':
                 if _part == '$--':
@@ -296,49 +371,24 @@ class TelnetProxy(SharedDataReceiver):
                 _state = ''
         return _state
 
-    def analyse_data_buffer(self, _data: bytes,
-                            pm: bytes, buffer: bytes,
-                            mode: str, state: str) -> Tuple[bytes, bytes, str, str]:
-        """analyse the data buffer"""
-        _mode: str = mode
-        _state: str = state
-        _pm: bytes = pm
-        _buffer: bytes = buffer
-
-        if len(_data)>1 and repr(_data[0:2])=="b'pm'":
-            logging.debug('pm response detected')
-            _pm = _data
-            if _pm[-2:] == b'\r\n':
-                logging.debug('pm response is complete')
-                #todo: analyse the pm response
-            else:
-                logging.debug('pm response is not complete')
-                _mode= 'pm' # switch to mode where we gather the pm response
-        if _mode == 'pm':
-            _pm = _pm + _data
-            if _pm[-2:] == b'\r\n':
-                logging.debug('pm detected (%d bytes)',len(_pm))
-                #todo: analyse the pm response
-            #todo verify if _mode should be set to '' only if pm is complete
-            _mode = ''
-        if (repr(_data[0:2]) != "b'pm'") and (_mode != 'pm'):
-            if _data[-2:] != b'\r\n':
-                _mode='buffer'
-            logging.debug('normal response detected %s',repr(_data))
-            if _mode == 'buffer':
-                _buffer = _buffer + _data
-            else:
-                _buffer = _data
-            if _buffer[-2:] == b'\r\n':
-                logging.debug('buffer is complete')
-                _mode = ''
-                if len(_buffer)>4 and repr(_buffer[0:4]) == "b'$<<<'":
-                    logging.info('dac desq detected (%d bytes), skipped',len(_buffer))
+    def analyse_pm(self, pm: bytes):
+        _part: str = None
+        i: int = -1
+        _str_parts: list[str] = None
+        logging.debug('analyse_pm %d bytes ==>%s',len(pm), repr(pm))
+        _str_parts = pm.decode('ascii').split(' ')
+        for _part in _str_parts:
+#            logging.debug('analyse_pm %d :%s',i,_part)
+            if ((i in self._values) and (_part != self._values[i])) or (not i in self._values):
+                if i in self._values:
+                    logging.debug('analyse_pm changed %d :%s was %s', i, _part, self._values[i])
                 else:
-                    _state = self.parse_response_buffer(self._mq, _state, _buffer)
-                _buffer = b''
-
-        return _pm, _buffer, _mode, _state
+                    logging.debug('analyse_pm     new %d :%s', i, _part)
+                self._values[i]= _part
+                if i in self._dict:
+                    logging.debug('analyse_pm %s --> %s', self._dict[i],_part)
+                    self._put(self._dict[i], _part)
+            i=i+1
 
     def is_pm_response(self, _data: bytes) -> bool:
         """check if the data is a pm response"""
@@ -352,10 +402,14 @@ class TelnetProxy(SharedDataReceiver):
             return True
         return False
 
-    def analyse_data_buffer_v2(self, _mq: Queue, _data: bytes,
+
+    def analyse_data_bufferV2(self, _data: bytes,
                                pm: bytes, buffer: bytes,
                                mode: str, state: str) -> Tuple[bytes, bytes, str, str]:
-        """analyse the data buffer
+        """analyse the data buffer sent by the boiler
+        it can be a buffer response for a request of the IGW
+            values split by \\r\\n
+        if can be bytes starting with 'pm' , values split by spaces
         _mode can have the following values:
         - '' : normal mode
         - 'pm' : special mode for pm response : modify _pm 
@@ -375,10 +429,10 @@ class TelnetProxy(SharedDataReceiver):
                 _pm = _data
                 logging.debug('pm detected (%d bytes)',len(_pm))
                 #todo: analyse the pm response
+                self.analyse_pm(_pm)
                 _mode = ''
             else:
                 _pm = _pm + _data
-            #return after processing _pm
             return _pm, _buffer, _mode, _state
 
         #here _mode is not 'pm'
@@ -397,10 +451,64 @@ class TelnetProxy(SharedDataReceiver):
             if self.is_daq_desc(_buffer):
                 logging.info('dac desq detected (%d bytes), skipped',len(_buffer))
             else:
-                _state = self.parse_response_buffer(self._mq, _state, _buffer)
+                _state = self.parse_response_buffer(_state, _buffer)
             _buffer = b'' #clear working buffer
         #return after processing _buffer
         return _pm, _buffer, _mode, _state
+
+    def analyse_data_buffer(self, _data: bytes,
+                               buffer: bytes,
+                               mode: str, state: str) -> Tuple[bytes, str, str]:
+        """analyse the data buffer sent by the boiler
+        it can be a buffer response for a request of the IGW
+            values split by \\r\\n
+        if can be bytes starting with 'pm' , values split by spaces
+        _mode can have the following values:
+        - '' : normal mode
+        - 'pm' : special mode for pm response : modify _pm 
+        - 'buffer' : special mode for buffer response : modify _buffer
+        """
+        _mode: str = mode
+        _state: str = state
+        _buffer: bytes = buffer
+
+        if self.is_pm_response(_data):
+            logging.debug('pm response detected')
+            _mode= 'pm'
+
+        if _mode == 'pm':
+            if _data[-2:] == b'\r\n':
+                _time= time.time()
+                if (self._pmstamp == 0) or ((_time - self._pmstamp) > self.config.scan):
+                    self._pm = _data
+                    logging.debug('pm detected (%d bytes)',len(self._pm))
+                    #todo: analyse the pm response
+                    self.analyse_pm(self._pm)
+                    _mode = ''
+            else:
+                self._pm = self._pm + _data
+            return _buffer, _mode, _state
+
+        #here _mode is not 'pm'
+        logging.debug('normal response detected')
+        if _data[-2:] != b'\r\n':
+            _mode='buffer'
+
+        if _mode == 'buffer':
+            _buffer = _buffer + _data
+        else:
+            _buffer = _data
+
+        if _buffer[-2:] == b'\r\n':
+            logging.debug('buffer is complete')
+            _mode = '' # revert to normal mode for next data
+            if self.is_daq_desc(_buffer):
+                logging.info('dac desq detected (%d bytes), skipped',len(_buffer))
+            else:
+                _state = self.parse_response_buffer(_state, _buffer)
+            _buffer = b'' #clear working buffer
+        #return after processing _buffer
+        return _buffer, _mode, _state
 
     def loop(self):
         """loop waiting requests and replies"""
@@ -423,7 +531,7 @@ class TelnetProxy(SharedDataReceiver):
                     _data, _addr = self._telnet.recvfrom(BUFF_SIZE)
                     logging.debug('telnet received  request %d bytes ==>%s',
                                  len(_data), repr(_data))
-                    _state = self.parse_request(self._mq, _data)
+                    _state = self.parse_request(_data)
                     logging.debug('_state-->%s',_state)
                     # we should resend it
                     logging.debug('resending %d bytes to %s:%d',
@@ -432,7 +540,8 @@ class TelnetProxy(SharedDataReceiver):
                 if _socket == self._resend:
                     # so we received a reply
                     _data, _addr = self._resend.recvfrom(BUFF_SIZE)
-                    logging.debug('telnet received response %d bytes ==>%s',
+                    if not _data.startswith(b'pm'):
+                        logging.debug('telnet received response %d bytes ==>%s',
                                  len(_data), repr(_data))
 
                     logging.debug('sending %d bytes to %s:%d',
@@ -440,8 +549,8 @@ class TelnetProxy(SharedDataReceiver):
                     self._telnet.send(_data)
                     logging.debug('telnet sent back response to client')
                     # analyse the response
-                    _pm, _buffer, _mode, _state = self.analyse_data_buffer_v2(self._mq, _data,
-                               _pm, _buffer, _mode, _state)
+                    _buffer, _mode, _state = self.analyse_data_buffer(_data,
+                               _buffer, _mode, _state)
 
 class ThreadedTelnetProxy(Thread):
     """This class implements a Thread to run the TelnetProxy"""

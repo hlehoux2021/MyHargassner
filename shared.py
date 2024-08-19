@@ -7,6 +7,7 @@ import platform
 import logging
 from typing import Annotated
 import annotated_types
+import hargconfig
 
 #----------------------------------------------------------#
 SOCKET_TIMEOUT= 0.2
@@ -43,13 +44,11 @@ class SharedDataReceiver(SharedData):
     and a handler to process the received data.
     """
     rq: Queue
+    config: hargconfig.HargConfig = None
 
     def __init__(self):
         super().__init__()
-#        self.gw_port = 0    # source port from which gateway is sending
-#        self.gw_addr= b''   # to save the gateway ip adress when discovered
-#        self.bl_addr= b''   # to save the boiler ip address when discovered
-#        self.bl_port= 0     # destination port to which boiler is listening
+        self.config= hargconfig.HargConfig()
         self.rq = Queue()
 
     def handle(self):

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+# this program implements a fake IGW broadcasting the beginning of message sequence
 import socket
 import time
 

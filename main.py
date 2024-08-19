@@ -15,7 +15,6 @@ Main program to run the telnet proxy, boiler listener and gateway listener
 
 import logging
 import argparse
-
 from telnetproxy import ThreadedTelnetProxy
 from boiler import ThreadedBoilerListenerSender
 from gateway import ThreadedGatewayListenerSender
@@ -83,23 +82,33 @@ logging.info('Started')
 
 #----------------------------------------------------------#
 
-from queue import Queue,Empty
-mq = Queue()
+#from queue import Queue,Empty
 
-tln= ThreadedTelnetProxy(mq, GW_IFACE, BL_IFACE, 23)
-bls= ThreadedBoilerListenerSender(tln.queue(), BL_IFACE, GW_IFACE)
-gls= ThreadedGatewayListenerSender(mq, bls.queue(), GW_IFACE, BL_IFACE, UDP_PORT)
+# MqttInfomer will receive info on the mq queue
+mi = MqttInformer()
+
+# create a telnet proxy. this will forward info to the mq queue
+tln= ThreadedTelnetProxy(mi.queue(), GW_IFACE, BL_IFACE, 23)
+
+# create a BoilerListener
+# it will discover the boiler and forward its addr:port to Telnet Proxy through the tln queue
+bls= ThreadedBoilerListenerSender(mi.queue(), tln.queue(), BL_IFACE, GW_IFACE)
+
+# create a gateway listener
+# it will forward info to MqttInformer through the mq queue
+# it will discover the IGW and forward its addr:port to Boiler Listener through the bls queue
+gls= ThreadedGatewayListenerSender(mi.queue(), bls.queue(), GW_IFACE, BL_IFACE, UDP_PORT)
 
 tln.start()
 bls.start()
 gls.start()
-
-mi = MqttInformer(mq)
 mi.start()
+
+from queue import Empty
 
 while True:
     try:
-        msg = mq.get(block=True, timeout=10)
+        msg = mi.queue().get(block=True, timeout=10)
         logging.info('handleReceiveQueue: received %s', msg)
         if msg.startswith('toto:'):
             logging.info('ReceiveQueue=%s', msg.split(':')[1])
