@@ -17,18 +17,6 @@ class HargConfig():
         self.scan= 60
         # defining the list of value (from telnetproxy) we want to expose
         self.wanted= {
-			 'c0'   ,  
-             'c3'   ,
-             'c5'   , 
-             'c6'   , 
-             'c7'   , 
-             'c21'  , 
-             'c27'  ,
-             'c96'  ,
-             'c134' , 
-             'c138'
-        }
-        self.wanted= {
 			 'c0', 'c1','c2','c3','c4','c5','c6','c7','c8','c9',
 			 'c10', 'c11','c12','c13','c14','c15','c16','c17','c18','c19',
 			 'c20', 'c21','c22','c23','c24','c25','c26','c27','c28','c29',
@@ -40,8 +28,32 @@ class HargConfig():
 			 'c80', 'c81','c82','c83','c84','c85','c86','c87','c88','c89',
 			 'c90', 'c91','c92','c93','c94','c95','c96','c97','c98','c99'
         }
+        self.wanted= {
+             'UPTIME', 'SYS', 'BOOT', 'IGW', 'SWV', 'FWV', 'SNIO', 'SNBCE', 'RTC',
+			 'c0'   ,  
+             'c3'   ,
+             'c5'   , 
+             'c6'   , 
+             'c7'   , 
+             'c21'  , 
+             'c27'  ,
+             'c96'  ,
+             'c134' , 
+             'c138'
+        }
+
         # explaining the values
         self.desc= {
+
+'UPTIME':{'name':'UPTIME',			'unit':'',		'desc':'uptime'},
+'SYS':{'name':'SYS',				'unit':'',		'desc':'Code system'},
+'BOOT':{'name':'BOOT',				'unit':'',		'desc':'Boot version'},
+'IGW':{'name':'IGW',				'unit':'',		'desc':'N° de série Passerelle'},
+'SWV':{'name':'SWV',				'unit':'',		'desc':'Version logiciel'},
+'FWV':{'name':'FWV',				'unit':'',		'desc':'Version firmware I/O'},
+'SNIO':{'name':'SNIO',				'unit':'',		'desc':'N° de série I/O'},
+'SNBCE':{'name':'SNBCE',			'unit':'',		'desc':'N° de série Pupitre'},
+'RTC':{'name':'RTC',	    		'unit':'',		'desc':'real time counter'},
 'c0':{'name':'ZK',				    'unit':'',		'desc':'etat chaudiere'},
 'c1':{'name':'O2',				    'unit':'%',	    'desc':'O2 est'},
 'c2':{'name':'O2soll',			    'unit':'%',	    'desc':'O2 doit'},

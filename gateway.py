@@ -86,13 +86,13 @@ class GatewayListenerSender(ListenerSender):
         for part in _str_parts:
             if part.startswith('HargaWebApp'):
                 _subpart = part[13:]  # Extract portion after the key
-                logging.info('HargaWebApp:%s', _subpart)
-                self._mq.put('HargaWebApp:'+_subpart)
+                logging.info('HargaWebApp££%s', _subpart)
+                self._mq.put('HargaWebApp££'+_subpart)
 
             if part.startswith('SN:'):
                 _subpart = part[3:]  # Extract portion after the key
                 logging.info('SN: [%s]', _subpart)
-                self._mq.put('SN:'+_subpart)
+                self._mq.put('SN££'+_subpart)
 
 class ThreadedGatewayListenerSender(Thread):
     """This class implements a Thread to run the gateway."""

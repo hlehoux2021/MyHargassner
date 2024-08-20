@@ -64,9 +64,9 @@ class BoilerListenerSender(ListenerSender):
         if data.startswith(b'\x00\x02\x48\x53\x56'):
             logging.info('HSV discovered')
             logging.info('HSV=%s',data[2:32].decode())
-            self._mq.put('HSV:' + data[2:32].decode())
+            self._mq.put('HSV££' + data[2:32].decode())
             logging.info('Code systeme=%s',data[len(data)-16:len(data)].decode())
-            self._mq.put('SYS:' + data[len(data)-16:len(data)].decode())
+            self._mq.put('SYS££' + data[len(data)-16:len(data)].decode())
 
 class ThreadedBoilerListenerSender(Thread):
     """

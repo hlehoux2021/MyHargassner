@@ -29,7 +29,7 @@ class MqttInformer():
     _web_app: Sensor = None
     _key: Sensor = None
     _kt: Sensor = None
-    _swv: Sensor = None
+    #_swv: Sensor = None
 
     def __init__(self):
         self.config= hargconfig.HargConfig()
@@ -93,7 +93,7 @@ class MqttInformer():
         self._key = self._create_sensor("Login Key", "KEY")
         # sensors coming in normal mode
         self._kt = self._create_sensor("KT","KT")
-        self._swv = self._create_sensor("Software Version", "SWV")
+        #self._swv = self._create_sensor("Software Version", "SWV")
         # sensors wanted from the pm buffer
         for _part in self.config.wanted:
             _sensor= self._create_sensor(self.config.desc[_part]['name'],_part)
@@ -106,7 +106,7 @@ class MqttInformer():
         while True:
             try:
                 msg = self._info_queue.get(block=True, timeout=10)
-                _str_parts = msg.split(':')
+                _str_parts = msg.split('££')
                 if _stage == 'device_info_ok':
                     # we are in normal mode, we handle new or modified values
                     logging.debug('normal mode analyse message')
@@ -118,8 +118,8 @@ class MqttInformer():
                             self._web_app.set_state(_str_parts[1])
                         if _str_parts[0] == 'KT':
                             self._kt.set_state(_str_parts[1])
-                        if _str_parts[0] == 'SWV':
-                            self._swv.set_state(_str_parts[1])
+ #                       if _str_parts[0] == 'SWV':
+ #                           self._swv.set_state(_str_parts[1])
                         # treat sensors from telnet pm buffer
                         if _str_parts[0] in self.config.wanted and _str_parts[0] in self._sensors:
                             logging.info('updating state of sensor:%s',_str_parts[0])

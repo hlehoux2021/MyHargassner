@@ -64,7 +64,7 @@ from shared import SharedDataReceiver,SOCKET_TIMEOUT,BUFF_SIZE
 # API: api version
 # SETKOMM: setkomm value
 # ASNR: asnr version number
-# BOOT: bott version nulmber
+# BOOT: boot version number
 # KT: kt description
 # SWV: software version
 # FWV: firmware i/o version
@@ -86,11 +86,10 @@ class TelnetProxy(SharedDataReceiver):
     _resend: socket.socket
     _telnet: socket.socket
     _mq: Queue
-    _pm: bytes
+    _pm: bytes = b''
     _pmstamp: int = 0
-    _dict: dict = None
     _values: dict = None # telnet pm values
-#    _convert: dict = None # values converted independent from telnet order (firmware specific)
+
     def __init__(self, mq: Queue, src_iface, dst_iface, port):
         super().__init__()
         self.src_iface = src_iface
@@ -110,24 +109,7 @@ class TelnetProxy(SharedDataReceiver):
         self._resend.settimeout(SOCKET_TIMEOUT)
         self._values= dict()
         self._convert= dict()
-        self._dict= dict()
-        self._dict = {
-			 0 :'c0'  ,  1:'c1'  ,  2:'c2'  ,  3:'c3'  ,  4:'c4'  ,  5:'c12' ,  6:'c13' ,  7:'c176',  8:'c5'  ,  9:'c53',
-			10 :'c52' , 11:'c8'  , 12:'c9'  , 13:'c10' , 14:'c180', 15:'c96' , 16:'c106', 17:'c95' , 18:'c110', 19:'c11',
-			20 :'c134', 21:'c56' , 22:'c48' , 23:'c49' , 24:'c50' , 25:'c51' , 26:'c55' , 27:'c160', 28:'c54' , 29:'c121',
-			30 :'c97' , 31:'c57' , 32:'c58' , 33:'c59' , 34:'c60' , 35:'c61' , 36:'c112', 37:'c111', 38:'c113', 39:'c114',
-			40 :'c115', 41:'c99' , 42:'c154', 43:'c130', 44:'c136', 45:'c62' , 46:'c79' , 47:'c73' , 48:'c129', 49:'c15',
-			50 :'c76' , 51:'c119', 52:'c128', 53:'c6'  , 54:'c7'  , 55:'c107', 56:'c16' , 57:'c17' , 58:'c137', 59:'c45',
-			60 :'c84' , 61:'c100', 62:'c21' , 63:'c23' , 64:'c138', 65:'c46' , 66:'c85' , 67:'c101', 68:'c22' , 69:'c24',
-			70 :'c139', 71:'c47' , 72:'c86' , 73:'c102', 74:'c120', 75:'c41' , 76:'c187', 77:'c42' , 78:'c186', 79:'c188',
-			80 :'c19' , 81:'c20' , 82:'c27' , 83:'c28' , 84:'c92' , 85:'c80' , 86:'c118', 87:'c145', 88:'c168', 89:'c146',
-			90 :'c147', 91:'c148', 92:'c149', 93:'c150', 94:'c151', 95:'c152', 96:'c153', 97:'c169', 98:'c170', 99:'c171',
-			100:'c172',101:'c173',102:'c174',103:'c182',104:'c181' ,105:'c165',106:'c166',107:'c167' 
-        }
-        self._dict = {
-			 0 :'c0'  ,  3:'c3'  ,  8:'c5'  , 15:'c96' , 20:'c134', 53:'c6'  , 54:'c7'  , 62:'c21' , 64:'c138', 82:'c27' 
-        }
-    
+   
     def bind(self):
         """bind the telnet socket"""
         logging.debug('telnet binding to port %s', self.port)
@@ -141,7 +123,7 @@ class TelnetProxy(SharedDataReceiver):
     def accept(self):
         """accept a telnet connection"""
         _addr: tuple
-        logging.debug('telnet accepting a connection')
+        logging.info('telnet accepting a connection')
         self._telnet, _addr = self._listen.accept()
         logging.info('telnet connection from %s:%d accepted', _addr[0], _addr[1])
         # remember the source port from which gateway is telneting
@@ -242,8 +224,8 @@ class TelnetProxy(SharedDataReceiver):
         logging.debug('_state/_part: %s/%s', _state, _part)
         return _state
     def _put(self, key: str, subpart: str):
-        logging.debug("put %s:%s", key, subpart)
-        self._mq.put(key + ":" + subpart)
+        logging.info("put %s --> %s", key, subpart)
+        self._mq.put(key + "££" + subpart)
 
     def parse_response_buffer(self, state: str, buffer: bytes) -> str:
         """parse the response buffer sent by boiler"""
@@ -385,9 +367,9 @@ class TelnetProxy(SharedDataReceiver):
                 else:
                     logging.debug('analyse_pm     new %d :%s', i, _part)
                 self._values[i]= _part
-                if i in self._dict:
-                    logging.debug('analyse_pm %s --> %s', self._dict[i],_part)
-                    self._put(self._dict[i], _part)
+                if i in self.config.map:
+                    logging.info('pm %s --> %s', self.config.map[i],_part)
+                    self._put(self.config.map[i], _part)
             i=i+1
 
     def is_pm_response(self, _data: bytes) -> bool:
@@ -481,10 +463,10 @@ class TelnetProxy(SharedDataReceiver):
                 _time= time.time()
                 if (self._pmstamp == 0) or ((_time - self._pmstamp) > self.config.scan):
                     self._pm = _data
+                    self._pmstamp = _time
                     logging.debug('pm detected (%d bytes)',len(self._pm))
-                    #todo: analyse the pm response
                     self.analyse_pm(self._pm)
-                    _mode = ''
+                _mode = ''
             else:
                 self._pm = self._pm + _data
             return _buffer, _mode, _state
@@ -541,13 +523,19 @@ class TelnetProxy(SharedDataReceiver):
                     # so we received a reply
                     _data, _addr = self._resend.recvfrom(BUFF_SIZE)
                     if not _data.startswith(b'pm'):
-                        logging.debug('telnet received response %d bytes ==>%s',
-                                 len(_data), repr(_data))
-
-                    logging.debug('sending %d bytes to %s:%d',
-                                  len(_data), self.gw_addr.decode(), self.gwt_port)
-                    self._telnet.send(_data)
-                    logging.debug('telnet sent back response to client')
+                        logging.debug('telnet received response %d bytes ==>%s',len(_data), repr(_data))
+                    else:
+                        logging.debug('telnet received pm response %d bytes',len(_data))
+                    logging.debug('sending %d bytes to %s:%d',len(_data), self.gw_addr.decode(), self.gwt_port)
+                    #todo manage when not all data is sent in one call
+                    #todo manage exceptions
+                    try:
+                        if self._telnet.send(_data) != len(_data):
+                            logging.error('telnet send error: not all data sent')                    
+                        logging.debug('telnet sent back response to client')
+                    except Exception as err:
+                        logging.critical("Exception: %s", type(err))
+                        raise
                     # analyse the response
                     _buffer, _mode, _state = self.analyse_data_buffer(_data,
                                _buffer, _mode, _state)
