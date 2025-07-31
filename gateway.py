@@ -99,7 +99,7 @@ class ThreadedGatewayListenerSender(Thread):
     gls: GatewayListenerSender
 
     def __init__(self, mq: Queue, sq: Queue, src_iface: bytes,dst_iface: bytes, udp_port: int):
-        super().__init__()
+        super().__init__(name='GatewayListener')
         self.gls= GatewayListenerSender(mq, sq, src_iface, dst_iface, udp_port)
 
     def queue(self) -> Queue:

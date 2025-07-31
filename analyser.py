@@ -10,16 +10,16 @@ import hargconfig
 
 class Analyser():
     """
-    analyser
+    analyser for the dialog with boiler
     """
-    config: hargconfig.HargConfig = None
+    config: hargconfig.HargConfig
     _mq: Queue
     _pmstamp: int = 0
-    _values: dict = None # telnet pm values
+    _values: dict # telnet pm values
     _pm: bytes = b''
 
     def __init__(self,mq: Queue) -> None:
-        _mq= mq
+        self._mq= mq
         self._values= dict()
         self.config= hargconfig.HargConfig()
 
@@ -123,14 +123,14 @@ class Analyser():
         logging.debug('_state/_part: %s/%s', _state, _part)
         return _state
 
-    def parse_response_buffer(self, state: str, buffer: bytes) -> str:
+    def _parse_response_buffer(self, state: str, buffer: bytes) -> str:
         """parse the response buffer sent by boiler"""
         _state: str = state
         _part: str = None
         _subpart: str = None
         _str_parts: list[str] = None
 
-        logging.debug('parse_response input _state=%s',_state)
+        logging.debug('_parse_response input _state=%s',_state)
         _str_parts= repr(buffer)[2:-1].split('\\r\\n')
         for _part in _str_parts:
             logging.debug('part:%s', _part)
@@ -320,7 +320,7 @@ class Analyser():
             if self.is_daq_desc(_buffer):
                 logging.info('dac desq detected (%d bytes), skipped',len(_buffer))
             else:
-                _state = self.parse_response_buffer(_state, _buffer)
+                _state = self._parse_response_buffer(_state, _buffer)
             _buffer = b'' #clear working buffer
         #return after processing _buffer
         return _buffer, _mode, _state

@@ -1,9 +1,8 @@
 """
 This module implements the TelnetProxy
 """
-import socket
+import socket as s
 import select
-import time
 from queue import Queue
 import platform
 import logging
@@ -12,6 +11,7 @@ from typing import Annotated, Tuple
 import annotated_types
 
 from shared import SharedDataReceiver,SOCKET_TIMEOUT,BUFF_SIZE
+from analyser import Analyser
 
 # $login token
 #   $00A000A0
@@ -73,6 +73,130 @@ from shared import SharedDataReceiver,SOCKET_TIMEOUT,BUFF_SIZE
 # UPTIME: uptime
 # RTC: real time count
 
+# Arret
+#$par get PR001\r\n
+#    $PR001;6;2;4;1;0;0;0;Mode;Manu;Arr;Ballon;Auto;Arr combustion;0;\r\n
+#$par set "PR001;6;1"\r\n
+#   zPa A: PR001 (Mode) = Ballon\r\n
+#   zPa N: PR001 (Mode) = Arr\r\n
+#   zParamter PR001 per APP verstellt\r\n
+#   $ack\r\n
+#$par get PR001\r\n
+#   $PR001;6;1;4;1;0;0;0;Mode;Manu;Arr;Ballon;Auto;Arr combustion;0;\r\n
+#
+# Auto
+#$par get PR001\r\n
+#   $PR001;6;1;4;1;0;0;0;Mode;Manu;Arr;Ballon;Auto;Arr combustion;0;\r\n
+# $par set "PR001;6;3"\r\n
+#   zPa A: PR001 (Mode) = Arr\r\n
+#   zPa N: PR001 (Mode) = Auto\r\n
+#   zParamter PR001 per APP verstellt\r\n
+#   $ack\r\n
+#$par get PR001\r\n
+#   $PR001;6;3;4;1;0;0;0;Mode;Manu;Arr;Ballon;Auto;Arr combustion;0;\r\n
+#
+# table, 6 champs
+# Mode
+# Manu : 0
+# Arr : 1
+# Ballon : 2
+# Auto : 3
+# Arret Combustion : 4
+
+#Chauffage Zone 1
+# 0: arret
+# 1: auto
+# 2: reduire
+# 3: confort
+# 4: 1x confort
+# 5: Refroid
+# automatique
+#$par get PR011\r\n
+#   $PR011;6;0;5;1;0;0;0;Zone 1 Mode;Arr;Auto;R\xe9duire;Confort;1x Confort;Refroid.;0;\r\n
+#$par set "PR011;6;1"\r\n
+#   zPa A: PR011 (Mode) = Arr\r\nz
+#   Set Para changed\r\n
+#   zPa N: PR011 (Mode) = Auto\r\n
+#   zParamter PR011 per APP verstellt\r\n
+#   $ack\r\n
+#
+# reduire
+#$par set "PR011;6;2"\r\n
+# confort
+#$par set "PR011;6;3"\r\n
+# arret
+# $par set "PR011;6;0"\r\n
+#   zPa A: PR011 (Mode) = Confort\r\n
+#   zPa N: PR011 (Mode) = Arr\r\n
+#   zParamter PR011 per APP verstellt\r\n
+#   $ack
+#   zFr 1 Set Mode 0 (2)\r\n
+#   zHK1 Restwaerme\r\n
+#   zkeine Anforderung\r\n
+#   zPuffer Aus\r\n
+
+
+class TelnetClient():
+    """
+    implement a client connecting to a telnet service
+    """
+    _sock= None
+    def __init__(self):
+        super().__init__()
+        # we will now create the socket to resend the telnet request
+        self._sock = s.socket(s.AF_INET, s.SOCK_STREAM)
+        self._sock.setsockopt(s.SOL_SOCKET, s.SO_REUSEPORT, 1)
+        self._sock.setsockopt(s.SOL_SOCKET, s.SO_REUSEADDR, 1)
+        self._sock.settimeout(SOCKET_TIMEOUT)
+
+    def connect(self, addr: bytes, *, port: int = 23):
+        """connect to the boiler"""
+        logging.info('telnet connecting to %s on port 23', repr(addr))
+        self._sock.connect((addr, port))
+    def send(self, data: bytes):
+        self._sock.send(data)
+    def socket(self):
+        return self._sock
+    def recvfrom(self) -> Tuple[bytes, bytes]:
+        return self._sock.recvfrom(BUFF_SIZE)
+
+class TelnetService():
+    """
+    implements telnet service receiving requests and forwarding them to the boiler
+    """
+    _listen= None
+    _telnet= None
+
+    def __init__(self, src_iface: bytes):
+        super().__init__()
+        self._listen = s.socket(s.AF_INET, s.SOCK_STREAM)
+        if platform.system() == 'Linux':
+            self._listen.setsockopt(s.SOL_SOCKET, s.SO_BINDTODEVICE, src_iface)
+        self._listen.setsockopt(s.SOL_SOCKET, s.SO_REUSEPORT, 1)
+        self._listen.setsockopt(s.SOL_SOCKET, s.SO_REUSEADDR, 1)
+
+    def bind(self, port: int):
+        """bind the telnet socket"""
+        logging.debug('telnet binding to port %d', port)
+        self._listen.bind(('', port))
+    def listen(self):
+        """listen for a telnet connection"""
+        logging.debug('telnet listening')
+        self._listen.listen()
+    def accept(self) -> bytes:
+        """accept a telnet connection"""
+        _addr: tuple
+        logging.info('telnet accepting a connection')
+        self._telnet, _addr = self._listen.accept()
+        logging.info('telnet connection from %s:%d accepted', _addr[0], _addr[1])
+        # reply the source port from which gateway is telneting
+        return _addr[1]
+    def send(self, data: bytes)-> int:
+        return self._telnet.send(data)
+    def socket(self):
+        return self._telnet
+    def recvfrom(self) -> Tuple[bytes, bytes]:
+        return self._telnet.recvfrom(BUFF_SIZE)
 
 
 class TelnetProxy(SharedDataReceiver):
@@ -82,52 +206,65 @@ class TelnetProxy(SharedDataReceiver):
     src_iface: bytes
     dst_iface: bytes
     port: Annotated[int, annotated_types.Gt(0)]
-    _listen: socket.socket
-    _resend: socket.socket
-    _telnet: socket.socket
-    _mq: Queue
-    _pm: bytes = b''
-    _pmstamp: int = 0
-    _values: dict = None # telnet pm values
+ #   _listen: s.socket
+ #  _resend: s.socket
+    _client: TelnetClient # to request the boiler
+    _service1: TelnetService # to service the IGW gateaway
+    _service2: TelnetService # to service other requests
+ #   _telnet: s.socket
+ #   _mq: Queue
+    _analyser: Analyser
+#    _pmstamp: int = 0
+#    _values: dict = None # telnet pm values
 
     def __init__(self, mq: Queue, src_iface, dst_iface, port):
         super().__init__()
         self.src_iface = src_iface
         self.dst_iface = dst_iface
         self.port = port
-        self._mq = mq
-        self._listen = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        if platform.system() == 'Linux':
-            self._listen.setsockopt(socket.SOL_SOCKET, socket.SO_BINDTODEVICE, self.src_iface)
-        self._listen.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
-        self._listen.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-
+        self._analyser= Analyser(mq)
+#        self._mq = mq
+#        self._listen = s.socket(s.AF_INET, s.SOCK_STREAM)
+#        if platform.system() == 'Linux':
+#            self._listen.setsockopt(s.SOL_SOCKET, s.SO_BINDTODEVICE, self.src_iface)
+#        self._listen.setsockopt(s.SOL_SOCKET, s.SO_REUSEPORT, 1)
+#        self._listen.setsockopt(s.SOL_SOCKET, s.SO_REUSEADDR, 1)
+        self._service1= TelnetService(self.src_iface)
+        self._service2= TelnetService(self.src_iface)
         # we will now create the socket to resend the telnet request
-        self._resend = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self._resend.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
-        self._resend.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self._resend.settimeout(SOCKET_TIMEOUT)
-        self._values= dict()
-        self._convert= dict()
-   
-    def bind(self):
+        self._client= TelnetClient()
+#        self._resend.setsockopt(s.SOL_SOCKET, s.SO_REUSEADDR, 1)
+#        self._resend = s.socket(s.AF_INET, s.SOCK_STREAM)
+#        self._resend.setsockopt(s.SOL_SOCKET, s.SO_REUSEPORT, 1)
+#        self._resend.settimeout(SOCKET_TIMEOUT)
+#        self._values= dict()
+#        self._convert= dict()
+
+    def bind1(self):
         """bind the telnet socket"""
         logging.debug('telnet binding to port %s', self.port)
-        self._listen.bind(('', self.port))
+        self._service1.bind(self.port)
+    def bind2(self):
+        """bind the telnet socket"""
+        logging.debug('telnet binding to port 4000')
+        self._service2.bind(4000)
 
-    def listen(self):
+    def listen1(self):
         """listen for a telnet connection"""
         logging.debug('telnet listening')
-        self._listen.listen()
+        self._service1.listen()
+    def listen2(self):
+        """listen for a telnet connection"""
+        logging.debug('telnet listening')
+        self._service2.listen()
 
-    def accept(self):
+    def accept1(self):
         """accept a telnet connection"""
-        _addr: tuple
-        logging.info('telnet accepting a connection')
-        self._telnet, _addr = self._listen.accept()
-        logging.info('telnet connection from %s:%d accepted', _addr[0], _addr[1])
         # remember the source port from which gateway is telneting
-        self.gwt_port = _addr[1]
+        self.gwt_port = self._service1.accept()
+    def accept2(self):
+        """accept a telnet connection"""
+        self._service2.accept()
 
     # wait for the boiler address and port to be discovered
     def discover(self):
@@ -136,392 +273,62 @@ class TelnetProxy(SharedDataReceiver):
             logging.debug('waiting for the discovery of the boiler address and port')
             self.handle()
         # redistribute BL info to the mq Queue for further use
-        self._put('BL_ADDR',str(self.bl_addr,'ascii'))
-        self._put('BL_PORT',str(self.bl_port))
+        self._analyser.push('BL_ADDR',str(self.bl_addr,'ascii'))
+        self._analyser.push('BL_PORT',str(self.bl_port))
     def connect(self):
         """connect to the boiler"""
         logging.info('telnet connecting to %s on port 23', repr(self.bl_addr))
-        self._resend.connect((self.bl_addr, 23))
-
-    def parse_request(self, data: bytes) -> str:
-        """parse the telnet request
-        set _state to the state of the request/response dialog
-        extract _subpart from the request"""
-        _state: str = None
-        _part: str = None
-        _subpart: str = None
-        _str_parts: list[str] = None
-
-        _str_parts = data.decode('ascii').split('\r\n')
-        for _part in _str_parts:
-            logging.debug('_part=%s',_part)
-            if _part.startswith('$login token'):
-                logging.debug('$login token detected')
-                _state = '$login token'
-            elif _part.startswith('$login key'):
-                logging.debug('$login key detected')
-                _state = '$login key'
-                _subpart = _part[11:]
-                self._put('KEY', _subpart)
-            elif _part.startswith('$apiversion'):
-                logging.debug('$apiversion detected')
-                _state = '$apiversion'
-            elif _part.startswith('$setkomm'):
-                logging.debug('$setkomm detected')
-                _state = '$setkomm'
-            elif _part.startswith('$asnr get'):
-                logging.debug('$asnr get detected')
-                _state = '$asnr get'
-            elif _part.startswith('$igw set'):
-                logging.debug('$igw set detected')
-                _state = '$igw set'
-                _subpart = _part[9:]
-                self._put('IGW', _subpart)
-            elif _part.startswith('$daq stop'):
-                logging.debug('$daq stop detected')
-                _state = '$daq stop'
-            elif _part.startswith('$logging disable'):
-                logging.debug('$logging disable detected')
-                _state = '$logging disable'
-            elif _part.startswith('$daq desc'):
-                logging.debug('$daq desc detected')
-                _state = '$daq desc'
-            elif _part.startswith('$daq start'):
-                logging.debug('$daq start detected')
-                _state = '$daq start'
-            elif _part.startswith('$logging enable'):
-                logging.debug('$logging enable detected')
-                _state = '$logging enable'
-            elif _part.startswith('$bootversion'):
-                logging.debug('$bootversion detected')
-                _state = '$bootversion'
-            elif _part.startswith('$info'):
-                logging.debug('$info detected')
-                _state = '$info'
-            elif _part.startswith('$uptime'):
-                logging.debug('$uptime detected')
-                _state = '$uptime'
-            elif _part.startswith('$rtc get'):
-                logging.debug('$rtc get detected')
-                _state = '$rtc get'
-            elif _part.startswith('$par get all'):
-                logging.debug('$par get all detected')
-                _state = '$par get all'
-            elif _part.startswith('$par get changed'):
-                logging.debug('$par get changed detected')
-                _state = '$par get changed'
-            elif _part.startswith('$par get'): # $par get %d
-                logging.debug('$par get detected')
-                _state = '$par get'
-            elif _part.startswith('$erract'):
-                logging.debug('$erract detected')
-                _state = '$erract'
-            elif _part == '':
-                logging.debug('empty _part')
-            else:
-                logging.debug('else unknown state')
-                _state = 'unknown'
-        logging.debug('_state/_part: %s/%s', _state, _part)
-        return _state
-    def _put(self, key: str, subpart: str):
-        logging.info("put %s --> %s", key, subpart)
-        self._mq.put(key + "££" + subpart)
-
-    def parse_response_buffer(self, state: str, buffer: bytes) -> str:
-        """parse the response buffer sent by boiler"""
-        _state: str = state
-        _part: str = None
-        _subpart: str = None
-        _str_parts: list[str] = None
-
-        logging.debug('parse_response input _state=%s',_state)
-        _str_parts= repr(buffer)[2:-1].split('\\r\\n')
-        for _part in _str_parts:
-            logging.debug('part:%s', _part)
-            if _state == '$login token':
-                # $wwxxyyzz
-                _subpart = _part[1:]
-                self._put('TOKEN', _subpart)
-                _state = ''
-            elif _state == '$login key':
-                # b'zclient login (0)\r\n$ack\r\n'
-                if "zclient login" in _part:
-                    logging.debug('zclient login detected')
-                if _part.startswith('$ack'):
-                    logging.debug('$login key $ack detected')
-                    _state = ''
-            elif _state == '$apiversion':
-                # $1.0.1
-                if _part.startswith("$"):
-                    logging.debug('$apiversion $ack detected')
-                    _subpart = _part[1:]
-                    self._put('API', _subpart)
-                    _state = ''
-            elif _state == '$setkomm':
-                # $1234567 ack
-                if "ack" in _part:
-                    _subpart = _part[1:-4]
-                    self._put('SETKOMM', _subpart)
-                    _state = ''
-            elif _state == '$asnr get':
-                # $1.0.1
-                if _part.startswith("$"):
-                    logging.debug('$asnr get $ack detected')
-                    _subpart = _part[1:]
-                    self._put('ASNR', _subpart)
-                    _state = ''
-            elif _state == '$igw set':
-                if "ack" in _part:
-                    logging.debug('$igw set $ack detected')
-                    _state = ''
-            elif "$daq stopped" in _part:
-                logging.info('$daq stopped')
-                _state = ''
-            elif "logging disabled" in _part:
-                logging.info('$logging disabled')
-                _state = ''
-            elif _state == '$daq desc':
-                #todo review this since filtered before
-                if _part.startswith('$<<') and _part.endswith('>>'):
-                    logging.debug('$daq desc $ack detected')
-                    _state = ''
-            elif "daq started" in _part:
-                logging.info('$daq started')
-                _state = ''
-            elif "logging enabled" in _part:
-                logging.info('$logging enabled')
-                _state = ''
-            elif _state == '$bootversion':
-                #$V2.18
-                if _part.startswith("$V"):
-                    logging.debug('$bootversion $ack detected')
-                    _subpart = _part[2:]
-                    self._put('BOOT', _subpart)
-                    _state = ''
-            elif _state == '$info':
-                if _part.startswith('$KT:'):
-                    logging.debug('$KT $ack detected')
-                    _subpart = _part[5:]
-                    self._put('KT', _subpart)
-                if _part.startswith('$SWV:'):
-                    logging.debug('$SWV $ack detected')
-                    _subpart = _part[6:]
-                    self._put('SWV', _subpart)
-                if _part.startswith('$FWV I/O:'):
-                    logging.debug('$FWV I/O $ack detected')
-                    _subpart = _part[10:]
-                    self._put('FWV', _subpart)
-                if _part.startswith('$SN I/O:'):
-                    logging.debug('$SN I/O $ack detected')
-                    _subpart = _part[9:]
-                    self._put('SNIO', _subpart)
-                if _part.startswith('$SN BCE:'):
-                    logging.debug('$SN BCE $ack detected')
-                    _subpart = _part[9:]
-                    self._put('SNBCE', _subpart)
-                    _state = ''
-            elif _state == '$uptime':
-                if _part.startswith('$'):
-                    logging.debug('$uptime $ack detected')
-                    _subpart = _part[1:]
-                    self._put('UPTIME', _subpart)
-                    _state = ''
-            elif _state == '$rtc get':
-                if _part.startswith('$'):
-                    logging.debug('$rtc get $ack detected')
-                    _subpart = _part[1:]
-                    self._put('RTC', _subpart)
-                    _state = ''
-            elif _state == '$par get changed':
-                if _part == '$--':
-                    logging.debug('$par get changed $ack detected')
-                    _state = ''
-            elif _state == '$par get':
-                if _part.startswith('$'):
-                    logging.debug('$par get $ack detected')
-                    _subpart = _part[1:] # value of the parameter asked by IGW
-                    _state = ''
-            elif _state == '$par get all':
-                logging.debug('$par get all $ack detected')
-                _state = ''
-            elif _state == '$erract':
-                # $no errors OR anything else
-                logging.debug('$erract $ack detected')
-                _state = ''
-            else:
-                logging.debug('unknown state:%s', _state)
-                _state = ''
-        return _state
-
-    def analyse_pm(self, pm: bytes):
-        _part: str = None
-        i: int = -1
-        _str_parts: list[str] = None
-        logging.debug('analyse_pm %d bytes ==>%s',len(pm), repr(pm))
-        _str_parts = pm.decode('ascii').split(' ')
-        for _part in _str_parts:
-#            logging.debug('analyse_pm %d :%s',i,_part)
-            if ((i in self._values) and (_part != self._values[i])) or (not i in self._values):
-                if i in self._values:
-                    logging.debug('analyse_pm changed %d :%s was %s', i, _part, self._values[i])
-                else:
-                    logging.debug('analyse_pm     new %d :%s', i, _part)
-                self._values[i]= _part
-                if i in self.config.map:
-                    logging.info('pm %s --> %s', self.config.map[i],_part)
-                    self._put(self.config.map[i], _part)
-            i=i+1
-
-    def is_pm_response(self, _data: bytes) -> bool:
-        """check if the data is a pm response"""
-        if len(_data)>1 and repr(_data[0:2])=="b'pm'":
-            return True
-        return False
-
-    def is_daq_desc(self, _buffer: bytes) -> bool:
-        """check if the data is a daq description"""
-        if len(_buffer)>4 and repr(_buffer[0:4]) == "b'$<<<'":
-            return True
-        return False
-
-
-    def analyse_data_bufferV2(self, _data: bytes,
-                               pm: bytes, buffer: bytes,
-                               mode: str, state: str) -> Tuple[bytes, bytes, str, str]:
-        """analyse the data buffer sent by the boiler
-        it can be a buffer response for a request of the IGW
-            values split by \\r\\n
-        if can be bytes starting with 'pm' , values split by spaces
-        _mode can have the following values:
-        - '' : normal mode
-        - 'pm' : special mode for pm response : modify _pm 
-        - 'buffer' : special mode for buffer response : modify _buffer
-        """
-        _mode: str = mode
-        _state: str = state
-        _pm: bytes = pm
-        _buffer: bytes = buffer
-
-        if self.is_pm_response(_data):
-            logging.debug('pm response detected')
-            _mode= 'pm'
-
-        if _mode == 'pm':
-            if _data[-2:] == b'\r\n':
-                _pm = _data
-                logging.debug('pm detected (%d bytes)',len(_pm))
-                #todo: analyse the pm response
-                self.analyse_pm(_pm)
-                _mode = ''
-            else:
-                _pm = _pm + _data
-            return _pm, _buffer, _mode, _state
-
-        #here _mode is not 'pm'
-        logging.debug('normal response detected')
-        if _data[-2:] != b'\r\n':
-            _mode='buffer'
-
-        if _mode == 'buffer':
-            _buffer = _buffer + _data
-        else:
-            _buffer = _data
-
-        if _buffer[-2:] == b'\r\n':
-            logging.debug('buffer is complete')
-            _mode = '' # revert to normal mode for next data
-            if self.is_daq_desc(_buffer):
-                logging.info('dac desq detected (%d bytes), skipped',len(_buffer))
-            else:
-                _state = self.parse_response_buffer(_state, _buffer)
-            _buffer = b'' #clear working buffer
-        #return after processing _buffer
-        return _pm, _buffer, _mode, _state
-
-    def analyse_data_buffer(self, _data: bytes,
-                               buffer: bytes,
-                               mode: str, state: str) -> Tuple[bytes, str, str]:
-        """analyse the data buffer sent by the boiler
-        it can be a buffer response for a request of the IGW
-            values split by \\r\\n
-        if can be bytes starting with 'pm' , values split by spaces
-        _mode can have the following values:
-        - '' : normal mode
-        - 'pm' : special mode for pm response : modify _pm 
-        - 'buffer' : special mode for buffer response : modify _buffer
-        """
-        _mode: str = mode
-        _state: str = state
-        _buffer: bytes = buffer
-
-        if self.is_pm_response(_data):
-            logging.debug('pm response detected')
-            _mode= 'pm'
-
-        if _mode == 'pm':
-            if _data[-2:] == b'\r\n':
-                _time= time.time()
-                if (self._pmstamp == 0) or ((_time - self._pmstamp) > self.config.scan):
-                    self._pm = _data
-                    self._pmstamp = _time
-                    logging.debug('pm detected (%d bytes)',len(self._pm))
-                    self.analyse_pm(self._pm)
-                _mode = ''
-            else:
-                self._pm = self._pm + _data
-            return _buffer, _mode, _state
-
-        #here _mode is not 'pm'
-        logging.debug('normal response detected')
-        if _data[-2:] != b'\r\n':
-            _mode='buffer'
-
-        if _mode == 'buffer':
-            _buffer = _buffer + _data
-        else:
-            _buffer = _data
-
-        if _buffer[-2:] == b'\r\n':
-            logging.debug('buffer is complete')
-            _mode = '' # revert to normal mode for next data
-            if self.is_daq_desc(_buffer):
-                logging.info('dac desq detected (%d bytes), skipped',len(_buffer))
-            else:
-                _state = self.parse_response_buffer(_state, _buffer)
-            _buffer = b'' #clear working buffer
-        #return after processing _buffer
-        return _buffer, _mode, _state
+#        self._resend.connect((self.bl_addr, 23))
+        self._client.connect(self.bl_addr)
 
     def loop(self):
         """loop waiting requests and replies"""
-        _socket: socket.socket
+        _sock: s.socket
         _data: bytes
         _addr: tuple
-        read_sockets: list[socket.socket]
-        write_sockets: list[socket.socket]
-        error_sockets: list[socket.socket]
+        read_sockets: list[s.socket]
+        write_sockets: list[s.socket]
+        error_sockets: list[s.socket]
         _state: str = '' # state of the request/response dialog
         _buffer: bytes = b'' # buffer to store the data received until we have a complete response
-        _pm: bytes = b'' # buffer to store special "pm" response
+#        _pm: bytes = b'' # buffer to store special "pm" response
         _mode: str = ''
+        _caller: int = 0 # to recall which caller we have to reply to (service1 or service 2)
         while True:
             logging.debug('telnet waiting data')
-            read_sockets, write_sockets, error_sockets = select.select([self._telnet, self._resend], [], [])
-            for _socket in read_sockets:
-                if _socket == self._telnet:
+            if self._service2.socket() == None:
+                read_sockets, write_sockets, error_sockets = select.select(
+                    [self._service1.socket(), self._client.socket()], [], [])
+            else:
+                read_sockets, write_sockets, error_sockets = select.select(
+                    [self._service1.socket(), self._service2.socket(), self._client.socket()], [], [])
+#                [self._service1.socket(), self._client.socket()], [], [])
+            for _sock in read_sockets:
+                if _sock == self._service1.socket():
                     # so we received a request
-                    _data, _addr = self._telnet.recvfrom(BUFF_SIZE)
-                    logging.debug('telnet received  request %d bytes ==>%s',
+                    _data, _addr = self._service1.recvfrom()
+                    logging.debug('service1 received  request %d bytes ==>%s',
                                  len(_data), repr(_data))
-                    _state = self.parse_request(_data)
+                    _caller= 1
+                    _state = self._analyser.parse_request(_data)
                     logging.debug('_state-->%s',_state)
                     # we should resend it
                     logging.debug('resending %d bytes to %s:%d',
                                  len(_data), repr(self.bl_addr), self.port)
-                    self._resend.send(_data)
-                if _socket == self._resend:
+                    #todo manage partial send data
+                    self._client.send(_data)
+ #               if _sock == self._resend:
+                if _sock == self._service2.socket():
+                    _data, _addr = self._service2.recvfrom()
+                    logging.debug('service2 received  request %d bytes ==>%s',
+                                 len(_data), repr(_data))
+                    _caller= 2
+                    for i in str(_sock).split():
+                            logging.debug(i)
+                    #self._service2.send(b'Thank you for calling')
+                if _sock ==self._client.socket():
                     # so we received a reply
-                    _data, _addr = self._resend.recvfrom(BUFF_SIZE)
+                    _data, _addr = self._client.recvfrom()
                     if not _data.startswith(b'pm'):
                         logging.debug('telnet received response %d bytes ==>%s',len(_data), repr(_data))
                     else:
@@ -530,20 +337,41 @@ class TelnetProxy(SharedDataReceiver):
                     #todo manage when not all data is sent in one call
                     #todo manage exceptions
                     try:
-                        if self._telnet.send(_data) != len(_data):
-                            logging.error('telnet send error: not all data sent')                    
+                        # sending data back to the caller
+                        # we imagine we receive the response quickly enough, 
+                        # before receiving a new request from the other caller
+                        # also this doesn't work if the pm buffer is split in several chunks
+                        # would need a more robust logic here
+                        if _caller==1 or _data.startswith(b'pm'):
+                            _sent= self._service1.send(_data)
+                        elif _caller==2:
+                            _sent= self._service2.send(_data)
+                        else:
+                            logging.warning('Beware received a response with not registered caller %d', _caller)
+                        if  _sent!= len(_data):
+                            logging.error('telnet send error: not all data sent %d/%d',_sent, len(_data))
                         logging.debug('telnet sent back response to client')
                     except Exception as err:
                         logging.critical("Exception: %s", type(err))
                         raise
                     # analyse the response
-                    _buffer, _mode, _state = self.analyse_data_buffer(_data,
+                    _buffer, _mode, _state = self._analyser.analyse_data_buffer(_data,
                                _buffer, _mode, _state)
+
+    def service(self):
+        logging.debug('TelnetProxy::service()')
+        # wait for the boiler address and port to be discovered
+        self.discover()
+        # boiler is listening on port 23
+        self.connect()
+        # now we can loop waiting requests and replies
+        self.loop()
 
 class ThreadedTelnetProxy(Thread):
     """This class implements a Thread to run the TelnetProxy"""
+    _tserver: Thread
     def __init__(self, mq: Queue, src_iface, dst_iface, port):
-        super().__init__()
+        super().__init__(name='TelnetProxy')
         self.tp= TelnetProxy(mq, src_iface, dst_iface, port)
         # Add any additional initialization logic here
 
@@ -554,19 +382,16 @@ class ThreadedTelnetProxy(Thread):
         return self.tp.queue()
 
     def run(self):
+        _ts: Thread= None
         logging.info('telnet proxy started: %s , %s', self.tp.src_iface, self.tp.dst_iface)
 
-        self.tp.bind()
-
-        self.tp.listen()
-
-        self.tp.accept()
-
-        # wait for the boiler address and port to be discovered
-        self.tp.discover()
-
-        # boiler is listening on port 23
-        self.tp.connect()
-
-        # now we can loop waiting requests and replies
-        self.tp.loop()
+        self.tp.bind1()
+        self.tp.listen1()
+        self.tp.accept1()
+        #we will service the accepted connexion in a separate thread
+        _ts= Thread(target=self.tp.service)
+        _ts.start()
+        self.tp.bind2()
+        self.tp.listen2()
+        self.tp.accept2()
+        _ts.join()

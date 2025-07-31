@@ -7,7 +7,6 @@ import platform
 import logging
 from typing import Annotated
 import annotated_types
-import hargconfig
 
 #----------------------------------------------------------#
 SOCKET_TIMEOUT= 0.2
@@ -17,8 +16,8 @@ BUFF_SIZE= 1024
 
 class HargInfo():
     """ a data class to store the HargInfo"""
-    gw_webapp: str = None   # HargaWebApp version eg 6.4.1
-    gw_sn: str = None       # IGW serial number
+    gw_webapp: str = ''  # HargaWebApp version eg 6.4.1
+    gw_sn: str = ''       # IGW serial number
 
 
 class SharedData():
@@ -44,11 +43,9 @@ class SharedDataReceiver(SharedData):
     and a handler to process the received data.
     """
     rq: Queue
-    config: hargconfig.HargConfig = None
 
     def __init__(self):
         super().__init__()
-        self.config= hargconfig.HargConfig()
         self.rq = Queue()
 
     def handle(self):
@@ -103,9 +100,11 @@ class ListenerSender(SharedDataReceiver):
         self.listen= socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
         self.listen.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
         self.listen.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+        logging.debug('system:', platform.system())
         if platform.system() == 'Linux':
             # pylint: disable=no-member
             self.listen.setsockopt(socket.SOL_SOCKET, socket.SO_BINDTODEVICE, src_iface)
+            logging.debug('listen to device %s', src_iface)
 
         self.resend= socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
         self.resend.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)

@@ -12,24 +12,25 @@ class HargConfig():
     desc: dict = None # dictonary describing the values
     map: dict = None # map between order in pm buffer and value
     scan: int = 0 # scan interval in seconds for pm bufer
+    buttons: dict = None
     def __init__(self):
         # setting a scan interval
         self.scan= 60
         # defining the list of value (from telnetproxy) we want to expose
+#        self.wanted= {
+#			 'c0', 'c1','c2','c3','c4','c5','c6','c7','c8','c9',
+#			 'c10', 'c11','c12','c13','c14','c15','c16','c17','c18','c19',
+#			 'c20', 'c21','c22','c23','c24','c25','c26','c27','c28','c29',
+#			 'c30', 'c31','c32','c33','c34','c35','c36','c37','c38','c39',
+#			 'c40', 'c41','c42','c43','c44','c45','c46','c47','c48','c49',
+#			 'c50', 'c51','c52','c53','c54','c55','c56','c57','c58','c59',
+#			 'c60', 'c61','c62','c63','c64','c65','c66','c67','c68','c69',
+#			 'c70', 'c71','c72','c73','c74','c75','c76','c77','c78','c79',
+#			 'c80', 'c81','c82','c83','c84','c85','c86','c87','c88','c89',
+#			 'c90', 'c91','c92','c93','c94','c95','c96','c97','c98','c99'
+#        }
         self.wanted= {
-			 'c0', 'c1','c2','c3','c4','c5','c6','c7','c8','c9',
-			 'c10', 'c11','c12','c13','c14','c15','c16','c17','c18','c19',
-			 'c20', 'c21','c22','c23','c24','c25','c26','c27','c28','c29',
-			 'c30', 'c31','c32','c33','c34','c35','c36','c37','c38','c39',
-			 'c40', 'c41','c42','c43','c44','c45','c46','c47','c48','c49',
-			 'c50', 'c51','c52','c53','c54','c55','c56','c57','c58','c59',
-			 'c60', 'c61','c62','c63','c64','c65','c66','c67','c68','c69',
-			 'c70', 'c71','c72','c73','c74','c75','c76','c77','c78','c79',
-			 'c80', 'c81','c82','c83','c84','c85','c86','c87','c88','c89',
-			 'c90', 'c91','c92','c93','c94','c95','c96','c97','c98','c99'
-        }
-        self.wanted= {
-             'UPTIME', 'SYS', 'BOOT', 'IGW', 'SWV', 'FWV', 'SNIO', 'SNBCE', 'RTC',
+             'UPTIME', 'SYS', 'BOOT', 'KT', 'IGW', 'SWV', 'FWV', 'SNIO', 'SNBCE', 'RTC',
 			 'c0'   ,  
              'c3'   ,
              'c5'   , 
@@ -258,4 +259,12 @@ class HargConfig():
 			80 :'c19' , 81:'c20' , 82:'c27' , 83:'c28' , 84:'c92' , 85:'c80' , 86:'c118', 87:'c145', 88:'c168', 89:'c146',
 			90 :'c147', 91:'c148', 92:'c149', 93:'c150', 94:'c151', 95:'c152', 96:'c153', 97:'c169', 98:'c170', 99:'c171',
 			100:'c172',101:'c173',102:'c174',103:'c182',104:'c181' ,105:'c165',106:'c166',107:'c167'
+        }
+        # definition of action buttons based on info provided by the boiler
+        self.buttons= {
+            #based on e.g. $PR001;6;3;4;1;0;0;0;Mode;Manu;Arr;Ballon;Auto;Arr combustion;0;\r\n
+            'Arr'               :   'Arrêt', 
+            'Ballon'            :   'Ballon',
+            'Auto'              :   'Auto',
+            'Arr combustion'    :   'Arrêt Combustion'
         }

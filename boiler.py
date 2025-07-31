@@ -75,7 +75,7 @@ class ThreadedBoilerListenerSender(Thread):
     bls: BoilerListenerSender
 
     def __init__(self, mq: Queue, sq: Queue, src_iface: bytes,dst_iface: bytes):
-        super().__init__()
+        super().__init__(name='BoilerListener')
         self.bls= BoilerListenerSender(mq, sq, src_iface, dst_iface)
 
     def queue(self) -> Queue:

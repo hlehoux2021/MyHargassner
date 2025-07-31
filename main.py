@@ -1,6 +1,7 @@
 #! /usr/bin/sudo /usr/bin/env "PATH=$PATH VIRTUAL_ENV=$VIRTUAL_ENV" python
 """
-Main program to run the telnet proxy, boiler listener and gateway listener
+Main program to run the telnet proxy, boiler listener, gateway listener
+and mqqt
 """
 
 # 100.84: <broadcast>	50000->35601	HargaWebApp
@@ -103,16 +104,3 @@ tln.start()
 bls.start()
 gls.start()
 mi.start()
-
-from queue import Empty
-
-while True:
-    try:
-        msg = mi.queue().get(block=True, timeout=10)
-        logging.info('handleReceiveQueue: received %s', msg)
-        if msg.startswith('toto:'):
-            logging.info('ReceiveQueue=%s', msg.split(':')[1])
-        else:
-            logging.warning('ReceiveQueue: unknown message %s', msg)
-    except Empty:
-        logging.debug('handleReceiveQueue: no message received')
