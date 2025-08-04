@@ -11,7 +11,7 @@ from ha_mqtt_discoverable.sensors import Sensor, SensorInfo
 from ha_mqtt_discoverable.sensors import Button, ButtonInfo
 from paho.mqtt.client import Client, MQTTMessage
 import hargconfig
-from shared import SOCKET_TIMEOUT,BUFF_SIZE
+from shared import BUFF_SIZE
 from telnetproxy import TelnetClient
 
 class MqttBase():

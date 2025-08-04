@@ -20,29 +20,29 @@ class GatewayListenerSender(ListenerSender):
     udp_port: Annotated[int, annotated_types.Gt(0)]
     _mq: Queue
 
-    def __init__(self, mq: Queue, sq: Queue, src_iface: bytes,dst_iface: bytes, udp_port: int):
+    def __init__(self, mq: Queue, sq: Queue, src_iface: bytes,dst_iface: bytes, udp_port: int, delta:int = 0):
         super().__init__(sq, src_iface, dst_iface)
         # Add any additional initialization logic here
         self.udp_port = udp_port    # destination port to which gateway is broadcasting
         self._mq = mq
+        self.delta = delta
+
     def handle_first(self, data, addr):
         """
         This method handles the discovery of caller's ip address and port.
         """
-        if self.bound is False:
-            logging.debug('first packet, listener not bound yet')
-            # first time we receive a packet, bind from the source port
-            logging.info('discovered %s:%d', addr[0], addr[1])
-            self.gw_port = addr[1]
-            self.gw_addr = addr[0]
-            self.sq.put('GW_ADDR:'+self.gw_addr)
-            self.sq.put('GW_PORT:'+str(self.gw_port))
-            if platform.system() == 'Darwin':
-                self.resend.bind(('', self.gw_port+1))
-            else:
-                self.resend.bind(('', self.gw_port))
-            logging.debug('sender bound to port: %d', self.gw_port)
-            self.bound = True
+        logging.debug('first packet, listener not bound yet')
+        # first time we receive a packet, bind from the source port
+        logging.info('discovered %s:%d', addr[0], addr[1])
+        self.gw_port = addr[1]
+        self.gw_addr = addr[0]
+        self.sq.put('GW_ADDR:'+self.gw_addr)
+        self.sq.put('GW_PORT:'+str(self.gw_port))
+#        self.resend.bind((self.gw_addr, self.gw_port))
+        self.resend.bind(('', self.gw_port))
+        logging.debug('sender bound to IP %s, port %d', self.gw_addr, self.gw_port)
+#        logging.debug('sender bound to port: %d', self.gw_port)
+
 
     def queue(self) -> Queue:
         """
@@ -56,19 +56,16 @@ class GatewayListenerSender(ListenerSender):
         """
 		#to act as the gateway, we rebroadcast the udp frame
         logging.debug('resending %d bytes to %s : %d',
-                      len(data), self.dst_iface.decode(), self.udp_port)
-        if platform.system() == 'Darwin':
-            #on Darwin, for simulation, we send to port+1
-            self.resend.sendto(data, ('<broadcast>', self.udp_port+1) )
-        else:
-            self.resend.sendto(data, ('<broadcast>', self.udp_port) )
+                      len(data), self.dst_iface.decode(), self.udp_port+self.delta)
+        self.resend.sendto(data, ('<broadcast>', self.udp_port+self.delta))
         logging.debug('resent %d bytes to %s : %d',
-                     len(data), self.dst_iface.decode(), self.udp_port)
+                     len(data), self.dst_iface.decode(), self.udp_port+self.delta)
 
     def bind(self):
         """ This method binds the listener mimicking the gateway."""
         self.listen.bind( ('',self.udp_port) )
         logging.debug('listener bound to %s, port %d', self.src_iface.decode(), self.udp_port)
+        self.bound = True
 
     def handle_data(self, data: bytes, addr: tuple):
         """handle udp data
@@ -98,9 +95,9 @@ class ThreadedGatewayListenerSender(Thread):
     """This class implements a Thread to run the gateway."""
     gls: GatewayListenerSender
 
-    def __init__(self, mq: Queue, sq: Queue, src_iface: bytes,dst_iface: bytes, udp_port: int):
+    def __init__(self, mq: Queue, sq: Queue, src_iface: bytes,dst_iface: bytes, udp_port: int, delta=0):
         super().__init__(name='GatewayListener')
-        self.gls= GatewayListenerSender(mq, sq, src_iface, dst_iface, udp_port)
+        self.gls= GatewayListenerSender(mq, sq, src_iface, dst_iface, udp_port, delta)
 
     def queue(self) -> Queue:
         """

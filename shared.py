@@ -9,8 +9,12 @@ from typing import Annotated
 import annotated_types
 
 #----------------------------------------------------------#
-SOCKET_TIMEOUT= 0.2
 BUFF_SIZE= 1024
+UDP_LISTENER_TIMEOUT = 5  # Timeout for UDP listener  
+
+# Add socket constants that might not be defined on all systems
+if not hasattr(socket, 'SO_BINDTODEVICE'):
+    socket.SO_BINDTODEVICE = 25  # From Linux <socket.h>
 
 #----------------------------------------------------------#
 
@@ -90,29 +94,61 @@ class ListenerSender(SharedDataReceiver):
     sq: Queue
     bound: bool = False
 
-    def __init__(self, sq: Queue, src_iface: bytes,dst_iface: bytes):
+    @staticmethod
+    def _is_ip_address(ip: str) -> bool:
+        """Check if a string is a valid IPv4 address"""
+        try:
+            parts = ip.split('.')
+            return len(parts) == 4 and all(0 <= int(part) <= 255 for part in parts)
+        except (AttributeError, TypeError, ValueError):
+            return False
+
+    def __init__(self, sq: Queue, src_iface: bytes, dst_iface: bytes):
         super().__init__()
         self.sq = sq        # the queue to send what i discover about the network
         self.src_iface = src_iface  # network interface where to listen
         self.dst_iface = dst_iface  # network interface where to resend
-        self.bound= False
+        self.bound = False
 
-        self.listen= socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+        self.listen = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
         self.listen.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
         self.listen.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-        logging.debug('system:', platform.system())
+        self.listen.settimeout(UDP_LISTENER_TIMEOUT)  # Set a timeout for the listener
+        logging.debug(f'system={platform.system()}')
+        
+        # Configure listen socket
         if platform.system() == 'Linux':
-            # pylint: disable=no-member
+            # Linux: use SO_BINDTODEVICE
             self.listen.setsockopt(socket.SOL_SOCKET, socket.SO_BINDTODEVICE, src_iface)
             logging.debug('listen to device %s', src_iface)
+        elif platform.system() == 'Darwin':
+            # macOS: bind to interface IP
+            src_ip = src_iface.decode('utf-8') if isinstance(src_iface, bytes) else src_iface
+            if not self._is_ip_address(src_ip):
+                logging.error("On macOS, please provide the IP address instead of interface name")
+                logging.error("For example: use '192.168.1.100' instead of 'en4'")
+                raise ValueError(f"Invalid IP address for macOS interface: {src_ip}")
+            self.src_ip = src_ip  # Store for later binding
+            logging.debug('configured listen IP %s', src_ip)
 
-        self.resend= socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+        # Configure resend socket
+        self.resend = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
         self.resend.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
         self.resend.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+        
         if platform.system() == 'Linux':
-            # pylint: disable=no-member
+            # Linux: use SO_BINDTODEVICE
             self.resend.setsockopt(socket.SOL_SOCKET, socket.SO_BINDTODEVICE, dst_iface)
-        self.resend.settimeout(SOCKET_TIMEOUT)
+        elif platform.system() == 'Darwin':
+            # macOS: bind to interface IP
+            dst_ip = dst_iface.decode('utf-8') if isinstance(dst_iface, bytes) else dst_iface
+            if not self._is_ip_address(dst_ip):
+                logging.error("On macOS, please provide the IP address instead of interface name")
+                logging.error("For example: use '192.168.1.100' instead of 'en4'")
+                raise ValueError(f"Invalid IP address for macOS interface: {dst_ip}")
+            self.dst_ip = dst_ip  # Store for later binding
+            logging.debug('configured resend IP %s', dst_ip)
+        
 
     def handle_first(self, data, addr):
         """
@@ -137,11 +173,28 @@ class ListenerSender(SharedDataReceiver):
         """
         data: bytes
         addr: tuple
+        
+        if not self.bound:
+            logging.error("Cannot start loop - socket not bound yet")
+            return
+            
         while True:
             logging.debug('waiting data')
-            data, addr = self.listen.recvfrom(BUFF_SIZE)
-            logging.debug('received buffer of %d bytes from %s : %d', len(data), addr[0], addr[1])
-            logging.debug('%s', data)
-            self.handle_first(data, addr)
-            self.handle_data(data, addr)
-            self.send(data)
+            data = None
+            addr = ('', 0)
+            try:
+                data, addr = self.listen.recvfrom(BUFF_SIZE) # Blocks for up to UDP_LISTENER_TIMEOUT seconds
+                if data:  # Only process if we actually got data
+                    logging.debug('received buffer of %d bytes from %s : %d', len(data), addr[0], addr[1])
+                    logging.debug('%s', data)
+                    self.handle_first(data, addr)
+                    self.handle_data(data, addr)
+                    self.send(data)
+            except socket.timeout:
+                # This is normal - just continue the loop
+                logging.debug('No data received within timeout period')
+                continue
+            except socket.error as e:
+                # This is an actual error
+                logging.error("Socket error in loop: %s", e)
+                break

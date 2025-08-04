@@ -10,7 +10,7 @@ from threading import Thread
 from typing import Annotated, Tuple
 import annotated_types
 
-from shared import SharedDataReceiver,SOCKET_TIMEOUT,BUFF_SIZE
+from shared import SharedDataReceiver,BUFF_SIZE
 from analyser import Analyser
 
 # $login token
@@ -147,7 +147,7 @@ class TelnetClient():
         self._sock = s.socket(s.AF_INET, s.SOCK_STREAM)
         self._sock.setsockopt(s.SOL_SOCKET, s.SO_REUSEPORT, 1)
         self._sock.setsockopt(s.SOL_SOCKET, s.SO_REUSEADDR, 1)
-        self._sock.settimeout(SOCKET_TIMEOUT)
+#        self._sock.settimeout(SOCKET_TIMEOUT)
 
     def connect(self, addr: bytes, *, port: int = 23):
         """connect to the boiler"""

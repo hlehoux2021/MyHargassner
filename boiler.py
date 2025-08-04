@@ -20,17 +20,24 @@ class BoilerListenerSender(ListenerSender):
         self.rq = Queue()
         self._mq = mq
     def handle_first(self, data, addr):
-        if self.bound is False:
-            logging.debug('BoilerListenerSender first packet, listener not bound yet')
-            # first time we receive a packet, bind from the source port
-            logging.info('Boiler discovered %s:%d', addr[0], addr[1])
-            self.bl_addr = addr[0]
-            self.bl_port = addr[1]
-            self.sq.put('BL_ADDR:'+self.bl_addr)
-            self.sq.put('BL_PORT:'+str(self.bl_port))
-            self.resend.bind(('', self.bl_port))
-            logging.debug('sender bound to port: %d', self.bl_port)
-            self.bound = True
+        logging.debug('BoilerListenerSender first packet, listener not bound yet')
+        # first time we receive a packet, bind from the source port
+        logging.info('Boiler discovered %s:%d', addr[0], addr[1])
+        self.bl_addr = addr[0]
+        self.bl_port = addr[1]
+        self.sq.put('BL_ADDR:'+self.bl_addr)
+        self.sq.put('BL_PORT:'+str(self.bl_port))
+        self.resend.bind((self.bl_addr, self.bl_port))
+        logging.debug('sender bound to IP %s, port %d', self.bl_addr, self.bl_port)
+#        if platform.system() == 'Darwin':
+#            # On macOS, bind to specific interface IP
+#            self.resend.bind((self.dst_ip, self.bl_port))
+#            logging.debug('sender bound to IP %s, port %d', self.dst_ip, self.bl_port)
+#        else:
+#            # On Linux, we've already set SO_BINDTODEVICE
+#            self.resend.bind(('', self.bl_port))
+#            logging.debug('sender bound to port: %d', self.bl_port)
+
 
     def send(self, data):
         logging.debug('resending %d bytes to %s : %d',
@@ -41,18 +48,21 @@ class BoilerListenerSender(ListenerSender):
 
     def discover(self):
         """ This method discovers the gateway ip address and port. ip address and port."""
+        logging.info('BoilerListenerSender discovering boiler')
         while self.gw_port == 0:
             self.handle()
-
+        logging.info('BoilerListenerSender discovered boiler %s:%d', self.bl_addr, self.bl_port)
     def bind(self):
         """ This method binds the listener mimicking the gateway."""
         if platform.system() == 'Darwin':
-            self.listen.bind( ('',self.gw_port+1) )
-            logging.debug('listener bound to %s, port %d', self.src_iface.decode(), self.gw_port+1)
+            # On macOS, we need to bind to the specific IP address
+            self.listen.bind((self.src_ip, self.gw_port))
+            logging.debug('listener bound to IP %s, port %d', self.src_ip, self.gw_port)
         else:
-            self.listen.bind( ('',self.gw_port) )
+            # On Linux, we've already set SO_BINDTODEVICE, so we can bind to any address
+            self.listen.bind(('', self.gw_port))
             logging.debug('listener bound to %s, port %d', self.src_iface.decode(), self.gw_port)
-
+        self.bound = True  # Set this after successful binding
     def handle_data(self, data: bytes, addr: tuple):
         """handle udp data"""
         _str: str = None

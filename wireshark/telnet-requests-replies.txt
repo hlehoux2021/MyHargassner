@@ -1,0 +1,680 @@
+No.     Time           Source                Destination           Protocol Length Info
+     99 38.484191685   192.168.100.13        192.168.100.9         TELNET   424    370 bytes data
+
+Frame 99: 424 bytes on wire (3392 bits), 424 bytes captured (3392 bits) on interface eth0, id 0
+Ethernet II, Src: HainzlIndust_04:3f:6c (00:24:bd:04:3f:6c), Dst: Synology_3a:21:0e (00:11:32:3a:21:0e)
+Internet Protocol Version 4, Src: 192.168.100.13, Dst: 192.168.100.9
+Transmission Control Protocol, Src Port: 23, Dst Port: 54221, Seq: 1, Ack: 1, Len: 370
+Telnet
+    Data […]: pm 9 20.0 7.7 65.9 0 62.3 32 11 111.0 67 68 70.0 120 34.1 68 5 0 0 0 70 0 0 30 100 85 85 72 84.8 85 1 0 13 3 0 0 0 9 21 0 566 1956 1133 8.00 13.58 589 -5.2 24192 140.0 112.5 33 -20.0 -20.0 0.0 11.5 10.1 0 -20.0 0 20.0 20.0 0 1 
+
+No.     Time           Source                Destination           Protocol Length Info
+    100 38.484275331   192.168.100.13        192.168.100.9         TELNET   60     4 bytes data
+
+Frame 100: 60 bytes on wire (480 bits), 60 bytes captured (480 bits) on interface eth0, id 0
+Ethernet II, Src: HainzlIndust_04:3f:6c (00:24:bd:04:3f:6c), Dst: Synology_3a:21:0e (00:11:32:3a:21:0e)
+Internet Protocol Version 4, Src: 192.168.100.13, Dst: 192.168.100.9
+Transmission Control Protocol, Src Port: 23, Dst Port: 54221, Seq: 371, Ack: 1, Len: 4
+Telnet
+    Data: 0 \r\n
+
+No.     Time           Source                Destination           Protocol Length Info
+    132 45.219269599   192.168.100.84        192.168.100.13        TELNET   68     14 bytes data
+
+Frame 132: 68 bytes on wire (544 bits), 68 bytes captured (544 bits) on interface eth0, id 0
+Ethernet II, Src: MicrochipTec_83:70:ec (44:b7:d0:83:70:ec), Dst: HainzlIndust_04:3f:6c (00:24:bd:04:3f:6c)
+Internet Protocol Version 4, Src: 192.168.100.84, Dst: 192.168.100.13
+Transmission Control Protocol, Src Port: 51975, Dst Port: 23, Seq: 1, Ack: 1, Len: 14
+Telnet
+    Data: $login token\r\n
+
+No.     Time           Source                Destination           Protocol Length Info
+    134 45.237453006   192.168.100.13        192.168.100.84        TELNET   61     7 bytes data
+
+Frame 134: 61 bytes on wire (488 bits), 61 bytes captured (488 bits) on interface eth0, id 0
+Ethernet II, Src: HainzlIndust_04:3f:6c (00:24:bd:04:3f:6c), Dst: MicrochipTec_83:70:ec (44:b7:d0:83:70:ec)
+Internet Protocol Version 4, Src: 192.168.100.13, Dst: 192.168.100.84
+Transmission Control Protocol, Src Port: 23, Dst Port: 51975, Seq: 1, Ack: 15, Len: 7
+Telnet
+    Data: $3313C1
+
+No.     Time           Source                Destination           Protocol Length Info
+    135 45.237589243   192.168.100.13        192.168.100.84        TELNET   60     4 bytes data
+
+Frame 135: 60 bytes on wire (480 bits), 60 bytes captured (480 bits) on interface eth0, id 0
+Ethernet II, Src: HainzlIndust_04:3f:6c (00:24:bd:04:3f:6c), Dst: MicrochipTec_83:70:ec (44:b7:d0:83:70:ec)
+Internet Protocol Version 4, Src: 192.168.100.13, Dst: 192.168.100.84
+Transmission Control Protocol, Src Port: 23, Dst Port: 51975, Seq: 8, Ack: 15, Len: 4
+Telnet
+    Data: F2\r\n
+
+No.     Time           Source                Destination           Protocol Length Info
+    138 45.239467977   192.168.100.84        192.168.100.13        TELNET   101    47 bytes data
+
+Frame 138: 101 bytes on wire (808 bits), 101 bytes captured (808 bits) on interface eth0, id 0
+Ethernet II, Src: MicrochipTec_83:70:ec (44:b7:d0:83:70:ec), Dst: HainzlIndust_04:3f:6c (00:24:bd:04:3f:6c)
+Internet Protocol Version 4, Src: 192.168.100.84, Dst: 192.168.100.13
+Transmission Control Protocol, Src Port: 51975, Dst Port: 23, Seq: 15, Ack: 12, Len: 47
+Telnet
+    Data: $login key 137171BD37643C72131D59797D966A730E\r\n
+
+No.     Time           Source                Destination           Protocol Length Info
+    140 45.263306862   192.168.100.13        192.168.100.84        TELNET   78     24 bytes data
+
+Frame 140: 78 bytes on wire (624 bits), 78 bytes captured (624 bits) on interface eth0, id 0
+Ethernet II, Src: HainzlIndust_04:3f:6c (00:24:bd:04:3f:6c), Dst: MicrochipTec_83:70:ec (44:b7:d0:83:70:ec)
+Internet Protocol Version 4, Src: 192.168.100.13, Dst: 192.168.100.84
+Transmission Control Protocol, Src Port: 23, Dst Port: 51975, Seq: 12, Ack: 62, Len: 24
+Telnet
+    Data: zclient login (7421)\r\n
+    Data: $a
+
+No.     Time           Source                Destination           Protocol Length Info
+    141 45.263438303   192.168.100.13        192.168.100.84        TELNET   60     4 bytes data
+
+Frame 141: 60 bytes on wire (480 bits), 60 bytes captured (480 bits) on interface eth0, id 0
+Ethernet II, Src: HainzlIndust_04:3f:6c (00:24:bd:04:3f:6c), Dst: MicrochipTec_83:70:ec (44:b7:d0:83:70:ec)
+Internet Protocol Version 4, Src: 192.168.100.13, Dst: 192.168.100.84
+Transmission Control Protocol, Src Port: 23, Dst Port: 51975, Seq: 36, Ack: 62, Len: 4
+Telnet
+    Data: ck\r\n
+
+No.     Time           Source                Destination           Protocol Length Info
+    145 45.271323341   192.168.100.84        192.168.100.13        TELNET   67     13 bytes data
+
+Frame 145: 67 bytes on wire (536 bits), 67 bytes captured (536 bits) on interface eth0, id 0
+Ethernet II, Src: MicrochipTec_83:70:ec (44:b7:d0:83:70:ec), Dst: HainzlIndust_04:3f:6c (00:24:bd:04:3f:6c)
+Internet Protocol Version 4, Src: 192.168.100.84, Dst: 192.168.100.13
+Transmission Control Protocol, Src Port: 51975, Dst Port: 23, Seq: 62, Ack: 40, Len: 13
+Telnet
+    Data: $apiversion\r\n
+
+No.     Time           Source                Destination           Protocol Length Info
+    147 45.317773381   192.168.100.13        192.168.100.84        TELNET   60     4 bytes data
+
+Frame 147: 60 bytes on wire (480 bits), 60 bytes captured (480 bits) on interface eth0, id 0
+Ethernet II, Src: HainzlIndust_04:3f:6c (00:24:bd:04:3f:6c), Dst: MicrochipTec_83:70:ec (44:b7:d0:83:70:ec)
+Internet Protocol Version 4, Src: 192.168.100.13, Dst: 192.168.100.84
+Transmission Control Protocol, Src Port: 23, Dst Port: 51975, Seq: 40, Ack: 75, Len: 4
+Telnet
+    Data: $1.0
+
+No.     Time           Source                Destination           Protocol Length Info
+    148 45.317912377   192.168.100.13        192.168.100.84        TELNET   60     4 bytes data
+
+Frame 148: 60 bytes on wire (480 bits), 60 bytes captured (480 bits) on interface eth0, id 0
+Ethernet II, Src: HainzlIndust_04:3f:6c (00:24:bd:04:3f:6c), Dst: MicrochipTec_83:70:ec (44:b7:d0:83:70:ec)
+Internet Protocol Version 4, Src: 192.168.100.13, Dst: 192.168.100.84
+Transmission Control Protocol, Src Port: 23, Dst Port: 51975, Seq: 44, Ack: 75, Len: 4
+Telnet
+    Data: .1\r\n
+
+No.     Time           Source                Destination           Protocol Length Info
+    151 45.319352473   192.168.100.84        192.168.100.13        TELNET   64     10 bytes data
+
+Frame 151: 64 bytes on wire (512 bits), 64 bytes captured (512 bits) on interface eth0, id 0
+Ethernet II, Src: MicrochipTec_83:70:ec (44:b7:d0:83:70:ec), Dst: HainzlIndust_04:3f:6c (00:24:bd:04:3f:6c)
+Internet Protocol Version 4, Src: 192.168.100.84, Dst: 192.168.100.13
+Transmission Control Protocol, Src Port: 51975, Dst Port: 23, Seq: 75, Ack: 48, Len: 10
+Telnet
+    Data: $setkomm\r\n
+
+No.     Time           Source                Destination           Protocol Length Info
+    153 45.341768096   192.168.100.13        192.168.100.84        TELNET   64     10 bytes data
+
+Frame 153: 64 bytes on wire (512 bits), 64 bytes captured (512 bits) on interface eth0, id 0
+Ethernet II, Src: HainzlIndust_04:3f:6c (00:24:bd:04:3f:6c), Dst: MicrochipTec_83:70:ec (44:b7:d0:83:70:ec)
+Internet Protocol Version 4, Src: 192.168.100.13, Dst: 192.168.100.84
+Transmission Control Protocol, Src Port: 23, Dst Port: 51975, Seq: 48, Ack: 85, Len: 10
+Telnet
+    Data: $2225410 a
+
+No.     Time           Source                Destination           Protocol Length Info
+    154 45.341907055   192.168.100.13        192.168.100.84        TELNET   60     4 bytes data
+
+Frame 154: 60 bytes on wire (480 bits), 60 bytes captured (480 bits) on interface eth0, id 0
+Ethernet II, Src: HainzlIndust_04:3f:6c (00:24:bd:04:3f:6c), Dst: MicrochipTec_83:70:ec (44:b7:d0:83:70:ec)
+Internet Protocol Version 4, Src: 192.168.100.13, Dst: 192.168.100.84
+Transmission Control Protocol, Src Port: 23, Dst Port: 51975, Seq: 58, Ack: 85, Len: 4
+Telnet
+    Data: ck\r\n
+
+No.     Time           Source                Destination           Protocol Length Info
+    157 45.343389576   192.168.100.84        192.168.100.13        TELNET   65     11 bytes data
+
+Frame 157: 65 bytes on wire (520 bits), 65 bytes captured (520 bits) on interface eth0, id 0
+Ethernet II, Src: MicrochipTec_83:70:ec (44:b7:d0:83:70:ec), Dst: HainzlIndust_04:3f:6c (00:24:bd:04:3f:6c)
+Internet Protocol Version 4, Src: 192.168.100.84, Dst: 192.168.100.13
+Transmission Control Protocol, Src Port: 51975, Dst Port: 23, Seq: 85, Ack: 62, Len: 11
+Telnet
+    Data: $asnr get\r\n
+
+No.     Time           Source                Destination           Protocol Length Info
+    159 45.358827677   192.168.100.13        192.168.100.84        TELNET   60     3 bytes data
+
+Frame 159: 60 bytes on wire (480 bits), 60 bytes captured (480 bits) on interface eth0, id 0
+Ethernet II, Src: HainzlIndust_04:3f:6c (00:24:bd:04:3f:6c), Dst: MicrochipTec_83:70:ec (44:b7:d0:83:70:ec)
+Internet Protocol Version 4, Src: 192.168.100.13, Dst: 192.168.100.84
+Transmission Control Protocol, Src Port: 23, Dst Port: 51975, Seq: 62, Ack: 96, Len: 3
+Telnet
+    Data: $\r\n
+
+No.     Time           Source                Destination           Protocol Length Info
+    161 45.359299110   192.168.100.84        192.168.100.13        TELNET   72     18 bytes data
+
+Frame 161: 72 bytes on wire (576 bits), 72 bytes captured (576 bits) on interface eth0, id 0
+Ethernet II, Src: MicrochipTec_83:70:ec (44:b7:d0:83:70:ec), Dst: HainzlIndust_04:3f:6c (00:24:bd:04:3f:6c)
+Internet Protocol Version 4, Src: 192.168.100.84, Dst: 192.168.100.13
+Transmission Control Protocol, Src Port: 51975, Dst Port: 23, Seq: 96, Ack: 65, Len: 18
+Telnet
+    Data: $igw set 0039808\r\n
+
+No.     Time           Source                Destination           Protocol Length Info
+    163 45.404588992   192.168.100.13        192.168.100.84        TELNET   60     2 bytes data
+
+Frame 163: 60 bytes on wire (480 bits), 60 bytes captured (480 bits) on interface eth0, id 0
+Ethernet II, Src: HainzlIndust_04:3f:6c (00:24:bd:04:3f:6c), Dst: MicrochipTec_83:70:ec (44:b7:d0:83:70:ec)
+Internet Protocol Version 4, Src: 192.168.100.13, Dst: 192.168.100.84
+Transmission Control Protocol, Src Port: 23, Dst Port: 51975, Seq: 65, Ack: 114, Len: 2
+Telnet
+    Data: $a
+
+No.     Time           Source                Destination           Protocol Length Info
+    164 45.404762210   192.168.100.13        192.168.100.84        TELNET   60     4 bytes data
+
+Frame 164: 60 bytes on wire (480 bits), 60 bytes captured (480 bits) on interface eth0, id 0
+Ethernet II, Src: HainzlIndust_04:3f:6c (00:24:bd:04:3f:6c), Dst: MicrochipTec_83:70:ec (44:b7:d0:83:70:ec)
+Internet Protocol Version 4, Src: 192.168.100.13, Dst: 192.168.100.84
+Transmission Control Protocol, Src Port: 23, Dst Port: 51975, Seq: 67, Ack: 114, Len: 4
+Telnet
+    Data: ck\r\n
+
+No.     Time           Source                Destination           Protocol Length Info
+    167 45.859020086   192.168.100.84        192.168.100.13        TELNET   65     11 bytes data
+
+Frame 167: 65 bytes on wire (520 bits), 65 bytes captured (520 bits) on interface eth0, id 0
+Ethernet II, Src: MicrochipTec_83:70:ec (44:b7:d0:83:70:ec), Dst: HainzlIndust_04:3f:6c (00:24:bd:04:3f:6c)
+Internet Protocol Version 4, Src: 192.168.100.84, Dst: 192.168.100.13
+Transmission Control Protocol, Src Port: 51975, Dst Port: 23, Seq: 114, Ack: 71, Len: 11
+Telnet
+    Data: $daq stop\r\n
+
+No.     Time           Source                Destination           Protocol Length Info
+    168 45.859071492   192.168.100.84        192.168.100.13        TELNET   72     18 bytes data
+
+Frame 168: 72 bytes on wire (576 bits), 72 bytes captured (576 bits) on interface eth0, id 0
+Ethernet II, Src: MicrochipTec_83:70:ec (44:b7:d0:83:70:ec), Dst: HainzlIndust_04:3f:6c (00:24:bd:04:3f:6c)
+Internet Protocol Version 4, Src: 192.168.100.84, Dst: 192.168.100.13
+Transmission Control Protocol, Src Port: 51975, Dst Port: 23, Seq: 125, Ack: 71, Len: 18
+Telnet
+    Data: $logging disable\r\n
+
+No.     Time           Source                Destination           Protocol Length Info
+    171 45.868604603   192.168.100.13        192.168.100.84        TELNET   64     10 bytes data
+
+Frame 171: 64 bytes on wire (512 bits), 64 bytes captured (512 bits) on interface eth0, id 0
+Ethernet II, Src: HainzlIndust_04:3f:6c (00:24:bd:04:3f:6c), Dst: MicrochipTec_83:70:ec (44:b7:d0:83:70:ec)
+Internet Protocol Version 4, Src: 192.168.100.13, Dst: 192.168.100.84
+Transmission Control Protocol, Src Port: 23, Dst Port: 51975, Seq: 71, Ack: 143, Len: 10
+Telnet
+    Data: $daq stopp
+
+No.     Time           Source                Destination           Protocol Length Info
+    172 45.868767765   192.168.100.13        192.168.100.84        TELNET   60     4 bytes data
+
+Frame 172: 60 bytes on wire (480 bits), 60 bytes captured (480 bits) on interface eth0, id 0
+Ethernet II, Src: HainzlIndust_04:3f:6c (00:24:bd:04:3f:6c), Dst: MicrochipTec_83:70:ec (44:b7:d0:83:70:ec)
+Internet Protocol Version 4, Src: 192.168.100.13, Dst: 192.168.100.84
+Transmission Control Protocol, Src Port: 23, Dst Port: 51975, Seq: 81, Ack: 143, Len: 4
+Telnet
+    Data: ed\r\n
+
+No.     Time           Source                Destination           Protocol Length Info
+    175 45.919643852   192.168.100.13        192.168.100.84        TELNET   69     15 bytes data
+
+Frame 175: 69 bytes on wire (552 bits), 69 bytes captured (552 bits) on interface eth0, id 0
+Ethernet II, Src: HainzlIndust_04:3f:6c (00:24:bd:04:3f:6c), Dst: MicrochipTec_83:70:ec (44:b7:d0:83:70:ec)
+Internet Protocol Version 4, Src: 192.168.100.13, Dst: 192.168.100.84
+Transmission Control Protocol, Src Port: 23, Dst Port: 51975, Seq: 85, Ack: 143, Len: 15
+Telnet
+    Data: $logging disabl
+
+No.     Time           Source                Destination           Protocol Length Info
+    176 45.919787200   192.168.100.13        192.168.100.84        TELNET   60     4 bytes data
+
+Frame 176: 60 bytes on wire (480 bits), 60 bytes captured (480 bits) on interface eth0, id 0
+Ethernet II, Src: HainzlIndust_04:3f:6c (00:24:bd:04:3f:6c), Dst: MicrochipTec_83:70:ec (44:b7:d0:83:70:ec)
+Internet Protocol Version 4, Src: 192.168.100.13, Dst: 192.168.100.84
+Transmission Control Protocol, Src Port: 23, Dst Port: 51975, Seq: 100, Ack: 143, Len: 4
+Telnet
+    Data: ed\r\n
+
+No.     Time           Source                Destination           Protocol Length Info
+    179 45.923185325   192.168.100.84        192.168.100.13        TELNET   65     11 bytes data
+
+Frame 179: 65 bytes on wire (520 bits), 65 bytes captured (520 bits) on interface eth0, id 0
+Ethernet II, Src: MicrochipTec_83:70:ec (44:b7:d0:83:70:ec), Dst: HainzlIndust_04:3f:6c (00:24:bd:04:3f:6c)
+Internet Protocol Version 4, Src: 192.168.100.84, Dst: 192.168.100.13
+Transmission Control Protocol, Src Port: 51975, Dst Port: 23, Seq: 143, Ack: 104, Len: 11
+Telnet
+    Data: $daq desc\r\n
+
+No.     Time           Source                Destination           Protocol Length Info
+    181 45.978544232   192.168.100.13        192.168.100.84        TELNET   1510   1456 bytes data
+
+Frame 181: 1510 bytes on wire (12080 bits), 1510 bytes captured (12080 bits) on interface eth0, id 0
+Ethernet II, Src: HainzlIndust_04:3f:6c (00:24:bd:04:3f:6c), Dst: MicrochipTec_83:70:ec (44:b7:d0:83:70:ec)
+Internet Protocol Version 4, Src: 192.168.100.13, Dst: 192.168.100.84
+Transmission Control Protocol, Src Port: 23, Dst Port: 51975, Seq: 104, Ack: 154, Len: 1456
+Telnet
+    Data […]: $<<<DAQPRJ><ANALOG><CHANNEL id='0' name='ZK' dop='0'/><CHANNEL id='1' name='O2' unit='%'/><CHANNEL id='2' name='O2soll' unit='%'/><CHANNEL id='3' name='TK' unit='�C'/><CHANNEL id='4' name='TKsoll' unit='�C' dop='0'/><CHANNE
+
+No.     Time           Source                Destination           Protocol Length Info
+    182 45.978544917   192.168.100.13        192.168.100.84        TELNET   60     4 bytes data
+
+Frame 182: 60 bytes on wire (480 bits), 60 bytes captured (480 bits) on interface eth0, id 0
+Ethernet II, Src: HainzlIndust_04:3f:6c (00:24:bd:04:3f:6c), Dst: MicrochipTec_83:70:ec (44:b7:d0:83:70:ec)
+Internet Protocol Version 4, Src: 192.168.100.13, Dst: 192.168.100.84
+Transmission Control Protocol, Src Port: 23, Dst Port: 51975, Seq: 1560, Ack: 154, Len: 4
+Telnet
+    Data: dop=
+
+No.     Time           Source                Destination           Protocol Length Info
+    186 46.030855729   192.168.100.13        192.168.100.84        TELNET   1510   1456 bytes data
+
+Frame 186: 1510 bytes on wire (12080 bits), 1510 bytes captured (12080 bits) on interface eth0, id 0
+Ethernet II, Src: HainzlIndust_04:3f:6c (00:24:bd:04:3f:6c), Dst: MicrochipTec_83:70:ec (44:b7:d0:83:70:ec)
+Internet Protocol Version 4, Src: 192.168.100.13, Dst: 192.168.100.84
+Transmission Control Protocol, Src Port: 23, Dst Port: 51975, Seq: 1564, Ack: 154, Len: 1456
+Telnet
+    Data […]: '0'/><CHANNEL id='32' name='I Ra' unit='mA' dop='0'/><CHANNEL id='33' name='I Aa' unit='mA' dop='0'/><CHANNEL id='34' name='I Sr' unit='mA' dop='0'/><CHANNEL id='35' name='I Rein' unit='mA' dop='0'/><CHANNEL id='36' name='LZ ES
+
+No.     Time           Source                Destination           Protocol Length Info
+    187 46.030856951   192.168.100.13        192.168.100.84        TELNET   60     4 bytes data
+
+Frame 187: 60 bytes on wire (480 bits), 60 bytes captured (480 bits) on interface eth0, id 0
+Ethernet II, Src: HainzlIndust_04:3f:6c (00:24:bd:04:3f:6c), Dst: MicrochipTec_83:70:ec (44:b7:d0:83:70:ec)
+Internet Protocol Version 4, Src: 192.168.100.13, Dst: 192.168.100.84
+Transmission Control Protocol, Src Port: 23, Dst Port: 51975, Seq: 3020, Ack: 154, Len: 4
+Telnet
+    Data: ANNE
+
+No.     Time           Source                Destination           Protocol Length Info
+    190 46.065148482   192.168.100.13        192.168.100.84        TELNET   1510   1456 bytes data
+
+Frame 190: 1510 bytes on wire (12080 bits), 1510 bytes captured (12080 bits) on interface eth0, id 0
+Ethernet II, Src: HainzlIndust_04:3f:6c (00:24:bd:04:3f:6c), Dst: MicrochipTec_83:70:ec (44:b7:d0:83:70:ec)
+Internet Protocol Version 4, Src: 192.168.100.13, Dst: 192.168.100.84
+Transmission Control Protocol, Src Port: 23, Dst Port: 51975, Seq: 3024, Ack: 154, Len: 1456
+Telnet
+    Data […]: L id='62' name='TVL_1' unit='�C'/><CHANNEL id='63' name='TVLs_1' unit='�C' dop='0'/><CHANNEL id='64' name='TRA_1' unit='�C'/><CHANNEL id='65' name='TRs_1' unit='�C'/><CHANNEL id='66' name='HKZustand_1' dop='0'/><CHANNEL
+    Data […]: $<<<CHANNEL id='76' name='TRA_B' unit='�C'/><CHANNEL id='77' name='TRs_B' unit='�C'/><CHANNEL id='78' name='HKZustand_B' dop='0'/><CHANNEL id='79' name='FRB Zustand' dop='0'/><CHANNEL id='80' name='TBA' unit='�C'/><CHANNE
+
+No.     Time           Source                Destination           Protocol Length Info
+    191 46.065148982   192.168.100.13        192.168.100.84        TELNET   60     4 bytes data
+
+Frame 191: 60 bytes on wire (480 bits), 60 bytes captured (480 bits) on interface eth0, id 0
+Ethernet II, Src: HainzlIndust_04:3f:6c (00:24:bd:04:3f:6c), Dst: MicrochipTec_83:70:ec (44:b7:d0:83:70:ec)
+Internet Protocol Version 4, Src: 192.168.100.13, Dst: 192.168.100.84
+Transmission Control Protocol, Src Port: 23, Dst Port: 51975, Seq: 4480, Ack: 154, Len: 4
+Telnet
+    Data: ' do
+
+No.     Time           Source                Destination           Protocol Length Info
+    194 46.088703763   192.168.100.13        192.168.100.84        TELNET   1510   1456 bytes data
+
+Frame 194: 1510 bytes on wire (12080 bits), 1510 bytes captured (12080 bits) on interface eth0, id 0
+Ethernet II, Src: HainzlIndust_04:3f:6c (00:24:bd:04:3f:6c), Dst: MicrochipTec_83:70:ec (44:b7:d0:83:70:ec)
+Internet Protocol Version 4, Src: 192.168.100.13, Dst: 192.168.100.84
+Transmission Control Protocol, Src Port: 23, Dst Port: 51975, Seq: 4484, Ack: 154, Len: 1456
+Telnet
+    Data […]: p='0'/><CHANNEL id='94' name='Anf. HKR7' unit='�C' dop='0'/><CHANNEL id='95' name='Anf. HKR8' unit='�C' dop='0'/><CHANNEL id='96' name='Anf. HKR9' unit='�C' dop='0'/><CHANNEL id='97' name='Anf. HKR10' unit='�C' dop='0'/
+    Data […]: $<<<CHANNEL id='0' bit='3' name='RLP/PuffP'/><CHANNEL id='0' bit='4' name='RLm_auf'/><CHANNEL id='0' bit='5' name='RLm_zu'/><CHANNEL id='0' bit='10' name='WS freig.'/><CHANNEL id='0' bit='11' name='Akt. Code'/><CHANNEL id='0' b
+
+No.     Time           Source                Destination           Protocol Length Info
+    195 46.088730707   192.168.100.13        192.168.100.84        TELNET   60     4 bytes data
+
+Frame 195: 60 bytes on wire (480 bits), 60 bytes captured (480 bits) on interface eth0, id 0
+Ethernet II, Src: HainzlIndust_04:3f:6c (00:24:bd:04:3f:6c), Dst: MicrochipTec_83:70:ec (44:b7:d0:83:70:ec)
+Internet Protocol Version 4, Src: 192.168.100.13, Dst: 192.168.100.84
+Transmission Control Protocol, Src Port: 23, Dst Port: 51975, Seq: 5940, Ack: 154, Len: 4
+Telnet
+    Data: id='
+
+No.     Time           Source                Destination           Protocol Length Info
+    198 46.139817992   192.168.100.13        192.168.100.84        TELNET   1510   1456 bytes data
+
+Frame 198: 1510 bytes on wire (12080 bits), 1510 bytes captured (12080 bits) on interface eth0, id 0
+Ethernet II, Src: HainzlIndust_04:3f:6c (00:24:bd:04:3f:6c), Dst: MicrochipTec_83:70:ec (44:b7:d0:83:70:ec)
+Internet Protocol Version 4, Src: 192.168.100.13, Dst: 192.168.100.84
+Transmission Control Protocol, Src Port: 23, Dst Port: 51975, Seq: 5944, Ack: 154, Len: 1456
+Telnet
+    Data […]: 1' bit='8' name='AS RA Run'/><CHANNEL id='1' bit='9' name='AS RA Dir'/><CHANNEL id='1' bit='10' name='Rein En'/><CHANNEL id='1' bit='11' name='Rein Run'/><CHANNEL id='1' bit='12' name='Es Rein Endl'/><CHANNEL id='1' bit='13' na
+    Data […]: $<<<CHANNEL id='2' bit='10' name='M3A'/><CHANNEL id='2' bit='11' name='M3Z'/><CHANNEL id='2' bit='12' name='HKP4'/><CHANNEL id='2' bit='13' name='M4A'/><CHANNEL id='2' bit='14' name='M4Z'/><CHANNEL id='2' bit='15' name='HKP5'/>
+
+No.     Time           Source                Destination           Protocol Length Info
+    199 46.139818363   192.168.100.13        192.168.100.84        TELNET   60     4 bytes data
+
+Frame 199: 60 bytes on wire (480 bits), 60 bytes captured (480 bits) on interface eth0, id 0
+Ethernet II, Src: HainzlIndust_04:3f:6c (00:24:bd:04:3f:6c), Dst: MicrochipTec_83:70:ec (44:b7:d0:83:70:ec)
+Internet Protocol Version 4, Src: 192.168.100.13, Dst: 192.168.100.84
+Transmission Control Protocol, Src Port: 23, Dst Port: 51975, Seq: 7400, Ack: 154, Len: 4
+Telnet
+    Data: me='
+
+No.     Time           Source                Destination           Protocol Length Info
+    202 46.159785729   192.168.100.13        192.168.100.84        TELNET   1510   1456 bytes data
+
+Frame 202: 1510 bytes on wire (12080 bits), 1510 bytes captured (12080 bits) on interface eth0, id 0
+Ethernet II, Src: HainzlIndust_04:3f:6c (00:24:bd:04:3f:6c), Dst: MicrochipTec_83:70:ec (44:b7:d0:83:70:ec)
+Internet Protocol Version 4, Src: 192.168.100.13, Dst: 192.168.100.84
+Transmission Control Protocol, Src Port: 23, Dst Port: 51975, Seq: 7404, Ack: 154, Len: 1456
+Telnet
+    Data […]: BZP3'/><CHANNEL id='3' bit='9' name='BZPB'/><CHANNEL id='4' bit='0' name='Aschebox'/><CHANNEL id='4' bit='1' name='Netztrafo'/><CHANNEL id='4' bit='2' name='Netzrelais'/><CHANNEL id='4' bit='4' name='Lagerraum'/><CHANNEL id='4'
+    Data […]: $<<<CHANNEL id='6' bit='7' name='EHKP3'/><CHANNEL id='6' bit='8' name='KASK1 MinLeist'/><CHANNEL id='6' bit='9' name='KASK2 MinLeist'/><CHANNEL id='6' bit='10' name='KASK3 MinLeist'/><CHANNEL id='6' bit='11' name='KASK4 MinLeis
+
+No.     Time           Source                Destination           Protocol Length Info
+    203 46.159785821   192.168.100.13        192.168.100.84        TELNET   60     4 bytes data
+
+Frame 203: 60 bytes on wire (480 bits), 60 bytes captured (480 bits) on interface eth0, id 0
+Ethernet II, Src: HainzlIndust_04:3f:6c (00:24:bd:04:3f:6c), Dst: MicrochipTec_83:70:ec (44:b7:d0:83:70:ec)
+Internet Protocol Version 4, Src: 192.168.100.13, Dst: 192.168.100.84
+Transmission Control Protocol, Src Port: 23, Dst Port: 51975, Seq: 8860, Ack: 154, Len: 4
+Telnet
+    Data: ask 
+
+No.     Time           Source                Destination           Protocol Length Info
+    206 46.172549485   192.168.100.13        192.168.100.84        TELNET   644    590 bytes data
+
+Frame 206: 644 bytes on wire (5152 bits), 644 bytes captured (5152 bits) on interface eth0, id 0
+Ethernet II, Src: HainzlIndust_04:3f:6c (00:24:bd:04:3f:6c), Dst: MicrochipTec_83:70:ec (44:b7:d0:83:70:ec)
+Internet Protocol Version 4, Src: 192.168.100.13, Dst: 192.168.100.84
+Transmission Control Protocol, Src Port: 23, Dst Port: 51975, Seq: 8864, Ack: 154, Len: 590
+Telnet
+    Data […]: FW Out'/><CHANNEL id='6' bit='26' name='KASK KWK OK'/><CHANNEL id='6' bit='27' name='KASK FW OK'/><CHANNEL id='7' bit='0' name='DReg P2'/><CHANNEL id='7' bit='1' name='DReg P3'/><CHANNEL id='7' bit='2' name='DReg Mi auf'/><CHAN
+
+No.     Time           Source                Destination           Protocol Length Info
+    207 46.172679279   192.168.100.13        192.168.100.84        TELNET   60     4 bytes data
+
+Frame 207: 60 bytes on wire (480 bits), 60 bytes captured (480 bits) on interface eth0, id 0
+Ethernet II, Src: HainzlIndust_04:3f:6c (00:24:bd:04:3f:6c), Dst: MicrochipTec_83:70:ec (44:b7:d0:83:70:ec)
+Internet Protocol Version 4, Src: 192.168.100.13, Dst: 192.168.100.84
+Transmission Control Protocol, Src Port: 23, Dst Port: 51975, Seq: 9454, Ack: 154, Len: 4
+Telnet
+    Data: >>\r\n
+
+No.     Time           Source                Destination           Protocol Length Info
+    209 46.175748262   192.168.100.84        192.168.100.13        TELNET   66     12 bytes data
+
+Frame 209: 66 bytes on wire (528 bits), 66 bytes captured (528 bits) on interface eth0, id 0
+Ethernet II, Src: MicrochipTec_83:70:ec (44:b7:d0:83:70:ec), Dst: HainzlIndust_04:3f:6c (00:24:bd:04:3f:6c)
+Internet Protocol Version 4, Src: 192.168.100.84, Dst: 192.168.100.13
+Transmission Control Protocol, Src Port: 51975, Dst Port: 23, Seq: 154, Ack: 9458, Len: 12
+Telnet
+    Data: $daq start\r\n
+
+No.     Time           Source                Destination           Protocol Length Info
+    210 46.175809150   192.168.100.84        192.168.100.13        TELNET   71     17 bytes data
+
+Frame 210: 71 bytes on wire (568 bits), 71 bytes captured (568 bits) on interface eth0, id 0
+Ethernet II, Src: MicrochipTec_83:70:ec (44:b7:d0:83:70:ec), Dst: HainzlIndust_04:3f:6c (00:24:bd:04:3f:6c)
+Internet Protocol Version 4, Src: 192.168.100.84, Dst: 192.168.100.13
+Transmission Control Protocol, Src Port: 51975, Dst Port: 23, Seq: 166, Ack: 9458, Len: 17
+Telnet
+    Data: $logging enable\r\n
+
+No.     Time           Source                Destination           Protocol Length Info
+    214 46.197690063   192.168.100.13        192.168.100.84        TELNET   64     10 bytes data
+
+Frame 214: 64 bytes on wire (512 bits), 64 bytes captured (512 bits) on interface eth0, id 0
+Ethernet II, Src: HainzlIndust_04:3f:6c (00:24:bd:04:3f:6c), Dst: MicrochipTec_83:70:ec (44:b7:d0:83:70:ec)
+Internet Protocol Version 4, Src: 192.168.100.13, Dst: 192.168.100.84
+Transmission Control Protocol, Src Port: 23, Dst Port: 51975, Seq: 9458, Ack: 183, Len: 10
+Telnet
+    Data: $daq start
+
+No.     Time           Source                Destination           Protocol Length Info
+    215 46.197832856   192.168.100.13        192.168.100.84        TELNET   60     4 bytes data
+
+Frame 215: 60 bytes on wire (480 bits), 60 bytes captured (480 bits) on interface eth0, id 0
+Ethernet II, Src: HainzlIndust_04:3f:6c (00:24:bd:04:3f:6c), Dst: MicrochipTec_83:70:ec (44:b7:d0:83:70:ec)
+Internet Protocol Version 4, Src: 192.168.100.13, Dst: 192.168.100.84
+Transmission Control Protocol, Src Port: 23, Dst Port: 51975, Seq: 9468, Ack: 183, Len: 4
+Telnet
+    Data: ed\r\n
+
+No.     Time           Source                Destination           Protocol Length Info
+    218 46.254168037   192.168.100.13        192.168.100.84        TELNET   424    370 bytes data
+
+Frame 218: 424 bytes on wire (3392 bits), 424 bytes captured (3392 bits) on interface eth0, id 0
+Ethernet II, Src: HainzlIndust_04:3f:6c (00:24:bd:04:3f:6c), Dst: MicrochipTec_83:70:ec (44:b7:d0:83:70:ec)
+Internet Protocol Version 4, Src: 192.168.100.13, Dst: 192.168.100.84
+Transmission Control Protocol, Src Port: 23, Dst Port: 51975, Seq: 9472, Ack: 183, Len: 370
+Telnet
+    Data […]: pm 9 20.0 7.7 65.7 0 60.6 32 11 110.3 67 68 70.0 120 34.1 68 5 0 0 0 70 0 0 30 100 85 85 72 84.8 85 1 0 13 2 0 0 0 9 21 0 566 1956 1133 8.00 13.58 589 -5.3 24193 140.0 106.9 33 -20.0 -20.0 0.0 11.4 10.1 0 -20.0 0 20.0 20.0 0 1 
+
+No.     Time           Source                Destination           Protocol Length Info
+    219 46.254247739   192.168.100.13        192.168.100.84        TELNET   60     4 bytes data
+
+Frame 219: 60 bytes on wire (480 bits), 60 bytes captured (480 bits) on interface eth0, id 0
+Ethernet II, Src: HainzlIndust_04:3f:6c (00:24:bd:04:3f:6c), Dst: MicrochipTec_83:70:ec (44:b7:d0:83:70:ec)
+Internet Protocol Version 4, Src: 192.168.100.13, Dst: 192.168.100.84
+Transmission Control Protocol, Src Port: 23, Dst Port: 51975, Seq: 9842, Ack: 183, Len: 4
+Telnet
+    Data: 0 \r\n
+
+No.     Time           Source                Destination           Protocol Length Info
+    222 46.263986122   192.168.100.13        192.168.100.84        TELNET   68     14 bytes data
+
+Frame 222: 68 bytes on wire (544 bits), 68 bytes captured (544 bits) on interface eth0, id 0
+Ethernet II, Src: HainzlIndust_04:3f:6c (00:24:bd:04:3f:6c), Dst: MicrochipTec_83:70:ec (44:b7:d0:83:70:ec)
+Internet Protocol Version 4, Src: 192.168.100.13, Dst: 192.168.100.84
+Transmission Control Protocol, Src Port: 23, Dst Port: 51975, Seq: 9846, Ack: 183, Len: 14
+Telnet
+    Data: $logging enabl
+
+No.     Time           Source                Destination           Protocol Length Info
+    223 46.264128322   192.168.100.13        192.168.100.84        TELNET   60     4 bytes data
+
+Frame 223: 60 bytes on wire (480 bits), 60 bytes captured (480 bits) on interface eth0, id 0
+Ethernet II, Src: HainzlIndust_04:3f:6c (00:24:bd:04:3f:6c), Dst: MicrochipTec_83:70:ec (44:b7:d0:83:70:ec)
+Internet Protocol Version 4, Src: 192.168.100.13, Dst: 192.168.100.84
+Transmission Control Protocol, Src Port: 23, Dst Port: 51975, Seq: 9860, Ack: 183, Len: 4
+Telnet
+    Data: ed\r\n
+
+No.     Time           Source                Destination           Protocol Length Info
+    226 46.271457206   192.168.100.84        192.168.100.13        TELNET   68     14 bytes data
+
+Frame 226: 68 bytes on wire (544 bits), 68 bytes captured (544 bits) on interface eth0, id 0
+Ethernet II, Src: MicrochipTec_83:70:ec (44:b7:d0:83:70:ec), Dst: HainzlIndust_04:3f:6c (00:24:bd:04:3f:6c)
+Internet Protocol Version 4, Src: 192.168.100.84, Dst: 192.168.100.13
+Transmission Control Protocol, Src Port: 51975, Dst Port: 23, Seq: 183, Ack: 9864, Len: 14
+Telnet
+    Data: $bootversion\r\n
+
+No.     Time           Source                Destination           Protocol Length Info
+    228 46.294817881   192.168.100.13        192.168.100.84        TELNET   60     4 bytes data
+
+Frame 228: 60 bytes on wire (480 bits), 60 bytes captured (480 bits) on interface eth0, id 0
+Ethernet II, Src: HainzlIndust_04:3f:6c (00:24:bd:04:3f:6c), Dst: MicrochipTec_83:70:ec (44:b7:d0:83:70:ec)
+Internet Protocol Version 4, Src: 192.168.100.13, Dst: 192.168.100.84
+Transmission Control Protocol, Src Port: 23, Dst Port: 51975, Seq: 9864, Ack: 197, Len: 4
+Telnet
+    Data: $V2.
+
+No.     Time           Source                Destination           Protocol Length Info
+    229 46.294967767   192.168.100.13        192.168.100.84        TELNET   60     4 bytes data
+
+Frame 229: 60 bytes on wire (480 bits), 60 bytes captured (480 bits) on interface eth0, id 0
+Ethernet II, Src: HainzlIndust_04:3f:6c (00:24:bd:04:3f:6c), Dst: MicrochipTec_83:70:ec (44:b7:d0:83:70:ec)
+Internet Protocol Version 4, Src: 192.168.100.13, Dst: 192.168.100.84
+Transmission Control Protocol, Src Port: 23, Dst Port: 51975, Seq: 9868, Ack: 197, Len: 4
+Telnet
+    Data: 18\r\n
+
+No.     Time           Source                Destination           Protocol Length Info
+    236 46.343310672   192.168.100.84        192.168.100.13        TELNET   61     7 bytes data
+
+Frame 236: 61 bytes on wire (488 bits), 61 bytes captured (488 bits) on interface eth0, id 0
+Ethernet II, Src: MicrochipTec_83:70:ec (44:b7:d0:83:70:ec), Dst: HainzlIndust_04:3f:6c (00:24:bd:04:3f:6c)
+Internet Protocol Version 4, Src: 192.168.100.84, Dst: 192.168.100.13
+Transmission Control Protocol, Src Port: 51975, Dst Port: 23, Seq: 197, Ack: 9872, Len: 7
+Telnet
+    Data: $info\r\n
+
+No.     Time           Source                Destination           Protocol Length Info
+    238 46.350583279   192.168.100.13        192.168.100.84        TELNET   149    95 bytes data
+
+Frame 238: 149 bytes on wire (1192 bits), 149 bytes captured (1192 bits) on interface eth0, id 0
+Ethernet II, Src: HainzlIndust_04:3f:6c (00:24:bd:04:3f:6c), Dst: MicrochipTec_83:70:ec (44:b7:d0:83:70:ec)
+Internet Protocol Version 4, Src: 192.168.100.13, Dst: 192.168.100.84
+Transmission Control Protocol, Src Port: 23, Dst Port: 51975, Seq: 9872, Ack: 204, Len: 95
+Telnet
+    Data: $KT: 'Nano.2(.3) 15'\r\n
+    Data: $SWV: 'V14.0n3'\r\n
+    Data: $FWV I/O: 'V1.2.8'\r\n
+    Data: $SN I/O: '2581475'\r\n
+    Data: $SN BCE: '272715
+
+No.     Time           Source                Destination           Protocol Length Info
+    239 46.350740387   192.168.100.13        192.168.100.84        TELNET   60     4 bytes data
+
+Frame 239: 60 bytes on wire (480 bits), 60 bytes captured (480 bits) on interface eth0, id 0
+Ethernet II, Src: HainzlIndust_04:3f:6c (00:24:bd:04:3f:6c), Dst: MicrochipTec_83:70:ec (44:b7:d0:83:70:ec)
+Internet Protocol Version 4, Src: 192.168.100.13, Dst: 192.168.100.84
+Transmission Control Protocol, Src Port: 23, Dst Port: 51975, Seq: 9967, Ack: 204, Len: 4
+Telnet
+    Data: 2'\r\n
+
+No.     Time           Source                Destination           Protocol Length Info
+    243 46.367010302   192.168.100.84        192.168.100.13        TELNET   63     9 bytes data
+
+Frame 243: 63 bytes on wire (504 bits), 63 bytes captured (504 bits) on interface eth0, id 0
+Ethernet II, Src: MicrochipTec_83:70:ec (44:b7:d0:83:70:ec), Dst: HainzlIndust_04:3f:6c (00:24:bd:04:3f:6c)
+Internet Protocol Version 4, Src: 192.168.100.84, Dst: 192.168.100.13
+Transmission Control Protocol, Src Port: 51975, Dst Port: 23, Seq: 204, Ack: 9971, Len: 9
+Telnet
+    Data: $uptime\r\n
+
+No.     Time           Source                Destination           Protocol Length Info
+    245 46.390041133   192.168.100.13        192.168.100.84        TELNET   60     5 bytes data
+
+Frame 245: 60 bytes on wire (480 bits), 60 bytes captured (480 bits) on interface eth0, id 0
+Ethernet II, Src: HainzlIndust_04:3f:6c (00:24:bd:04:3f:6c), Dst: MicrochipTec_83:70:ec (44:b7:d0:83:70:ec)
+Internet Protocol Version 4, Src: 192.168.100.13, Dst: 192.168.100.84
+Transmission Control Protocol, Src Port: 23, Dst Port: 51975, Seq: 9971, Ack: 213, Len: 5
+Telnet
+    Data: $6661
+
+No.     Time           Source                Destination           Protocol Length Info
+    246 46.390180130   192.168.100.13        192.168.100.84        TELNET   60     4 bytes data
+
+Frame 246: 60 bytes on wire (480 bits), 60 bytes captured (480 bits) on interface eth0, id 0
+Ethernet II, Src: HainzlIndust_04:3f:6c (00:24:bd:04:3f:6c), Dst: MicrochipTec_83:70:ec (44:b7:d0:83:70:ec)
+Internet Protocol Version 4, Src: 192.168.100.13, Dst: 192.168.100.84
+Transmission Control Protocol, Src Port: 23, Dst Port: 51975, Seq: 9976, Ack: 213, Len: 4
+Telnet
+    Data: 51\r\n
+
+No.     Time           Source                Destination           Protocol Length Info
+    256 47.275740645   192.168.100.13        192.168.100.84        TELNET   426    372 bytes data
+
+Frame 256: 426 bytes on wire (3408 bits), 426 bytes captured (3408 bits) on interface eth0, id 0
+Ethernet II, Src: HainzlIndust_04:3f:6c (00:24:bd:04:3f:6c), Dst: MicrochipTec_83:70:ec (44:b7:d0:83:70:ec)
+Internet Protocol Version 4, Src: 192.168.100.13, Dst: 192.168.100.84
+Transmission Control Protocol, Src Port: 23, Dst Port: 51975, Seq: 9980, Ack: 213, Len: 372
+Telnet
+    Data […]: pm 9 20.0 7.7 65.7 0 60.4 32 11 110.1 67 68 70.0 120 34.1 68 5 0 0 0 70 0 0 30.3 100 85 85 72 84.8 85 1 0 13 2 0 0 0 9 21 0 566 1956 1133 8.00 13.58 589 -5.3 24192 140.0 110.6 33 -20.0 -20.0 0.0 11.4 10.1 0 -20.0 0 20.0 20.0 0 
+
+No.     Time           Source                Destination           Protocol Length Info
+    257 47.275831032   192.168.100.13        192.168.100.84        TELNET   60     4 bytes data
+
+Frame 257: 60 bytes on wire (480 bits), 60 bytes captured (480 bits) on interface eth0, id 0
+Ethernet II, Src: HainzlIndust_04:3f:6c (00:24:bd:04:3f:6c), Dst: MicrochipTec_83:70:ec (44:b7:d0:83:70:ec)
+Internet Protocol Version 4, Src: 192.168.100.13, Dst: 192.168.100.84
+Transmission Control Protocol, Src Port: 23, Dst Port: 51975, Seq: 10352, Ack: 213, Len: 4
+Telnet
+    Data: 0 \r\n
+
+No.     Time           Source                Destination           Protocol Length Info
+    269 48.280015922   192.168.100.13        192.168.100.84        TELNET   421    367 bytes data
+
+Frame 269: 421 bytes on wire (3368 bits), 421 bytes captured (3368 bits) on interface eth0, id 0
+Ethernet II, Src: HainzlIndust_04:3f:6c (00:24:bd:04:3f:6c), Dst: MicrochipTec_83:70:ec (44:b7:d0:83:70:ec)
+Internet Protocol Version 4, Src: 192.168.100.13, Dst: 192.168.100.84
+Transmission Control Protocol, Src Port: 23, Dst Port: 51975, Seq: 10356, Ack: 213, Len: 367
+Telnet
+    Data […]: pm 9 20.0 7.7 65.7 0 60.3 32 11 110.3 67 68 70.0 120 34.1 68 5 0 0 0 70 0 0 30 100 85 85 72 84.8 85 1 0 13 3 0 0 0 9 21 0 566 1956 1133 8.00 13.58 589 -5.3 24190 140.0 108.8 33 -20.0 -20.0 0.0 11.4 10.1 0 -20.0 0 20.0 20.0 0 1 
+
+No.     Time           Source                Destination           Protocol Length Info
+    270 48.280095235   192.168.100.13        192.168.100.84        TELNET   60     4 bytes data
+
+Frame 270: 60 bytes on wire (480 bits), 60 bytes captured (480 bits) on interface eth0, id 0
+Ethernet II, Src: HainzlIndust_04:3f:6c (00:24:bd:04:3f:6c), Dst: MicrochipTec_83:70:ec (44:b7:d0:83:70:ec)
+Internet Protocol Version 4, Src: 192.168.100.13, Dst: 192.168.100.84
+Transmission Control Protocol, Src Port: 23, Dst Port: 51975, Seq: 10723, Ack: 213, Len: 4
+Telnet
+    Data: 0 \r\n
+
+No.     Time           Source                Destination           Protocol Length Info
+    277 48.885628768   192.168.100.84        192.168.100.13        TELNET   64     10 bytes data
+
+Frame 277: 64 bytes on wire (512 bits), 64 bytes captured (512 bits) on interface eth0, id 0
+Ethernet II, Src: MicrochipTec_83:70:ec (44:b7:d0:83:70:ec), Dst: HainzlIndust_04:3f:6c (00:24:bd:04:3f:6c)
+Internet Protocol Version 4, Src: 192.168.100.84, Dst: 192.168.100.13
+Transmission Control Protocol, Src Port: 51975, Dst Port: 23, Seq: 213, Ack: 10727, Len: 10
+Telnet
+    Data: $rtc get\r\n
+
+No.     Time           Source                Destination           Protocol Length Info
+    279 48.905411566   192.168.100.13        192.168.100.84        TELNET   72     18 bytes data
+
+Frame 279: 72 bytes on wire (576 bits), 72 bytes captured (576 bits) on interface eth0, id 0
+Ethernet II, Src: HainzlIndust_04:3f:6c (00:24:bd:04:3f:6c), Dst: MicrochipTec_83:70:ec (44:b7:d0:83:70:ec)
+Internet Protocol Version 4, Src: 192.168.100.13, Dst: 192.168.100.84
+Transmission Control Protocol, Src Port: 23, Dst Port: 51975, Seq: 10727, Ack: 223, Len: 18
+Telnet
+    Data: $2023-11-12 18:32:
+
+No.     Time           Source                Destination           Protocol Length Info
+    280 48.905546674   192.168.100.13        192.168.100.84        TELNET   60     4 bytes data
+
+Frame 280: 60 bytes on wire (480 bits), 60 bytes captured (480 bits) on interface eth0, id 0
+Ethernet II, Src: HainzlIndust_04:3f:6c (00:24:bd:04:3f:6c), Dst: MicrochipTec_83:70:ec (44:b7:d0:83:70:ec)
+Internet Protocol Version 4, Src: 192.168.100.13, Dst: 192.168.100.84
+Transmission Control Protocol, Src Port: 23, Dst Port: 51975, Seq: 10745, Ack: 223, Len: 4
+Telnet
+    Data: 35\r\n
+
+No.     Time           Source                Destination           Protocol Length Info
+    283 48.909862055   192.168.100.84        192.168.100.13        TELNET   94     40 bytes data
+
+Frame 283: 94 bytes on wire (752 bits), 94 bytes captured (752 bits) on interface eth0, id 0
+Ethernet II, Src: MicrochipTec_83:70:ec (44:b7:d0:83:70:ec), Dst: HainzlIndust_04:3f:6c (00:24:bd:04:3f:6c)
+Internet Protocol Version 4, Src: 192.168.100.84, Dst: 192.168.100.13
+Transmission Control Protocol, Src Port: 51975, Dst Port: 23, Seq: 223, Ack: 10749, Len: 40
+Telnet
+    Data: $par get changed "2023-11-12 18:21:37"\r\n
+
+No.     Time           Source                Destination           Protocol Length Info
+    286 48.971771002   192.168.100.13        192.168.100.84        TELNET   199    145 bytes data
+
+Frame 286: 199 bytes on wire (1592 bits), 199 bytes captured (1592 bits) on interface eth0, id 0
+Ethernet II, Src: HainzlIndust_04:3f:6c (00:24:bd:04:3f:6c), Dst: MicrochipTec_83:70:ec (44:b7:d0:83:70:ec)
+Internet Protocol Version 4, Src: 192.168.100.13, Dst: 192.168.100.84
+Transmission Control Protocol, Src Port: 23, Dst Port: 51975, Seq: 10749, Ack: 263, Len: 145
+Telnet
+    Data: $PR001;6;1;4;1;0;0;0;Mode;Manu;Arr;Ballon;Auto;Arr combustion;\r\n
+    Data: $PR011;6;0;5;1;0;0;0;Zone 1 Mode;Arr;Auto;R�duire;Confort;1x Confort;Refroid.;\r\n
+    Data: $
+
+No.     Time           Source                Destination           Protocol Length Info
+    287 48.971883592   192.168.100.13        192.168.100.84        TELNET   60     4 bytes data
+
+Frame 287: 60 bytes on wire (480 bits), 60 bytes captured (480 bits) on interface eth0, id 0
+Ethernet II, Src: HainzlIndust_04:3f:6c (00:24:bd:04:3f:6c), Dst: MicrochipTec_83:70:ec (44:b7:d0:83:70:ec)
+Internet Protocol Version 4, Src: 192.168.100.13, Dst: 192.168.100.84
+Transmission Control Protocol, Src Port: 23, Dst Port: 51975, Seq: 10894, Ack: 263, Len: 4
+Telnet
+    Data: --\r\n

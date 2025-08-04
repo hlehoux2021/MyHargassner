@@ -89,7 +89,7 @@ logging.info('Started')
 mi = MqttInformer()
 
 # create a telnet proxy. this will forward info to the mq queue
-tln= ThreadedTelnetProxy(mi.queue(), GW_IFACE, BL_IFACE, 23)
+tln= ThreadedTelnetProxy(mi.queue(), GW_IFACE, BL_IFACE, port=24)
 
 # create a BoilerListener
 # it will discover the boiler and forward its addr:port to Telnet Proxy through the tln queue
@@ -98,7 +98,7 @@ bls= ThreadedBoilerListenerSender(mi.queue(), tln.queue(), BL_IFACE, GW_IFACE)
 # create a gateway listener
 # it will forward info to MqttInformer through the mq queue
 # it will discover the IGW and forward its addr:port to Boiler Listener through the bls queue
-gls= ThreadedGatewayListenerSender(mi.queue(), bls.queue(), GW_IFACE, BL_IFACE, UDP_PORT)
+gls= ThreadedGatewayListenerSender(mi.queue(), bls.queue(), GW_IFACE, BL_IFACE, UDP_PORT,delta=100)
 
 tln.start()
 bls.start()
