@@ -6,6 +6,7 @@ it forwards messages from the IGW to the boiler
 import logging
 import platform
 from queue import Queue
+from pubsub.pubsub import PubSub
 
 from threading import Thread
 from typing import Annotated
@@ -18,13 +19,13 @@ class GatewayListenerSender(ListenerSender):
     This class extends ListenerSender class to implement the gateway listener.
     """
     udp_port: Annotated[int, annotated_types.Gt(0)]
-    _mq: Queue
+    _com: PubSub
 
-    def __init__(self, mq: Queue, sq: Queue, src_iface: bytes,dst_iface: bytes, udp_port: int, delta:int = 0):
-        super().__init__(sq, src_iface, dst_iface)
+
+    def __init__(self, communicator: PubSub, src_iface: bytes,dst_iface: bytes, udp_port: int, delta:int = 0):
+        super().__init__(communicator, src_iface, dst_iface)
         # Add any additional initialization logic here
         self.udp_port = udp_port    # destination port to which gateway is broadcasting
-        self._mq = mq
         self.delta = delta
 
     def publish_discovery(self, addr):
@@ -35,14 +36,16 @@ class GatewayListenerSender(ListenerSender):
         logging.info('GatewayListenerSender discovered gateway%s:%d', addr[0], addr[1])
         self.gw_port = addr[1]
         self.gw_addr = addr[0]
-        self.sq.put('GW_ADDR:'+self.gw_addr)
-        self.sq.put('GW_PORT:'+str(self.gw_port))
+
+        logging.info('Publishing Gateway info on channel %s', self._channel)
+        self._com.publish(self._channel, f"GW_ADDR:{self.gw_addr}")
+        self._com.publish(self._channel, f"GW_PORT:{self.gw_port}")
 
     def handle_first(self, data, addr):
         """
         This method handles the discovery of caller's ip address and port.
         """
-        logging.debug('first packet, listener not bound yet')
+        logging.debug('first packet, resender not bound yet')
         self.publish_discovery(addr)  # Call the method to publish discovery
 
         # first time we receive a packet, bind from the source port
@@ -123,20 +126,20 @@ class GatewayListenerSender(ListenerSender):
             if part.startswith('HargaWebApp'):
                 _subpart = part[13:]  # Extract portion after the key
                 logging.info('HargaWebApp££%s', _subpart)
-                self._mq.put('HargaWebApp££'+_subpart)
+                self._com.publish(self._channel, f"HargaWebApp££{_subpart}")
 
             if part.startswith('SN:'):
                 _subpart = part[3:]  # Extract portion after the key
                 logging.info('SN: [%s]', _subpart)
-                self._mq.put('SN££'+_subpart)
+                self._com.publish(self._channel, f"SN££{_subpart}")
 
 class ThreadedGatewayListenerSender(Thread):
     """This class implements a Thread to run the gateway."""
     gls: GatewayListenerSender
 
-    def __init__(self, mq: Queue, sq: Queue, src_iface: bytes,dst_iface: bytes, udp_port: int, delta=0):
+    def __init__(self, communicator: PubSub, src_iface: bytes,dst_iface: bytes, udp_port: int, delta=0):
         super().__init__(name='GatewayListener')
-        self.gls= GatewayListenerSender(mq, sq, src_iface, dst_iface, udp_port, delta)
+        self.gls= GatewayListenerSender(communicator, src_iface, dst_iface, udp_port, delta)
 
     def queue(self) -> Queue:
         """

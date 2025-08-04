@@ -14,6 +14,8 @@ import hargconfig
 from shared import BUFF_SIZE
 from telnetproxy import TelnetClient
 
+from pubsub.pubsub import PubSub
+
 class MqttBase():
     """
     common base class for MqttInformer and MqttActuator
@@ -153,7 +155,10 @@ class MqttInformer(MqttBase):
     - $setkomm: mandatory , i choose this as a primary identifiers (Boiler number)
 
     """
-    _info_queue: Queue
+#    _info_queue: Queue
+    _com: PubSub
+    _channel= "test"
+
     _dict: dict
     _sensors: dict
     _token: Sensor
@@ -163,9 +168,11 @@ class MqttInformer(MqttBase):
     #_swv: Sensor = None
     _ma: ThreadedMqttActuator
 
-    def __init__(self):
+    def __init__(self,communicator: PubSub):
         super().__init__()
-        self._info_queue= Queue()
+#        self._info_queue= Queue()
+        self._com = communicator
+        self._msq = self._com.subscribe(self._channel)
         self._dict = {}
         self._sensors= {}
         
@@ -229,13 +236,24 @@ class MqttInformer(MqttBase):
             _sensor.set_state("")
             self._sensors[_part]= _sensor
 
+
     def start(self):
         """This method runs the MqttInformer, waiting for message on _info_queue"""
         _stage: str = ''
         while True:
             try:
-                msg = self._info_queue.get(block=True, timeout=10)
+                logging.debug('MqttInformer: waiting for messages')
+                _message = next(self._msq.listen())
+                if not _message:
+                    logging.debug('MqttInfomer no message received')
+                    continue
+                msg = _message['data']
+                logging.debug('MqttInformer: received %s', msg)
+#                msg = self._info_queue.get(block=True, timeout=10)
                 _str_parts = msg.split('££')
+                if not _str_parts or len(_str_parts) < 2:
+                    logging.warning('MqttInformer: invalid message format %s', msg)
+                    continue
                 if _stage == 'device_info_ok':
                     # we are in normal mode, we handle new or modified values
                     logging.debug('normal mode analyse message')
@@ -286,11 +304,5 @@ class MqttInformer(MqttBase):
                         # now we init the already available sensors
                         self._init_sensors()
             except Empty:
-                logging.debug("Queue is empty")
+                logging.debug("handleReceiveQueue: no message received")
             logging.debug('MqttInformer stage is now %s', _stage)
-
-    def queue(self) -> Queue:
-        """
-        This method returns the queue to receive data from.
-        """
-        return self._info_queue

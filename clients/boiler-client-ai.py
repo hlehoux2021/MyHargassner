@@ -20,7 +20,7 @@ class BoilerSimulator(SharedSimulator):
         super().__init__(serial_number, version, interface)
         
         # Create telnet server socket
-        self.telnet_server = self.create_telnet_socket()
+        self.telnet_server = self.create_telnet_socket(24)
 
         ports_to_listen = [35601+delta, 50001+delta]
         for port in ports_to_listen:

@@ -8,6 +8,8 @@ import logging
 from typing import Annotated
 import annotated_types
 
+from pubsub.pubsub import PubSub
+
 #----------------------------------------------------------#
 BUFF_SIZE= 1024
 UDP_LISTENER_TIMEOUT = 5  # Timeout for UDP listener  
@@ -46,19 +48,28 @@ class SharedDataReceiver(SharedData):
     This class extends SharedData class with a queue to receive data from
     and a handler to process the received data.
     """
-    rq: Queue
+    _channel= "test"
+    _com: PubSub # every data receiver should have a PubSub communicator
 
-    def __init__(self):
+    def __init__(self, communicator: PubSub = None):
         super().__init__()
-        self.rq = Queue()
+        self._com = communicator
+        self._msq = self._com.subscribe(self._channel)
 
     def handle(self):
         """
         This method handles received messages from the queue.
         """
+        logging.debug('NEW handleReceiveQueue: waiting for messages')
         try:
-            msg = self.rq.get(block=True, timeout=10)
-            logging.debug('handleReceiveQueue: received %s', msg)
+            _message = next(self._msq.listen())
+            if not _message:
+                logging.debug('NEW handleReceiveQueue: no message received')
+                return
+            msg = _message['data']
+            if isinstance(msg, bytes):
+                msg = msg.decode('utf-8')
+            logging.debug('NEW handleReceiveQueue: received %s', msg)
             if msg.startswith('GW_ADDR:'):
                 self.gw_addr = bytes(msg.split(':')[1],'ascii')
                 logging.debug('handleReceiveQueue: gw_addr=%s', self.gw_addr)
@@ -76,12 +87,6 @@ class SharedDataReceiver(SharedData):
         except Empty:
             logging.debug('handleReceiveQueue: no message received')
 
-    def queue(self) -> Queue:
-        """
-        This method returns the queue to receive data from.
-        """
-        return self.rq
-
 class ListenerSender(SharedDataReceiver):
     """
     This class extends SharedDataReceiver class with a socket to listen
@@ -91,7 +96,7 @@ class ListenerSender(SharedDataReceiver):
     resend: socket.socket
     src_iface: bytes
     dst_iface: bytes
-    sq: Queue
+
     bound: bool = False
     resender_bound: bool = False  # Flag to indicate if the resend socket is bound
     @staticmethod
@@ -103,9 +108,8 @@ class ListenerSender(SharedDataReceiver):
         except (AttributeError, TypeError, ValueError):
             return False
 
-    def __init__(self, sq: Queue, src_iface: bytes, dst_iface: bytes):
-        super().__init__()
-        self.sq = sq        # the queue to send what i discover about the network
+    def __init__(self, communicator: PubSub, src_iface: bytes, dst_iface: bytes):
+        super().__init__(communicator)
         self.src_iface = src_iface  # network interface where to listen
         self.dst_iface = dst_iface  # network interface where to resend
         self.bound = False

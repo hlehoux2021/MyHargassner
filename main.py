@@ -21,6 +21,10 @@ from boiler import ThreadedBoilerListenerSender
 from gateway import ThreadedGatewayListenerSender
 from mqtt import MqttInformer
 
+import time
+import threading
+from pubsub.pubsub import PubSub
+
 #----------------------------------------------------------#
 LOG_PATH = "./" #chemin où enregistrer les logs
 LOG_LEVEL= logging.DEBUG
@@ -85,20 +89,58 @@ logging.info('Started')
 
 #from queue import Queue,Empty
 
+communicator= PubSub()
+
+class PubSubListener(threading.Thread):
+    """ Class defining a listener used in a thread """
+
+    def __init__(self, chanel_name, full_thread_name,
+                 communicator):
+        """
+        Constructor for this listener
+        parameters :
+        - thread_name : name of this listener
+        - chanel_name : name of the channel to listen
+        - full_thread_name : long name for this thread
+        - communicator : pubsub message dispatching system.
+        """
+
+        threading.Thread.__init__(self, name=full_thread_name)
+        self.full_thread_name = full_thread_name
+        self.message_queue = communicator.subscribe(chanel_name)
+
+    def run(self):
+        """ Method called by start() method of the thread. """
+
+        logging.info("Run start, listen to messages with a pause of 100ms between each one...")
+
+        is_running = True
+        counter = 0
+        while is_running:
+            message = next(self.message_queue.listen())
+            logging.info("receives : id : %d : %s",
+                  message['id'], message['data'])
+            time.sleep(0.1)
+            is_running = (message['data'] != "End")
+            counter += 1
+
+pln= PubSubListener('test', 'PubSubListener', communicator)
+pln.start()              
+
 # MqttInfomer will receive info on the mq queue
-mi = MqttInformer()
+mi = MqttInformer(communicator)
 
 # create a telnet proxy. this will forward info to the mq queue
-tln= ThreadedTelnetProxy(mi.queue(), GW_IFACE, BL_IFACE, port=24)
+tln= ThreadedTelnetProxy(communicator, GW_IFACE, BL_IFACE, port=23,)
 
 # create a BoilerListener
 # it will discover the boiler and forward its addr:port to Telnet Proxy through the tln queue
-bls= ThreadedBoilerListenerSender(mi.queue(), tln.queue(), BL_IFACE, GW_IFACE,delta=100)
+bls= ThreadedBoilerListenerSender(communicator, BL_IFACE, GW_IFACE,delta=100)
 
 # create a gateway listener
 # it will forward info to MqttInformer through the mq queue
 # it will discover the IGW and forward its addr:port to Boiler Listener through the bls queue
-gls= ThreadedGatewayListenerSender(mi.queue(), bls.queue(), GW_IFACE, BL_IFACE, UDP_PORT,delta=100)
+gls= ThreadedGatewayListenerSender(communicator, GW_IFACE, BL_IFACE, UDP_PORT,delta=100)
 
 tln.start()
 bls.start()

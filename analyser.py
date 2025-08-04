@@ -3,7 +3,9 @@
 """
 import logging
 import time
-from queue import Queue
+#from queue import Queue
+from pubsub.pubsub import PubSub
+
 from typing import Tuple
 
 import hargconfig
@@ -13,13 +15,19 @@ class Analyser():
     analyser for the dialog with boiler
     """
     config: hargconfig.HargConfig
-    _mq: Queue
+#    _mq: Queue
+    _channel= "test"
+    _com: PubSub # every data receiver should have a PubSub communicator
+
     _pmstamp: int = 0
     _values: dict # telnet pm values
     _pm: bytes = b''
 
-    def __init__(self,mq: Queue) -> None:
-        self._mq= mq
+    def __init__(self, communicator: PubSub) -> None:
+#        self._mq= mq
+        self._com = communicator
+        self._msq = self._com.subscribe(self._channel)
+
         self._values= dict()
         self.config= hargconfig.HargConfig()
 
@@ -28,7 +36,8 @@ class Analyser():
         push a result to the queue where it will be used
         """
         logging.info("put %s --> %s", key, subpart)
-        self._mq.put(key + "££" + subpart)
+        #self._mq.put(key + "££" + subpart)
+        self._com.publish(self._channel, f"{key}££{subpart}")
 
     def is_pm_response(self, _data: bytes) -> bool:
         """check if the data is a pm response"""

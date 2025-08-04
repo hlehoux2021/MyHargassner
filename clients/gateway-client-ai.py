@@ -84,30 +84,29 @@ class GatewaySimulator(SharedSimulator):
             print(f"Connected to {host} on port 23")
 
             # Process each message in sequence
-            for cmd in self.commands:
-                print(f"Sending: {cmd['send_msg'].decode().strip()}")
-                telnet_client.send(cmd['send_msg'])
-                
-                if cmd['expect_pattern']:  # If we expect a response
-                    try:
-                        data = telnet_client.recv(1024)
-                        if data:
-                            decoded_data = data.decode().strip()
-                            print(f"Received: {decoded_data}")
+            while True:
+                print(f"Starting telnet sequence with {host}")
+                for cmd in self.commands:
+                    print(f"Sending: {cmd['send_msg'].decode().strip()}")
+                    telnet_client.send(cmd['send_msg'])
+        
+                    if cmd['expect_pattern']:  # If we expect a response
+                        try:
+                            data = telnet_client.recv(1024)
+                            if data:
+                                decoded_data = data.decode().strip()
+                                print(f"Received: {decoded_data}")
                             
-                            if not re.search(cmd['expect_pattern'], decoded_data):
-                                print(f"Error: Response '{decoded_data}' does not match expected pattern '{cmd['expect_pattern']}'")
-                            else:
-                                print(f"Response matches expected pattern: '{cmd['expect_pattern']}'")
-                    except socket.timeout:
-                        print(f"Timeout waiting for response to {cmd['send_msg'].decode().strip()}")
-                    except UnicodeDecodeError as e:
-                        print(f"Error decoding response: {e}")
-                        continue
-                
-                time.sleep(10)  # Wait specified delay before next message
-
-            print(f"Completed telnet sequence with {host}")
+                                if not re.search(cmd['expect_pattern'], decoded_data):
+                                    print(f"Error: Response '{decoded_data}' does not match expected pattern '{cmd['expect_pattern']}'")
+                                else:
+                                    print(f"Response matches expected pattern: '{cmd['expect_pattern']}'")
+                        except socket.timeout:
+                            print(f"Timeout waiting for response to {cmd['send_msg'].decode().strip()}")
+                        except UnicodeDecodeError as e:
+                            print(f"Error decoding response: {e}")
+                    time.sleep(5)  # Wait specified delay before next message
+                print(f"Completed telnet sequence with {host}")
 
         except socket.error as e:
             print(f"Telnet connection error with {host}: {e}")

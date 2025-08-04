@@ -3,7 +3,9 @@ This module implements the TelnetProxy
 """
 import socket as s
 import select
-from queue import Queue
+#from queue import Queue
+from pubsub.pubsub import PubSub
+
 import platform
 import logging
 from threading import Thread
@@ -149,10 +151,15 @@ class TelnetClient():
         self._sock.setsockopt(s.SOL_SOCKET, s.SO_REUSEADDR, 1)
 #        self._sock.settimeout(SOCKET_TIMEOUT)
 
-    def connect(self, addr: bytes, *, port: int = 23):
+    def connect(self, addr: bytes):
         """connect to the boiler"""
-        logging.info('telnet connecting to %s on port 23', repr(addr))
+        if platform.system() == 'Darwin':
+            port= 24  # default telnet port
+        else:
+            port= 23  # default telnet port
+        logging.info('telnet connecting to %s on port %d', repr(addr), port)
         self._sock.connect((addr, port))
+
     def send(self, data: bytes):
         self._sock.send(data)
     def socket(self):
@@ -212,18 +219,16 @@ class TelnetProxy(SharedDataReceiver):
     _service1: TelnetService # to service the IGW gateaway
     _service2: TelnetService # to service other requests
  #   _telnet: s.socket
- #   _mq: Queue
     _analyser: Analyser
 #    _pmstamp: int = 0
 #    _values: dict = None # telnet pm values
 
-    def __init__(self, mq: Queue, src_iface, dst_iface, port):
-        super().__init__()
+    def __init__(self, communicator: PubSub, src_iface, dst_iface, port):
+        super().__init__(communicator)
         self.src_iface = src_iface
         self.dst_iface = dst_iface
         self.port = port
-        self._analyser= Analyser(mq)
-#        self._mq = mq
+        self._analyser= Analyser(communicator)
 #        self._listen = s.socket(s.AF_INET, s.SOCK_STREAM)
 #        if platform.system() == 'Linux':
 #            self._listen.setsockopt(s.SOL_SOCKET, s.SO_BINDTODEVICE, self.src_iface)
@@ -278,7 +283,6 @@ class TelnetProxy(SharedDataReceiver):
     def connect(self):
         """connect to the boiler"""
         logging.info('telnet connecting to %s on port 23', repr(self.bl_addr))
-#        self._resend.connect((self.bl_addr, 23))
         self._client.connect(self.bl_addr)
 
     def loop(self):
@@ -310,6 +314,9 @@ class TelnetProxy(SharedDataReceiver):
                     logging.debug('service1 received  request %d bytes ==>%s',
                                  len(_data), repr(_data))
                     _caller= 1
+                    if not _data:
+                        logging.warning('service1 received empty request')
+                        continue
                     _state = self._analyser.parse_request(_data)
                     logging.debug('_state-->%s',_state)
                     # we should resend it
@@ -370,16 +377,10 @@ class TelnetProxy(SharedDataReceiver):
 class ThreadedTelnetProxy(Thread):
     """This class implements a Thread to run the TelnetProxy"""
     _tserver: Thread
-    def __init__(self, mq: Queue, src_iface, dst_iface, port):
+    def __init__(self, communicator: PubSub, src_iface, dst_iface, port):
         super().__init__(name='TelnetProxy')
-        self.tp= TelnetProxy(mq, src_iface, dst_iface, port)
+        self.tp= TelnetProxy(communicator, src_iface, dst_iface, port)
         # Add any additional initialization logic here
-
-    def queue(self) -> Queue:
-        """
-        This method returns the queue to receive data from.
-        """
-        return self.tp.queue()
 
     def run(self):
         _ts: Thread= None

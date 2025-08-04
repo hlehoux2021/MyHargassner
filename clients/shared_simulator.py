@@ -160,14 +160,14 @@ class SharedSimulator:
         {
             'pattern': r'^get em\r\n?$',
             'send_msg': b"get em\r\n",
-            'response': b"em 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0\r\n",
+            'response': b"em 9 20.0 7.7 65.7 0 60.3 32 11 110.3 67 68 70.0 120 34.1 \r\n",
             'expect_pattern': r"em\s+.*",
             'delay': 1.0
         },
         {
             'pattern': r'^get dm\r\n?$',
             'send_msg': b"get dm\r\n",
-            'response': b"dm 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0\r\n",
+            'response': b"dm 9 20.0 7.7 65.7 0 60.3 32 11 110.3 67 68 70.0 120 34.1 \r\n",
             'expect_pattern': r"dm\s+.*",
             'delay': 1.0
         }
@@ -291,7 +291,11 @@ class SharedSimulator:
 
                     response = self.handle_telnet_command(command)
                     if response:
-                        print(f"Sending response: {response.decode().strip()}")
+                        try:
+                            print(f"Sending response: {response.decode().strip()}")
+                        except Exception as e:
+                            print(f"Error decoding response: {e}")
+
                         client.send(response)
 
                 except socket.timeout:
