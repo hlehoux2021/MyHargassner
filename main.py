@@ -93,7 +93,7 @@ tln= ThreadedTelnetProxy(mi.queue(), GW_IFACE, BL_IFACE, port=24)
 
 # create a BoilerListener
 # it will discover the boiler and forward its addr:port to Telnet Proxy through the tln queue
-bls= ThreadedBoilerListenerSender(mi.queue(), tln.queue(), BL_IFACE, GW_IFACE)
+bls= ThreadedBoilerListenerSender(mi.queue(), tln.queue(), BL_IFACE, GW_IFACE,delta=100)
 
 # create a gateway listener
 # it will forward info to MqttInformer through the mq queue

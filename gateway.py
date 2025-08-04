@@ -27,21 +27,52 @@ class GatewayListenerSender(ListenerSender):
         self._mq = mq
         self.delta = delta
 
+    def publish_discovery(self, addr):
+        """
+        This method publishes the discovery of the gateway.
+        It sends the gateway address and port to the shared queue.
+        """
+        logging.info('GatewayListenerSender discovered gateway%s:%d', addr[0], addr[1])
+        self.gw_port = addr[1]
+        self.gw_addr = addr[0]
+        self.sq.put('GW_ADDR:'+self.gw_addr)
+        self.sq.put('GW_PORT:'+str(self.gw_port))
+
     def handle_first(self, data, addr):
         """
         This method handles the discovery of caller's ip address and port.
         """
         logging.debug('first packet, listener not bound yet')
+        self.publish_discovery(addr)  # Call the method to publish discovery
+
         # first time we receive a packet, bind from the source port
-        logging.info('discovered %s:%d', addr[0], addr[1])
-        self.gw_port = addr[1]
-        self.gw_addr = addr[0]
-        self.sq.put('GW_ADDR:'+self.gw_addr)
-        self.sq.put('GW_PORT:'+str(self.gw_port))
-#        self.resend.bind((self.gw_addr, self.gw_port))
-        self.resend.bind(('', self.gw_port))
-        logging.debug('sender bound to IP %s, port %d', self.gw_addr, self.gw_port)
-#        logging.debug('sender bound to port: %d', self.gw_port)
+        if self.resender_bound:
+            logging.debug('resender already bound, skipping bind operation')
+        else:
+            if platform.system() == 'Darwin':
+                # On macOS, bind to the specific interface IP
+                bind_port = self.gw_port - self.delta
+                logging.debug('Binding details - IP: %s, Port: %d, Delta: %d, Original Port: %d', 
+                    self.dst_ip, bind_port, self.delta, self.gw_port)
+                try:
+                    self.resend.bind((self.dst_ip, bind_port))
+                    self.resender_bound = True
+                    logging.debug('resender bound to IP %s, port %d', self.dst_ip, bind_port)
+                except OSError as e:
+                    logging.error('Failed to bind resender on macOS: %s', str(e))
+                    raise
+            else:
+                # On Linux, we already used SO_BINDTODEVICE
+                logging.debug('binding resender to \'\', port %d', self.gw_port)
+                try:
+                    self.resend.bind(('', self.gw_port))
+                    self.resender_bound = True
+                    logging.debug('resender bound to port %d on interface %s', self.gw_port, self.dst_iface.decode())
+                except OSError as e:
+                    logging.error('Failed to bind resender on Linux: %s', str(e))
+                    raise
+
+        
 
 
     def queue(self) -> Queue:
@@ -63,8 +94,16 @@ class GatewayListenerSender(ListenerSender):
 
     def bind(self):
         """ This method binds the listener mimicking the gateway."""
-        self.listen.bind( ('',self.udp_port) )
-        logging.debug('listener bound to %s, port %d', self.src_iface.decode(), self.udp_port)
+        if platform.system() == 'Darwin remove':
+            # On macOS, we need to bind to the specific interface IP
+            logging.debug('binding listener to IP %s, port %d', self.src_ip, self.udp_port)
+            self.listen.bind((self.src_ip, self.udp_port))
+            logging.debug('listener bound to IP %s, port %d', self.src_ip, self.udp_port)
+        else:
+            # On Linux, we already used SO_BINDTODEVICE, so we can bind to all interfaces
+            logging.debug('binding listener to '', port %d', self.udp_port)
+            self.listen.bind(('', self.udp_port))
+            logging.debug('listener bound to '', port %d', self.udp_port)
         self.bound = True
 
     def handle_data(self, data: bytes, addr: tuple):

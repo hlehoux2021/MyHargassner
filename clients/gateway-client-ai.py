@@ -46,7 +46,7 @@ class GatewaySimulator(SharedSimulator):
         while self.running:
             # Skip broadcasting if we're in a telnet sequence
             if self.sending_telnet:
-                time.sleep(1)  # Sleep briefly and check again
+                time.sleep(5)  # Sleep briefly and check again
                 continue
                 
             for message, src_port, dst_port, wait_reply, reply_pattern, timeout in messages:

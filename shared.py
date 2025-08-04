@@ -93,7 +93,7 @@ class ListenerSender(SharedDataReceiver):
     dst_iface: bytes
     sq: Queue
     bound: bool = False
-
+    resender_bound: bool = False  # Flag to indicate if the resend socket is bound
     @staticmethod
     def _is_ip_address(ip: str) -> bool:
         """Check if a string is a valid IPv4 address"""
@@ -187,7 +187,9 @@ class ListenerSender(SharedDataReceiver):
                 if data:  # Only process if we actually got data
                     logging.debug('received buffer of %d bytes from %s : %d', len(data), addr[0], addr[1])
                     logging.debug('%s', data)
-                    self.handle_first(data, addr)
+                    # if destination is not yet discovered, handle first packet and bind the resend socket
+                    if not self.resender_bound:
+                        self.handle_first(data, addr)
                     self.handle_data(data, addr)
                     self.send(data)
             except socket.timeout:
