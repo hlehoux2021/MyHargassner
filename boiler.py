@@ -57,9 +57,14 @@ class BoilerListenerSender(ListenerSender):
     def discover(self):
         """ This method discovers the gateway ip address and port. ip address and port."""
         logging.info('BoilerListenerSender discovering gateway')
+        self._msq = self._com.subscribe(self._channel, self.name())
         while self.gw_port == 0:
             self.handle()
         logging.info('BoilerListenerSender discovered gateway %s:%d', self.gw_addr, self.gw_port)
+        #unsubscribe from the channel to avoid receiving further messages
+        logging.info('BoilerListenerSender unsubscribe from channel %s', self._channel)
+        self._com.unsubscribe(self._channel,self._msq)
+        self._msq = None  # Clear the message queue reference
 
     def bind(self):
         """ This method binds the listener mimicking the gateway."""

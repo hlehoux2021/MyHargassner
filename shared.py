@@ -8,7 +8,7 @@ import logging
 from typing import Annotated
 import annotated_types
 
-from pubsub.pubsub import PubSub
+from pubsub.pubsub import PubSub,ChanelQueue
 
 #----------------------------------------------------------#
 BUFF_SIZE= 1024
@@ -43,33 +43,38 @@ class SharedData():
         self.bl_port= 0     # destination port to which boiler is listening
         self.gwt_port = 0    # source telnet port from which gateway is sending
 
+    def name(self):
+        return self.__class__.__name__
+
 class SharedDataReceiver(SharedData):
     """
     This class extends SharedData class with a queue to receive data from
     and a handler to process the received data.
     """
-    _channel= "test"
+    _channel= "bootstrap" # Channel to exchange bootstrap information about boiler and gateway, addr, port, etc
     _com: PubSub # every data receiver should have a PubSub communicator
+    _msq: ChanelQueue = None  # Message queue for receiving data
 
     def __init__(self, communicator: PubSub = None):
         super().__init__()
         self._com = communicator
-        self._msq = self._com.subscribe(self._channel)
+#        self._msq = self._com.subscribe(self._channel, "SharedDataReceiver")
 
     def handle(self):
         """
         This method handles received messages from the queue.
         """
-        logging.debug('NEW handleReceiveQueue: waiting for messages')
+        logging.debug((f"handle() called on {self.name()} with channel {self._channel}"))
         try:
             _message = next(self._msq.listen())
+            logging.debug('ChannelQueue size: %d', self._msq.qsize())
             if not _message:
-                logging.debug('NEW handleReceiveQueue: no message received')
+                logging.debug('handleReceiveQueue: no message received')
                 return
             msg = _message['data']
             if isinstance(msg, bytes):
                 msg = msg.decode('utf-8')
-            logging.debug('NEW handleReceiveQueue: received %s', msg)
+            logging.debug('handleReceiveQueue: received %s', msg)
             if msg.startswith('GW_ADDR:'):
                 self.gw_addr = bytes(msg.split(':')[1],'ascii')
                 logging.debug('handleReceiveQueue: gw_addr=%s', self.gw_addr)
@@ -86,6 +91,15 @@ class SharedDataReceiver(SharedData):
                 logging.debug('handleReceiveQueue: unknown message %s', msg)
         except Empty:
             logging.debug('handleReceiveQueue: no message received')
+        logging.debug('handle(): end of method')
+
+    def loop(self):
+        """
+        This method is the main loop of the class.
+        It should be overridden in subclasses to implement specific behavior.
+        """
+        logging.error(f"loop() not implemented in {self.name()}")
+        raise NotImplementedError("Subclasses must implement this method")
 
 class ListenerSender(SharedDataReceiver):
     """
@@ -183,6 +197,8 @@ class ListenerSender(SharedDataReceiver):
             return
             
         while True:
+            if self._msq:
+                logging.debug('ChannelQueue size: %d', self._msq.qsize())
             logging.debug('waiting data')
             data = None
             addr = ('', 0)

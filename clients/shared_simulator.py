@@ -2,8 +2,8 @@
 
 import socket
 import time
-import threading
 import re
+import psutil
 
 # Add socket constants that might not be defined on all systems
 if not hasattr(socket, 'SO_BINDTODEVICE'):
@@ -20,14 +20,14 @@ class SharedSimulator:
         {
             'pattern': r'^\$login token\r\n?$',
             'send_msg': b"$login token\r\n",
-            'response': b"$3313C1F2\r\n",
-            'expect_pattern': r"\$3313C1",
+            'response': b"$AABBCCFF\r\n",
+            'expect_pattern': r"\$AABBCC",
             'delay': 0.1
         },
         {
             'pattern': r'^\$login key .*\r\n?$',
-            'send_msg': b"$login key 3313C1\r\n",
-            'response': b"zclient login (7421)\r\n$ack\r\n",
+            'send_msg': b"$login key AABBCCFF\r\n",
+            'response': b"zclient login (9999)\r\n$ack\r\n",
             'expect_pattern': r"zclient login",
             'delay': 0.1
         },
@@ -43,8 +43,8 @@ class SharedSimulator:
         {
             'pattern': r'^\$setkomm\r\n?$',
             'send_msg': b"$setkomm\r\n",
-            'response': b"$2225410 ack\r\n",
-            'expect_pattern': r"\$2225410",
+            'response': b"$1234567 ack\r\n",
+            'expect_pattern': r"\$1234567",
             'delay': 0.1
         },
         {
@@ -56,7 +56,7 @@ class SharedSimulator:
         },
         {
             'pattern': r'^\$igw set \d+\r\n?$',
-            'send_msg': b"$igw set 0039808\r\n",
+            'send_msg': b"$igw set 0033444\r\n",
             'response': b"$ack\r\n",
             'expect_pattern': r"ack",
             'delay': 0.1
@@ -95,14 +95,14 @@ class SharedSimulator:
             'pattern': r'^\$logging disable\r\n?$',
             'send_msg': b"$logging disable\r\n",
             'response': b"$logging disabled\r\n",
-            'expect_pattern': r"disabled",
+            'expect_pattern': r"\$logging disabled",
             'delay': 0.1
         },
         {
             'pattern': r'^\$logging enable\r\n?$',
             'send_msg': b"$logging enable\r\n",
             'response': b"$logging enabled\r\n",
-            'expect_pattern': r"enabled",
+            'expect_pattern': r"\$logging enabled",
             'delay': 0.1
         },
         
@@ -118,17 +118,17 @@ class SharedSimulator:
             'pattern': r'^\$info\r\n?$',
             'send_msg': b"$info\r\n",
             'response': b"$KT: 'Nano.2(.3) 15'\r\n"
-                       b"$SWV: 'V14.0n3'\r\n"
-                       b"$FWV I/O: 'V1.2.8'\r\n"
-                       b"$SN I/O: '2581475'\r\n"
-                       b"$SN BCE: '2727152'\r\n",
+                   b"$SWV: 'V14.0n3'\r\n"
+                   b"$FWV I/O: 'V1.2.8'\r\n"
+                   b"$SN I/O: '2222222'\r\n"
+                   b"$SN BCE: '3333333'\r\n",
             'expect_pattern': r"\$KT:.*",
             'delay': 0.1
         },
         {
             'pattern': r'^\$uptime\r\n?$',
             'send_msg': b"$uptime\r\n",
-            'response': b"$666151\r\n",
+            'response': lambda: f"${int(time.time() - psutil.boot_time())}\r\n".encode(),
             'expect_pattern': r"\$\d+",
             'delay': 0.1
         },

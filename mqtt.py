@@ -29,7 +29,10 @@ class MqttBase():
         #TODO remove password from code. note, this is an experimental dev jeedom without internet access
         self.mqtt_settings= Settings.MQTT(host="192.168.100.8",
                 username="jeedom",
-                password="rL4jVLF1JTcXUQBXSU1K479WzIBbCrJVtC7ch9sQllBIjZT5C9MJBsFjXfbIfHIH")
+                password="ckqlwHxxQ1vceSHca6Q4Ts6w4ImWwo8k6MvRDUWGrELmCt5WLwHRl30tTbxyTrXi")
+
+    def name(self):
+        return self.__class__.__name__
 
 class MqttActuator(MqttBase):
     """
@@ -157,7 +160,7 @@ class MqttInformer(MqttBase):
     """
 #    _info_queue: Queue
     _com: PubSub
-    _channel= "test"
+    _channel= "info" # Channel to receive info about the boiler
 
     _dict: dict
     _sensors: dict
@@ -172,7 +175,6 @@ class MqttInformer(MqttBase):
         super().__init__()
 #        self._info_queue= Queue()
         self._com = communicator
-        self._msq = self._com.subscribe(self._channel)
         self._dict = {}
         self._sensors= {}
         
@@ -240,16 +242,19 @@ class MqttInformer(MqttBase):
     def start(self):
         """This method runs the MqttInformer, waiting for message on _info_queue"""
         _stage: str = ''
+
+        self._msq = self._com.subscribe(self._channel, self.name())
+
         while True:
             try:
                 logging.debug('MqttInformer: waiting for messages')
+                logging.debug('MQTT ChannelQueue size: %d', self._msq.qsize())
                 _message = next(self._msq.listen())
                 if not _message:
                     logging.debug('MqttInfomer no message received')
                     continue
                 msg = _message['data']
                 logging.debug('MqttInformer: received %s', msg)
-#                msg = self._info_queue.get(block=True, timeout=10)
                 _str_parts = msg.split('££')
                 if not _str_parts or len(_str_parts) < 2:
                     logging.warning('MqttInformer: invalid message format %s', msg)
@@ -259,7 +264,7 @@ class MqttInformer(MqttBase):
                     logging.debug('normal mode analyse message')
                     if ((_str_parts[0] in self._dict) and (_str_parts[1] != self._dict[_str_parts[0]])) or (not _str_parts[0] in self._dict):
                         # the value is new or has changed
-                        logging.debug('new value:[%s/%s]', _str_parts[0], _str_parts[1])
+                        logging.info('adding new value:[%s/%s]', _str_parts[0], _str_parts[1])
                         self._dict[_str_parts[0]] = _str_parts[1]
                         if _str_parts[0] == 'HargaWebApp':
                             self._web_app.set_state(_str_parts[1])
@@ -277,7 +282,7 @@ class MqttInformer(MqttBase):
                     # device_info is not yes init
                     logging.debug("device_info not ready")
                     self._dict[_str_parts[0]] = _str_parts[1]
-                    logging.debug('MqttInformer added %s:%s to dict', _str_parts[0], _str_parts[1])
+                    logging.info('adding new value [%s:%s] to dict', _str_parts[0], _str_parts[1])
                     if 'BL_ADDR' in self._dict:
                         logging.debug("BL_ADDR:%s",self._dict["BL_ADDR"])
                     else:
@@ -293,7 +298,7 @@ class MqttInformer(MqttBase):
 
                     if ('BL_ADDR' in self._dict) and ('SETKOMM' in self._dict) and ('HSV' in self._dict):
                         # we have all the info to init device_info
-                        logging.debug('MqttInformer device_info_ok')
+                        logging.info('Boiler device_info is complete')
                         # Define the device. At least one of `identifiers` or `connections` must be supplied
                         self._create_device_info()
                         logging.debug("Device Info initialized")
@@ -306,3 +311,7 @@ class MqttInformer(MqttBase):
             except Empty:
                 logging.debug("handleReceiveQueue: no message received")
             logging.debug('MqttInformer stage is now %s', _stage)
+        # whenever we exit the loop, we unsubscribe from the channel
+        self._com.unsubscribe(self._channel, self._msq)
+        self._msq = None
+

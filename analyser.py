@@ -15,8 +15,7 @@ class Analyser():
     analyser for the dialog with boiler
     """
     config: hargconfig.HargConfig
-#    _mq: Queue
-    _channel= "test"
+    _channel= "info" # Channel to publish discoverd info about the boiler (from the dialog between gateway and boiler)
     _com: PubSub # every data receiver should have a PubSub communicator
 
     _pmstamp: int = 0
@@ -24,9 +23,7 @@ class Analyser():
     _pm: bytes = b''
 
     def __init__(self, communicator: PubSub) -> None:
-#        self._mq= mq
         self._com = communicator
-        self._msq = self._com.subscribe(self._channel)
 
         self._values= dict()
         self.config= hargconfig.HargConfig()
@@ -35,7 +32,7 @@ class Analyser():
         """
         push a result to the queue where it will be used
         """
-        logging.info("put %s --> %s", key, subpart)
+        logging.debug("put %s --> %s", key, subpart)
         #self._mq.put(key + "££" + subpart)
         self._com.publish(self._channel, f"{key}££{subpart}")
 
@@ -180,10 +177,10 @@ class Analyser():
                     logging.debug('$igw set $ack detected')
                     _state = ''
             elif "$daq stopped" in _part:
-                logging.info('$daq stopped')
+                logging.debug('$daq stopped')
                 _state = ''
             elif "logging disabled" in _part:
-                logging.info('$logging disabled')
+                logging.debug('$logging disabled')
                 _state = ''
             elif _state == '$daq desc':
                 #todo review this since filtered before
@@ -191,10 +188,10 @@ class Analyser():
                     logging.debug('$daq desc $ack detected')
                     _state = ''
             elif "daq started" in _part:
-                logging.info('$daq started')
+                logging.debug('$daq started')
                 _state = ''
             elif "logging enabled" in _part:
-                logging.info('$logging enabled')
+                logging.debug('$logging enabled')
                 _state = ''
             elif _state == '$bootversion':
                 #$V2.18

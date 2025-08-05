@@ -64,6 +64,7 @@ class GatewaySimulator(SharedSimulator):
                             target=self.initiate_telnet_connection,
                             args=(addr[0],)
                         )
+                        time.sleep(5) # wait telnet server to be ready
                         telnet_thread.daemon = True
                         telnet_thread.start()
 
@@ -105,11 +106,11 @@ class GatewaySimulator(SharedSimulator):
                             print(f"Timeout waiting for response to {cmd['send_msg'].decode().strip()}")
                         except UnicodeDecodeError as e:
                             print(f"Error decoding response: {e}")
-                    time.sleep(5)  # Wait specified delay before next message
+                    time.sleep(2)  # Wait specified delay before next message
                 print(f"Completed telnet sequence with {host}")
 
         except socket.error as e:
-            print(f"Telnet connection error with {host}: {e}")
+            print(f"Telnet connection error with {host} on port 23: {e}")
         finally:
             if telnet_client:
                 try:

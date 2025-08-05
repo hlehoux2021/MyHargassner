@@ -25,6 +25,12 @@ class GatewayListenerSender(ListenerSender):
     def __init__(self, communicator: PubSub, src_iface: bytes,dst_iface: bytes, udp_port: int, delta:int = 0):
         super().__init__(communicator, src_iface, dst_iface)
         # Add any additional initialization logic here
+
+        # GatewayListenerSender doesn't read pubsub channel: unsubscribe immediatly 
+#        logging.info('BoilerListenerSender : unsubscribe from channel %s', self._channel)
+#        self._com.unsubscribe(self._channel,self._msq)
+#        self._msq = None  # Clear the message queue reference
+
         self.udp_port = udp_port    # destination port to which gateway is broadcasting
         self.delta = delta
 

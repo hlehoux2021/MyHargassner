@@ -3,7 +3,8 @@ This module implements the TelnetProxy
 """
 import socket as s
 import select
-#from queue import Queue
+import time
+
 from pubsub.pubsub import PubSub
 
 import platform
@@ -143,13 +144,10 @@ class TelnetClient():
     implement a client connecting to a telnet service
     """
     _sock= None
+    _connected= False
+
     def __init__(self):
         super().__init__()
-        # we will now create the socket to resend the telnet request
-        self._sock = s.socket(s.AF_INET, s.SOCK_STREAM)
-        self._sock.setsockopt(s.SOL_SOCKET, s.SO_REUSEPORT, 1)
-        self._sock.setsockopt(s.SOL_SOCKET, s.SO_REUSEADDR, 1)
-#        self._sock.settimeout(SOCKET_TIMEOUT)
 
     def connect(self, addr: bytes):
         """connect to the boiler"""
@@ -158,7 +156,28 @@ class TelnetClient():
         else:
             port= 23  # default telnet port
         logging.info('telnet connecting to %s on port %d', repr(addr), port)
-        self._sock.connect((addr, port))
+        while not self._connected:
+            try:
+                # we will now create the socket to resend the telnet request
+                self._sock = s.socket(s.AF_INET, s.SOCK_STREAM)
+                self._sock.setsockopt(s.SOL_SOCKET, s.SO_REUSEPORT, 1)
+                self._sock.setsockopt(s.SOL_SOCKET, s.SO_REUSEADDR, 1)
+                self._sock.connect((addr, port))
+                self._connected = True
+                logging.info('telnet connected to %s on port %d', repr(addr), port)
+            except s.error as e:
+                logging.error('telnet connection error: %s', e)
+                time.sleep(5)  # Give some time for the connection to stabilize
+
+    def close(self):
+        """close the telnet connection"""
+        if self._connected:
+            logging.info('telnet closing connection')
+            self._sock.close()
+            self._sock = None
+            self._connected = False
+        else:
+            logging.warning('telnet close called but not connected')
 
     def send(self, data: bytes):
         self._sock.send(data)
@@ -184,18 +203,18 @@ class TelnetService():
 
     def bind(self, port: int):
         """bind the telnet socket"""
-        logging.debug('telnet binding to port %d', port)
+        logging.debug('TelnetService binding to port %d', port)
         self._listen.bind(('', port))
     def listen(self):
         """listen for a telnet connection"""
-        logging.debug('telnet listening')
+        logging.debug('TelnetService listening')
         self._listen.listen()
     def accept(self) -> bytes:
         """accept a telnet connection"""
         _addr: tuple
-        logging.info('telnet accepting a connection')
+        logging.info('TelnetService accepting a connection')
         self._telnet, _addr = self._listen.accept()
-        logging.info('telnet connection from %s:%d accepted', _addr[0], _addr[1])
+        logging.info('TelnetService connection from %s:%d accepted', _addr[0], _addr[1])
         # reply the source port from which gateway is telneting
         return _addr[1]
     def send(self, data: bytes)-> int:
@@ -229,21 +248,10 @@ class TelnetProxy(SharedDataReceiver):
         self.dst_iface = dst_iface
         self.port = port
         self._analyser= Analyser(communicator)
-#        self._listen = s.socket(s.AF_INET, s.SOCK_STREAM)
-#        if platform.system() == 'Linux':
-#            self._listen.setsockopt(s.SOL_SOCKET, s.SO_BINDTODEVICE, self.src_iface)
-#        self._listen.setsockopt(s.SOL_SOCKET, s.SO_REUSEPORT, 1)
-#        self._listen.setsockopt(s.SOL_SOCKET, s.SO_REUSEADDR, 1)
         self._service1= TelnetService(self.src_iface)
         self._service2= TelnetService(self.src_iface)
         # we will now create the socket to resend the telnet request
         self._client= TelnetClient()
-#        self._resend.setsockopt(s.SOL_SOCKET, s.SO_REUSEADDR, 1)
-#        self._resend = s.socket(s.AF_INET, s.SOCK_STREAM)
-#        self._resend.setsockopt(s.SOL_SOCKET, s.SO_REUSEPORT, 1)
-#        self._resend.settimeout(SOCKET_TIMEOUT)
-#        self._values= dict()
-#        self._convert= dict()
 
     def bind1(self):
         """bind the telnet socket"""
@@ -274,15 +282,24 @@ class TelnetProxy(SharedDataReceiver):
     # wait for the boiler address and port to be discovered
     def discover(self):
         """wait for the boiler address and port to be discovered"""
+        self._msq = self._com.subscribe(self._channel, self.name())
+
         while (self.bl_port == 0) or (self.bl_addr == b''):
             logging.debug('waiting for the discovery of the boiler address and port')
             self.handle()
+        logging.info('TelnetProxy discovered boiler %s:%d', self.bl_addr, self.bl_port)
+        # unsubscribe from the channel to avoid receiving further messages
+        logging.info('TelnetProxy unsubscribe from channel %s', self._channel)
+        self._com.unsubscribe(self._channel, self._msq)
+        self._msq = None
+
         # redistribute BL info to the mq Queue for further use
+        #todo check if useless
         self._analyser.push('BL_ADDR',str(self.bl_addr,'ascii'))
         self._analyser.push('BL_PORT',str(self.bl_port))
     def connect(self):
         """connect to the boiler"""
-        logging.info('telnet connecting to %s on port 23', repr(self.bl_addr))
+        logging.info('telnet connecting to %s ', repr(self.bl_addr))
         self._client.connect(self.bl_addr)
 
     def loop(self):
@@ -300,6 +317,8 @@ class TelnetProxy(SharedDataReceiver):
         _caller: int = 0 # to recall which caller we have to reply to (service1 or service 2)
         while True:
             logging.debug('telnet waiting data')
+            if self._msq:
+                logging.debug('TelnetProxy ChannelQueue size: %d', self._msq.qsize())
             if self._service2.socket() == None:
                 read_sockets, write_sockets, error_sockets = select.select(
                     [self._service1.socket(), self._client.socket()], [], [])
@@ -324,7 +343,6 @@ class TelnetProxy(SharedDataReceiver):
                                  len(_data), repr(self.bl_addr), self.port)
                     #todo manage partial send data
                     self._client.send(_data)
- #               if _sock == self._resend:
                 if _sock == self._service2.socket():
                     _data, _addr = self._service2.recvfrom()
                     logging.debug('service2 received  request %d bytes ==>%s',
@@ -335,7 +353,18 @@ class TelnetProxy(SharedDataReceiver):
                     #self._service2.send(b'Thank you for calling')
                 if _sock ==self._client.socket():
                     # so we received a reply
-                    _data, _addr = self._client.recvfrom()
+                    try:
+                        _data, _addr = self._client.recvfrom()
+                    except Exception as err:
+                        logging.critical("Exception on client telnet socket: %s", type(err))
+                        self._client.close()
+                        return
+
+                    if not _data:
+                        logging.warning('client received empty response')
+                        self._client.close()
+                        return
+
                     if not _data.startswith(b'pm'):
                         logging.debug('telnet received response %d bytes ==>%s',len(_data), repr(_data))
                     else:
@@ -367,12 +396,10 @@ class TelnetProxy(SharedDataReceiver):
 
     def service(self):
         logging.debug('TelnetProxy::service()')
-        # wait for the boiler address and port to be discovered
-        self.discover()
-        # boiler is listening on port 23
-        self.connect()
-        # now we can loop waiting requests and replies
-        self.loop()
+        while True:
+            self.connect() # will connect or reconnect to the boiler
+            # now we can loop waiting requests and replies
+            self.loop()
 
 class ThreadedTelnetProxy(Thread):
     """This class implements a Thread to run the TelnetProxy"""
@@ -386,13 +413,17 @@ class ThreadedTelnetProxy(Thread):
         _ts: Thread= None
         logging.info('telnet proxy started: %s , %s', self.tp.src_iface, self.tp.dst_iface)
 
+        # we will first discover the boiler
+        self.tp.discover()
+
+        # then we can bind/listen/accept and service()
         self.tp.bind1()
         self.tp.listen1()
         self.tp.accept1()
         #we will service the accepted connexion in a separate thread
-        _ts= Thread(target=self.tp.service)
+        _ts= Thread(target=self.tp.service, name='TelnetProxyService')
         _ts.start()
-        self.tp.bind2()
-        self.tp.listen2()
-        self.tp.accept2()
+#        self.tp.bind2()
+#        self.tp.listen2()
+#        self.tp.accept2()
         _ts.join()
