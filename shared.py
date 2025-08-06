@@ -26,9 +26,12 @@ class HargInfo():
     gw_sn: str = ''       # IGW serial number
 
 
-class SharedData():
+class NetworkData():
     """
-    This class is used to share data between the gateway and the boiler.
+    This class is used to register network data about the IGW internet gateway and the real boiler.
+    The gateway and boiler (addr,port) are discovered by listening to UDP broadcast messages.
+    The gateway will <broadcast> to port 35601 from port 50000, and to port 50001 from port 50002.
+    The Boiler will <broadcast> to port 50000 from port 35601 and to port 50002 from port 50001.
     """
     gw_port: Annotated[int, annotated_types.Gt(0)]
     bl_port: Annotated[int, annotated_types.Gt(0)]
@@ -46,10 +49,34 @@ class SharedData():
     def name(self):
         return self.__class__.__name__
 
-class SharedDataReceiver(SharedData):
+    def decode_message(self, msg: str):
+        """ Decode a message string to extract gateway and boiler addresses and ports.
+        The message format is expected to be 'GW_ADDR:<addr>', 'GW_PORT:<port>', 'BL_ADDR:<addr>', 'BL_PORT:<port>'.
+        """
+        logging.debug('decode_message called with %s', msg)
+        if msg.startswith('GW_ADDR:'):
+            self.gw_addr = bytes(msg.split(':')[1], 'ascii')
+            logging.debug('decode_message: gw_addr=%s', self.gw_addr)
+        elif msg.startswith('GW_PORT:'):
+            self.gw_port = int(msg.split(':')[1])
+            logging.debug('decode_message: gw_port=%d', self.gw_port)
+        elif msg.startswith('BL_ADDR:'):
+            self.bl_addr = bytes(msg.split(':')[1], 'ascii')
+            logging.debug('decode_message: bl_addr=%s', self.bl_addr)
+        elif msg.startswith('BL_PORT:'):
+            self.bl_port = int(msg.split(':')[1])
+            logging.debug('decode_message: bl_port=%d', self.bl_port)
+        elif msg.startswith('GWT_PORT:'):
+            self.gwt_port = int(msg.split(':')[1])
+            logging.debug('decode_message: gwt_port=%d', self.gwt_port)
+        else:
+            logging.warning('decode_message: unknown message %s', msg)
+
+
+class ChanelReceiver(NetworkData):
     """
-    This class extends SharedData class with a queue to receive data from
-    and a handler to process the received data.
+    This class extends NetworkData class with the possibility to receive messages on a ChanelQueue.
+    It defines a method to handle received messages.
     """
     _channel= "bootstrap" # Channel to exchange bootstrap information about boiler and gateway, addr, port, etc
     _com: PubSub # every data receiver should have a PubSub communicator
@@ -58,39 +85,25 @@ class SharedDataReceiver(SharedData):
     def __init__(self, communicator: PubSub = None):
         super().__init__()
         self._com = communicator
-#        self._msq = self._com.subscribe(self._channel, "SharedDataReceiver")
 
     def handle(self):
         """
         This method handles received messages from the queue.
+        we expect to receive messages to populate the NetworkData class.
         """
         logging.debug((f"handle() called on {self.name()} with channel {self._channel}"))
         try:
             _message = next(self._msq.listen())
-            logging.debug('ChannelQueue size: %d', self._msq.qsize())
-            if not _message:
-                logging.debug('handleReceiveQueue: no message received')
-                return
-            msg = _message['data']
-            if isinstance(msg, bytes):
-                msg = msg.decode('utf-8')
-            logging.debug('handleReceiveQueue: received %s', msg)
-            if msg.startswith('GW_ADDR:'):
-                self.gw_addr = bytes(msg.split(':')[1],'ascii')
-                logging.debug('handleReceiveQueue: gw_addr=%s', self.gw_addr)
-            elif msg.startswith('GW_PORT:'):
-                self.gw_port = int(msg.split(':')[1])
-                logging.debug('handleReceiveQueue: gw_port=%d', self.gw_port)
-            elif msg.startswith('BL_ADDR:'):
-                self.bl_addr = bytes(msg.split(':')[1],'ascii')
-                logging.debug('handleReceiveQueue: bl_addr=%s', self.bl_addr)
-            elif msg.startswith('BL_PORT:'):
-                self.bl_port = int(msg.split(':')[1])
-                logging.debug('handleReceiveQueue: bl_port=%d', self.bl_port)
-            else:
-                logging.debug('handleReceiveQueue: unknown message %s', msg)
         except Empty:
-            logging.debug('handleReceiveQueue: no message received')
+            logging.debug('handle(): Empty message received')
+            return
+        if not _message:
+            logging.debug('handle(): no message received')
+            return
+        msg = _message['data']
+        if isinstance(msg, bytes):
+            msg = msg.decode('utf-8')
+        self.decode_message(msg)
         logging.debug('handle(): end of method')
 
     def loop(self):
@@ -101,9 +114,9 @@ class SharedDataReceiver(SharedData):
         logging.error(f"loop() not implemented in {self.name()}")
         raise NotImplementedError("Subclasses must implement this method")
 
-class ListenerSender(SharedDataReceiver):
+class ListenerSender(ChanelReceiver):
     """
-    This class extends SharedDataReceiver class with a socket to listen
+    This class extends ChanelReceiver class with a socket to listen
     and a socket to resend data.
     """
     listen: socket.socket
@@ -167,24 +180,61 @@ class ListenerSender(SharedDataReceiver):
             self.dst_ip = dst_ip  # Store for later binding
             logging.debug('configured resend IP %s', dst_ip)
         
-
     def handle_first(self, data, addr):
         """
         This method handles the discovery of caller's ip address and port.
-        This method must be implemented in the child class.
-         """
+        """
+        logging.debug('first packet, resender not bound yet')
+        self.publish_discovery(addr)  # Call the method to publish discovery
+
+        # first time we receive a packet, bind from the source port
+        if self.resender_bound:
+            logging.debug('resender already bound, skipping bind operation')
+        else:
+            try:
+                self.resend.bind(self.get_resender_binding())
+                self.resender_bound = True
+                logging.debug('resender bound')
+            except OSError as e:
+                logging.error('Failed to bind resender: %s', str(e))
+                raise
+
+    def get_resender_binding(self):
+        """
+        This method returns the binding details for the resender.
+        """
+        logging.error(f"get_resender_binding() not implemented in {self.name()}")
+        raise NotImplementedError("Subclasses must implement this method")
 
     def send(self, data):
         """
         This method resends received data to the destination.
         This method must be implemented in the child class.
         """
+        logging.error(f"send() not implemented in {self.name()}")
+        raise NotImplementedError("Subclasses must implement this method")
 
     def handle_data(self, data: bytes, addr: tuple):
         """
         This method handles received data.
         This method must be implemented in the child class.
         """
+        logging.error(f"handle_data() not implemented in {self.name()}")
+        raise NotImplementedError("Subclasses must implement this method")
+
+    def publish_discovery(self, addr):
+        """
+        This method publishes the discovery of the Listener (gateway or boiler) to the Channel Queue.
+        It sends the gateway/boiler address and port to the shared queue.
+        """
+        logging.error(f"publish_discovery() not implemented in {self.name()}")
+        raise NotImplementedError("Subclasses must implement this method")
+
+    def queue(self) -> Queue:
+        """
+        This method returns the queue to receive data from.
+        """
+        return self._msq.queue() if self._msq else None
     def loop(self):
         """
         This method is the main loop of the class.

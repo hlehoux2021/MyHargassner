@@ -33,7 +33,6 @@ class Analyser():
         push a result to the queue where it will be used
         """
         logging.debug("put %s --> %s", key, subpart)
-        #self._mq.put(key + "££" + subpart)
         self._com.publish(self._channel, f"{key}££{subpart}")
 
     def is_pm_response(self, _data: bytes) -> bool:
@@ -136,7 +135,7 @@ class Analyser():
         _subpart: str = None
         _str_parts: list[str] = None
 
-        logging.debug('_parse_response input _state=%s',_state)
+        logging.debug('_parse_response input _state=%s _part=%s',_state, _part)
         _str_parts= repr(buffer)[2:-1].split('\\r\\n')
         for _part in _str_parts:
             logging.debug('part:%s', _part)

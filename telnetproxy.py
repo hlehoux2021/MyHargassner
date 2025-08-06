@@ -13,7 +13,7 @@ from threading import Thread
 from typing import Annotated, Tuple
 import annotated_types
 
-from shared import SharedDataReceiver,BUFF_SIZE
+from shared import ChanelReceiver,BUFF_SIZE
 from analyser import Analyser
 
 # $login token
@@ -225,7 +225,7 @@ class TelnetService():
         return self._telnet.recvfrom(BUFF_SIZE)
 
 
-class TelnetProxy(SharedDataReceiver):
+class TelnetProxy(ChanelReceiver):
     """
     This class implements the TelnetProxy
     """

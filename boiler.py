@@ -35,18 +35,13 @@ class BoilerListenerSender(ListenerSender):
         self._com.publish(self._channel, f"BL_ADDR:{self.bl_addr}")
         self._com.publish(self._channel, f"BL_PORT:{self.bl_port}")
 
-
-    def handle_first(self, data, addr):
-        logging.debug('first packet, listener not bound yet')
-        # first time we receive a packet, bind from the source port
-        logging.info('Boiler discovered %s:%d', addr[0], addr[1])
-        self.publish_discovery(addr)  # Call the method to publish discovery
-
-        bind_port = self.bl_port - self.delta
-        logging.debug('binding sender to %s:%d', self.bl_addr, bind_port)
-        self.resend.bind((self.bl_addr, bind_port))
-        logging.debug('sender bound to IP %s, port %d', self.bl_addr, bind_port)
-
+    def get_resender_binding(self):
+        """
+        This method returns the binding details for the resender.
+        """
+        #todo sort usage of delta between MacOS and Linux
+        return (self.bl_addr, self.bl_port - self.delta)
+    
     def send(self, data):
         logging.debug('resending %d bytes to %s : %d',
                       len(data), self.gw_addr.decode(), self.gw_port)

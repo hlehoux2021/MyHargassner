@@ -47,41 +47,21 @@ class GatewayListenerSender(ListenerSender):
         self._com.publish(self._channel, f"GW_ADDR:{self.gw_addr}")
         self._com.publish(self._channel, f"GW_PORT:{self.gw_port}")
 
-    def handle_first(self, data, addr):
+    def get_resender_binding(self):
         """
-        This method handles the discovery of caller's ip address and port.
+        This method returns the binding details for the resender.
         """
-        logging.debug('first packet, resender not bound yet')
-        self.publish_discovery(addr)  # Call the method to publish discovery
-
-        # first time we receive a packet, bind from the source port
-        if self.resender_bound:
-            logging.debug('resender already bound, skipping bind operation')
+        #todo sort usage of delta between MacOS and Linux
+        if platform.system() == 'Darwin':
+            # On macOS, we bind to the specific interface IP
+            bind_port = self.gw_port - self.delta
+            logging.debug('Binding details - IP: %s, Port: %d, Delta: %d, Original Port: %d', 
+                self.dst_ip, bind_port, self.delta, self.gw_port)
+            return (self.dst_ip, bind_port)
         else:
-            if platform.system() == 'Darwin':
-                # On macOS, bind to the specific interface IP
-                bind_port = self.gw_port - self.delta
-                logging.debug('Binding details - IP: %s, Port: %d, Delta: %d, Original Port: %d', 
-                    self.dst_ip, bind_port, self.delta, self.gw_port)
-                try:
-                    self.resend.bind((self.dst_ip, bind_port))
-                    self.resender_bound = True
-                    logging.debug('resender bound to IP %s, port %d', self.dst_ip, bind_port)
-                except OSError as e:
-                    logging.error('Failed to bind resender on macOS: %s', str(e))
-                    raise
-            else:
-                # On Linux, we already used SO_BINDTODEVICE
-                logging.debug('binding resender to \'\', port %d', self.gw_port)
-                try:
-                    self.resend.bind(('', self.gw_port))
-                    self.resender_bound = True
-                    logging.debug('resender bound to port %d on interface %s', self.gw_port, self.dst_iface.decode())
-                except OSError as e:
-                    logging.error('Failed to bind resender on Linux: %s', str(e))
-                    raise
+            # On Linux, we already used SO_BINDTODEVICE
+            return ('', self.gw_port)
 
-        
 
 
     def queue(self) -> Queue:

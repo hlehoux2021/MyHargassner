@@ -29,7 +29,7 @@ class MqttBase():
         #TODO remove password from code. note, this is an experimental dev jeedom without internet access
         self.mqtt_settings= Settings.MQTT(host="192.168.100.8",
                 username="jeedom",
-                password="ckqlwHxxQ1vceSHca6Q4Ts6w4ImWwo8k6MvRDUWGrELmCt5WLwHRl30tTbxyTrXi")
+                password="eBg3UokK76KOWEDDUTWGEXUHxntZpV9XUDGQ8C5Xub0v4o4pE0fS2ofPxDa52A2i")
 
     def name(self):
         return self.__class__.__name__
@@ -89,15 +89,16 @@ class MqttActuator(MqttBase):
 
     def service(self):
         #TODO implemnent and use this telnet service
-        self._client.connect('localhost', port=self.PORT)
+        #self._client.connect('localhost', port=self.PORT)
 
-        #button_info = ButtonInfo(name="My Button", unique_id="my_button", device=self._device_info)
-        #button_settings = Settings(mqtt=self.mqtt_settings, entity=button_info)
-        #user_data = "Some custom data"
-        #my_button = Button(button_settings, self.my_callback, user_data)
-
+        button_info = ButtonInfo(name="My Button", unique_id="my_button", device=self._device_info)
+        button_settings = Settings(mqtt=self.mqtt_settings, entity=button_info)
+        user_data = "Some custom data"
+        my_button = Button(button_settings, self.my_callback, user_data)
+        my_button.write_config() # Publish the button's discoverability message
+        
         #we will create button for each config available in PR001 from the boiler
-        self.createPR001()
+        #self.createPR001()
         # each time a HA/MQTT Button is clicked, MqttActuator::my_callback() is called
         logging.critical('exiting MqttActuator run()')
 
@@ -111,7 +112,6 @@ class Threaded(typing.Generic[EntityType]):
     _thread: Thread
 
     def __init__(self, device: DeviceInfo) -> None:
-        #self._entity= EntityType(device)
         self._entity.device_info= device
         self._thread= Thread(target= self._entity.service)
 
@@ -122,8 +122,9 @@ class ThreadedMqttActuator(Threaded[MqttActuator]):
     """
     MqttActuator that runs in a Thread
     """
-    def void(self) -> None:
-        pass
+    def __init__(self, device: DeviceInfo):
+        self._entity = MqttActuator(device)
+        super().__init__(device)
 
 class MySensor(Sensor):
     def __init__(self,_name: str, _id: str, _dict: dict, _config:hargconfig.HargConfig, _device_info: DeviceInfo, _mqtt: Settings.MQTT):
@@ -149,7 +150,10 @@ class MySensor(Sensor):
         
 class MqttInformer(MqttBase):
     """
-    class MqttInformer provides Boiler information via MQTT
+    class MqttInformer provides Boiler information via MQTT to MqttDiscovery plugin in Jeedom or Home Assistant
+    it receives data on a ChannelQueue and publishes it to the MQTT broker.
+    
+    It will create the device_info and sensors from the boiler data.
 
     Name: will be BL_ADDR ip adress of the boiler
     Identifiers:
@@ -197,7 +201,6 @@ class MqttInformer(MqttBase):
         self.device_info = DeviceInfo(
                             name=self._dict['BL_ADDR'],
                             manufacturer="Hargassner",
-                            model=self._dict['HSV'],
                             sw_version="1.0",
                             hw_version="1.0",
                            identifiers=lstr)
@@ -230,10 +233,13 @@ class MqttInformer(MqttBase):
         self._token = MySensor("Login Token", "TOKEN", self._dict, self.config, self.device_info, self.mqtt_settings)
         self._key = MySensor("Login Key", "KEY", self._dict, self.config, self.device_info, self.mqtt_settings)
         # sensors coming in normal mode
-        #self._kt = self._create_sensor("KT","KT")
+        self._kt = self._create_sensor("KT","KT")
         #self._swv = self._create_sensor("Software Version", "SWV")
         # sensors wanted from the pm buffer
         for _part in self.config.wanted:
+            if _part not in self.config.desc:
+                logging.warning(f"Missing description for {_part} in config")
+                continue
             _sensor= self._create_sensor(self.config.desc[_part]['name'],_part)
             _sensor.set_state("")
             self._sensors[_part]= _sensor
@@ -296,7 +302,8 @@ class MqttInformer(MqttBase):
                     else:
                         logging.debug("HSV missing")
 
-                    if ('BL_ADDR' in self._dict) and ('SETKOMM' in self._dict) and ('HSV' in self._dict):
+# removed HSV                   if ('BL_ADDR' in self._dict) and ('SETKOMM' in self._dict) and ('HSV' in self._dict):
+                    if ('BL_ADDR' in self._dict) and ('SETKOMM' in self._dict):
                         # we have all the info to init device_info
                         logging.info('Boiler device_info is complete')
                         # Define the device. At least one of `identifiers` or `connections` must be supplied

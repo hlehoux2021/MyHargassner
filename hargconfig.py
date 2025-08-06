@@ -30,7 +30,7 @@ class HargConfig():
 #			 'c90', 'c91','c92','c93','c94','c95','c96','c97','c98','c99'
 #        }
         self.wanted= {
-             'UPTIME', 'SYS', 'BOOT', 'KT', 'IGW', 'SWV', 'FWV', 'SNIO', 'SNBCE', 'RTC',
+            'UPTIME', 'SYS', 'BOOT', 'KT', 'IGW', 'SWV', 'FWV', 'SNIO', 'SNBCE', 'RTC',
 			 'c0'   ,  
              'c3'   ,
              'c5'   , 
@@ -46,6 +46,7 @@ class HargConfig():
         # explaining the values
         self.desc= {
 
+'KT':{'name':'KT',			'unit':'',		'desc':'kt string'},
 'UPTIME':{'name':'UPTIME',			'unit':'',		'desc':'uptime'},
 'SYS':{'name':'SYS',				'unit':'',		'desc':'Code system'},
 'BOOT':{'name':'BOOT',				'unit':'',		'desc':'Boot version'},
