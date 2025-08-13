@@ -286,13 +286,13 @@ class SharedSimulator:
                     if not data:
                         break
 
-                    command = data.decode()
+                    command = data.decode('latin1')
                     print(f"Received command: {command.strip()}")
 
                     response = self.handle_telnet_command(command)
                     if response:
                         try:
-                            print(f"Sending response: {response.decode().strip()}")
+                            print(f"Sending response: {response.decode('latin1').strip()}")
                         except Exception as e:
                             print(f"Error decoding response: {e}")
 
@@ -317,7 +317,7 @@ class SharedSimulator:
         sock = self.udp_sockets[src_port]
         
         try:
-            print(f"Broadcasting from port {src_port} to {dst_port}: {message.decode()}")
+            print(f"Broadcasting from port {src_port} to {dst_port}: {message.decode('latin1')}")
             sock.sendto(message, ('<broadcast>', dst_port))
 
             if expect_reply and reply_pattern and reply_timeout:
@@ -329,7 +329,7 @@ class SharedSimulator:
                     try:
                         data, addr = sock.recvfrom(1024)
                         if reply_pattern in data:
-                            print(f"Received reply from {addr}: {data.decode()}")
+                            print(f"Received reply from {addr}: {data.decode('latin1')}")
                             return data, addr
                     except socket.timeout:
                         continue

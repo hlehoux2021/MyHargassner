@@ -5,14 +5,15 @@ import socket as s
 import select
 import time
 
-from pubsub.pubsub import PubSub
-
 import platform
 import logging
 from threading import Thread
 from typing import Annotated, Tuple
 import annotated_types
 
+from pubsub.pubsub import PubSub
+
+from telnethelper import TelnetClient
 from shared import ChanelReceiver,BUFF_SIZE
 from analyser import Analyser
 
@@ -139,52 +140,6 @@ from analyser import Analyser
 #   zPuffer Aus\r\n
 
 
-class TelnetClient():
-    """
-    implement a client connecting to a telnet service
-    """
-    _sock= None
-    _connected= False
-
-    def __init__(self):
-        super().__init__()
-
-    def connect(self, addr: bytes):
-        """connect to the boiler"""
-        if platform.system() == 'Darwin':
-            port= 24  # default telnet port
-        else:
-            port= 23  # default telnet port
-        logging.info('telnet connecting to %s on port %d', repr(addr), port)
-        while not self._connected:
-            try:
-                # we will now create the socket to resend the telnet request
-                self._sock = s.socket(s.AF_INET, s.SOCK_STREAM)
-                self._sock.setsockopt(s.SOL_SOCKET, s.SO_REUSEPORT, 1)
-                self._sock.setsockopt(s.SOL_SOCKET, s.SO_REUSEADDR, 1)
-                self._sock.connect((addr, port))
-                self._connected = True
-                logging.info('telnet connected to %s on port %d', repr(addr), port)
-            except s.error as e:
-                logging.error('telnet connection error: %s', e)
-                time.sleep(5)  # Give some time for the connection to stabilize
-
-    def close(self):
-        """close the telnet connection"""
-        if self._connected:
-            logging.info('telnet closing connection')
-            self._sock.close()
-            self._sock = None
-            self._connected = False
-        else:
-            logging.warning('telnet close called but not connected')
-
-    def send(self, data: bytes):
-        self._sock.send(data)
-    def socket(self):
-        return self._sock
-    def recvfrom(self) -> Tuple[bytes, bytes]:
-        return self._sock.recvfrom(BUFF_SIZE)
 
 class TelnetService():
     """
@@ -251,7 +206,7 @@ class TelnetProxy(ChanelReceiver):
         self._service1= TelnetService(self.src_iface)
         self._service2= TelnetService(self.src_iface)
         # we will now create the socket to resend the telnet request
-        self._client= TelnetClient()
+        self._client= None
 
     def bind1(self):
         """bind the telnet socket"""
@@ -299,8 +254,40 @@ class TelnetProxy(ChanelReceiver):
         self._analyser.push('BL_PORT',str(self.bl_port))
     def connect(self):
         """connect to the boiler"""
-        logging.info('telnet connecting to %s ', repr(self.bl_addr))
-        self._client.connect(self.bl_addr)
+        logging.debug('telnet connecting to %s ', repr(self.bl_addr))
+        self._client= TelnetClient(self.bl_addr)
+        self._client.connect()
+
+
+    def get_boiler_config(self):
+        """get the boiler configuration
+        
+        Returns:
+            dict[str, list[str]]: A dictionary with the parameter name as key and a list of non-zero values
+        """
+        if not self._client._connected:
+            logging.error('Client not connected')
+            return {}
+            
+        logging.debug('telnet getting boiler config from %s', repr(self.bl_addr))
+        # ask for changed parameters
+        self._client.send(b'$par get changed \"2023-11-12 18:21:37\"\r\n')
+        
+        try:
+            _data = self._client.recv(BUFF_SIZE)
+        except Exception as e:
+            logging.error('Failed to receive data: %s', str(e))
+            return {}
+            
+        if not _data:
+            logging.error('No data received')
+            return {}
+            
+        logging.debug('telnet received boiler config %d bytes ==>%s', len(_data), repr(_data))
+        # we publish the boiler configuration (intended for the MqttActuator to use it)
+        message = f"BoilerConfig:{_data.decode('latin1')}"
+        self._com.publish(self._channel, message)
+        logging.debug('BoilerConfig published on channel %s', self._channel)
 
     def loop(self):
         """loop waiting requests and replies"""
@@ -399,6 +386,9 @@ class TelnetProxy(ChanelReceiver):
         while True:
             self.connect() # will connect or reconnect to the boiler
             # now we can loop waiting requests and replies
+            self.get_boiler_config()  # get the boiler configuration
+            # we will now loop waiting requests and replies
+            logging.debug('TelnetProxy::service() starting loop')
             self.loop()
 
 class ThreadedTelnetProxy(Thread):

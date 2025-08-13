@@ -106,8 +106,9 @@ class GatewaySimulator(SharedSimulator):
                             print(f"Timeout waiting for response to {cmd['send_msg'].decode().strip()}")
                         except UnicodeDecodeError as e:
                             print(f"Error decoding response: {e}")
-                    time.sleep(2)  # Wait specified delay before next message
+                    time.sleep(4)  # Wait specified delay before next message
                 print(f"Completed telnet sequence with {host}")
+                time.sleep(30)  # Wait before starting the sequence again
 
         except socket.error as e:
             print(f"Telnet connection error with {host} on port 23: {e}")

@@ -80,30 +80,65 @@ class ChanelReceiver(NetworkData):
     """
     _channel= "bootstrap" # Channel to exchange bootstrap information about boiler and gateway, addr, port, etc
     _com: PubSub # every data receiver should have a PubSub communicator
-    _msq: ChanelQueue = None  # Message queue for receiving data
+    _msq: ChanelQueue | None = None  # Message queue for receiving data
 
     def __init__(self, communicator: PubSub = None):
         super().__init__()
         self._com = communicator
 
-    def handle(self):
+    def handle(self, message_handler=None):
         """
         This method handles received messages from the queue.
-        we expect to receive messages to populate the NetworkData class.
+        We expect to receive messages to populate the NetworkData class.
+
+        Args:
+            message_handler (callable, optional): A function to handle the message.
+                If not provided, defaults to self.decode_message.
+                The function should accept a string argument.
         """
-        logging.debug((f"handle() called on {self.name()} with channel {self._channel}"))
+        logging.debug(f"handle() called on {self.name()} with channel {self._channel} message_handler={message_handler}")
+        
+        if not self._msq:
+            logging.error('handle(): No message queue available')
+            return
+            
         try:
-            _message = next(self._msq.listen())
+            logging.debug('handle(): attempting to get next message')
+            # Use non-blocking listen with timeout
+            iterator = self._msq.listen(timeout=1.0)  # 1 second timeout
+            try:
+                _message = next(iterator)
+                logging.debug('handle(): received message from queue: %s', _message)
+            except StopIteration:
+                logging.debug('handle(): no message available')
+                return
+                
+            if not _message or 'data' not in _message:
+                logging.debug('handle(): invalid message format received')
+                return
+                
+            msg = _message['data']
+            if isinstance(msg, bytes):
+                msg = msg.decode('utf-8')
+            logging.debug('handle(): decoded message: %s', msg)
+            
+            # Use the provided message handler if available, otherwise use decode_message
+            handler = message_handler if message_handler is not None else self.decode_message
+            logging.debug('handle(): calling handler %s with message', handler.__name__ if hasattr(handler, '__name__') else str(handler))
+            
+            try:
+                handler(msg)
+                logging.debug('handle(): handler completed successfully')
+            except Exception as e:
+                logging.error('handle(): error in message handler: %s', str(e), exc_info=True)
+                raise
+                
         except Empty:
             logging.debug('handle(): Empty message received')
-            return
-        if not _message:
-            logging.debug('handle(): no message received')
-            return
-        msg = _message['data']
-        if isinstance(msg, bytes):
-            msg = msg.decode('utf-8')
-        self.decode_message(msg)
+        except Exception as e:
+            logging.error('handle(): unexpected error: %s', str(e), exc_info=True)
+            raise
+        
         logging.debug('handle(): end of method')
 
     def loop(self):
@@ -250,18 +285,25 @@ class ListenerSender(ChanelReceiver):
             if self._msq:
                 logging.debug('ChannelQueue size: %d', self._msq.qsize())
             logging.debug('waiting data')
-            data = None
+            # Initialize with empty values
+            data = b''  # Initialize as empty bytes instead of None
             addr = ('', 0)
+            
             try:
-                data, addr = self.listen.recvfrom(BUFF_SIZE) # Blocks for up to UDP_LISTENER_TIMEOUT seconds
+                # Set socket timeout
+                self.listen.settimeout(1.0)  # 1 second timeout
+                data, addr = self.listen.recvfrom(BUFF_SIZE)
+                
                 if data:  # Only process if we actually got data
                     logging.debug('received buffer of %d bytes from %s : %d', len(data), addr[0], addr[1])
                     logging.debug('%s', data)
+                    
                     # if destination is not yet discovered, handle first packet and bind the resend socket
                     if not self.resender_bound:
                         self.handle_first(data, addr)
                     self.handle_data(data, addr)
                     self.send(data)
+                    
             except socket.timeout:
                 # This is normal - just continue the loop
                 logging.debug('No data received within timeout period')

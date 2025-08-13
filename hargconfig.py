@@ -12,7 +12,7 @@ class HargConfig():
     desc: dict = None # dictonary describing the values
     map: dict = None # map between order in pm buffer and value
     scan: int = 0 # scan interval in seconds for pm bufer
-    buttons: dict = None
+
     def __init__(self):
         # setting a scan interval
         self.scan= 60
@@ -31,16 +31,7 @@ class HargConfig():
 #        }
         self.wanted= {
             'UPTIME', 'SYS', 'BOOT', 'KT', 'IGW', 'SWV', 'FWV', 'SNIO', 'SNBCE', 'RTC',
-			 'c0'   ,  
-             'c3'   ,
-             'c5'   , 
-             'c6'   , 
-             'c7'   , 
-             'c21'  , 
-             'c27'  ,
-             'c96'  ,
-             'c134' , 
-             'c138'
+	    'c0', 'c3', 'c5', 'c6', 'c7', 'c21', 'c27', 'c96', 'c134', 'c138'
         }
 
         # explaining the values
@@ -260,12 +251,4 @@ class HargConfig():
 			80 :'c19' , 81:'c20' , 82:'c27' , 83:'c28' , 84:'c92' , 85:'c80' , 86:'c118', 87:'c145', 88:'c168', 89:'c146',
 			90 :'c147', 91:'c148', 92:'c149', 93:'c150', 94:'c151', 95:'c152', 96:'c153', 97:'c169', 98:'c170', 99:'c171',
 			100:'c172',101:'c173',102:'c174',103:'c182',104:'c181' ,105:'c165',106:'c166',107:'c167'
-        }
-        # definition of action buttons based on info provided by the boiler
-        self.buttons= {
-            #based on e.g. $PR001;6;3;4;1;0;0;0;Mode;Manu;Arr;Ballon;Auto;Arr combustion;0;\r\n
-            'Arr'               :   'Arrêt', 
-            'Ballon'            :   'Ballon',
-            'Auto'              :   'Auto',
-            'Arr combustion'    :   'Arrêt Combustion'
         }
