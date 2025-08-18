@@ -3,11 +3,12 @@ This module implements the boiler proxy
 """
 
 import logging
-from queue import Queue
-from pubsub.pubsub import PubSub
 
 import platform
 from threading import Thread
+from typing import Tuple
+
+from pubsub.pubsub import PubSub
 
 from shared import ListenerSender
 
@@ -19,7 +20,6 @@ class BoilerListenerSender(ListenerSender):
     def __init__(self, communicator: PubSub, src_iface: bytes,dst_iface: bytes, delta: int = 0):
         super().__init__(communicator, src_iface, dst_iface)
         # Add any additional initialization logic here
-#        self.rq = Queue()
         self.delta = delta
 
     def publish_discovery(self, addr):
@@ -29,19 +29,19 @@ class BoilerListenerSender(ListenerSender):
         """
         logging.info('BoilerListenerSender discovered boiler %s:%d', addr[0], addr[1])
         self.bl_port = addr[1]
-        self.bl_addr = addr[0]
+        self.bl_addr = addr[0].encode('utf-8')
 
         logging.info('Publishing Boiler info on channel %s', self._channel)
-        self._com.publish(self._channel, f"BL_ADDR:{self.bl_addr}")
+        self._com.publish(self._channel, f"BL_ADDR:{addr[0]}")
         self._com.publish(self._channel, f"BL_PORT:{self.bl_port}")
 
-    def get_resender_binding(self):
+    def get_resender_binding(self) -> Tuple[str, int]:
         """
         This method returns the binding details for the resender.
         """
         #todo sort usage of delta between MacOS and Linux
-        return (self.bl_addr, self.bl_port - self.delta)
-    
+        return (self.bl_addr.decode('utf-8'), self.bl_port - self.delta)
+
     def send(self, data):
         logging.debug('resending %d bytes to %s : %d',
                       len(data), self.gw_addr.decode(), self.gw_port)
@@ -78,9 +78,9 @@ class BoilerListenerSender(ListenerSender):
         self.bound = True  # Set this after successful binding
     def handle_data(self, data: bytes, addr: tuple):
         """handle udp data"""
-        _str: str = None
-        _subpart: str = None
-        _str_parts: list[str] = None
+        _str: str = ''
+        _subpart: str = ''
+        _str_parts: list[str] = []
 
         logging.debug('handle_data::received %d bytes from %s:%d ==>%s',
                       len(data), addr[0], addr[1], data.decode())

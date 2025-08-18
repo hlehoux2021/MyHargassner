@@ -24,7 +24,7 @@ class MqttBase():
     """
     config: hargconfig.HargConfig
     mqtt_settings: Settings.MQTT
-    _device_info: DeviceInfo | None
+    _device_info: DeviceInfo
 
     def __init__(self):
         """
@@ -37,7 +37,6 @@ class MqttBase():
         self.mqtt_settings = Settings.MQTT(host="192.168.100.8",
                 username="jeedom",
                 password="eBg3UokK76KOWEDDUTWGEXUHxntZpV9XUDGQ8C5Xub0v4o4pE0fS2ofPxDa52A2i")
-        self._device_info = None
 
     def name(self) -> str:
         """

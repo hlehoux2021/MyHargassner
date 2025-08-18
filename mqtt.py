@@ -5,38 +5,57 @@ Module for MQTT client to handle to boiler
 
 import logging
 from queue import Empty
-from ha_mqtt_discoverable import Settings, DeviceInfo
-from ha_mqtt_discoverable.sensors import Sensor, SensorInfo
+from typing import Union
 
+from ha_mqtt_discoverable import Settings, DeviceInfo # type: ignore
+from ha_mqtt_discoverable.sensors import Sensor, SensorInfo # type: ignore
 import hargconfig
 from actuator import MqttBase
 
-from pubsub.pubsub import PubSub,ChanelQueue
+from pubsub.pubsub import PubSub, ChanelQueue, ChanelPriorityQueue
 
 
 
 class MySensor(Sensor):
-    def __init__(self,_name: str, _id: str, _dict: dict, _config:hargconfig.HargConfig, _device_info: DeviceInfo, _mqtt: Settings.MQTT):
+    """
+    Custom sensor class extending ha_mqtt_discoverable Sensor.
+    
+    Handles the creation and configuration of MQTT sensors with optional unit of measurement
+    and description attributes.
+    """
+    def __init__(self, _name: str, _id: str, _dict: dict, _config: hargconfig.HargConfig,
+                 _device_info: DeviceInfo, _mqtt: Settings.MQTT):
+        """
+        Initialize a new sensor.
+
+        Args:
+            _name: Display name of the sensor
+            _id: Unique identifier for the sensor
+            _dict: Dictionary containing sensor values
+            _config: Configuration object containing sensor metadata
+            _device_info: Device information for MQTT discovery
+            _mqtt: MQTT connection settings
+        """
         if _id in _dict:
-            _state= _dict[_id]
+            _state = _dict[_id]
         else:
-            _state= ""
+            _state = ""
         if _id in _config.wanted:
-            _info= SensorInfo(name= _name,
-                              state= _state,
-                              unique_id= _id+"/"+_dict["BL_ADDR"],
-                              unit_of_measurement= _config.desc[_id]['unit'],
-                              device=_device_info)
+            _info = SensorInfo(name=_name,
+                             state=_state,
+                             unique_id=_id+"/"+_dict["BL_ADDR"],
+                             unit_of_measurement=_config.desc[_id]['unit'],
+                             device=_device_info)
         else:
-            _info= SensorInfo(name= _name,
-                              state= _state,
-                              unique_id= _id+"/"+_dict["BL_ADDR"],
-                              device=_device_info)
-        _settings= Settings(mqtt=_mqtt, entity= _info)
+            _info = SensorInfo(name=_name,
+                             state=_state,
+                             unique_id=_id+"/"+_dict["BL_ADDR"],
+                             device=_device_info)
+        _settings = Settings(mqtt=_mqtt, entity=_info)
         super().__init__(_settings)
         if _id in _config.desc:
             self.set_attributes({'description': _config.desc[_id]['desc']})
-        
+
 class MqttInformer(MqttBase):
     """
     class MqttInformer provides Boiler information via MQTT to MqttDiscovery plugin in Jeedom or Home Assistant
@@ -47,7 +66,7 @@ class MqttInformer(MqttBase):
     Name: will be BL_ADDR ip adress of the boiler
 
     """
-    _msq: ChanelQueue | None = None  # Message queue for receiving messages
+    _msq: Union[ChanelQueue, ChanelPriorityQueue, None] = None  # Message queue for receiving messages
     _com: PubSub
     _channel= "info" # Channel to receive info about the boiler
 
@@ -57,16 +76,13 @@ class MqttInformer(MqttBase):
     _web_app: Sensor
     _key: Sensor
     _kt: Sensor
-#    _ma: ThreadedMqttActuator | None = None
-    _device_info: DeviceInfo | None = None
+
     def __init__(self,communicator: PubSub):
         super().__init__()
-#        self._ma = None
-        self._device_info = None
         self._com = communicator
         self._dict = {}
         self._sensors= {}
-        
+
     def _init_sensors(self):
         """This method init the basis sensors"""
         if 'HargaWebApp' in self._dict:
@@ -104,7 +120,8 @@ class MqttInformer(MqttBase):
     def _create_all_sensors(self):
         # create basis mandatory sensors
         # sensors before normal mode
-        self._web_app = MySensor("HargaWebApp","HargaWebApp", self._dict, self.config, self._device_info, self.mqtt_settings)
+        self._web_app = MySensor("HargaWebApp","HargaWebApp",
+                                 self._dict, self.config, self._device_info, self.mqtt_settings)
         self._token = MySensor("Login Token", "TOKEN", self._dict, self.config, self._device_info, self.mqtt_settings)
         self._key = MySensor("Login Key", "KEY", self._dict, self.config, self._device_info, self.mqtt_settings)
         # sensors coming in normal mode
@@ -119,7 +136,7 @@ class MqttInformer(MqttBase):
             self._sensors[_part]= _sensor
 
 
-    def start(self):
+    def start(self) -> None:
         """This method runs the MqttInformer, waiting for message on _info_queue"""
         _stage: str = ''
 
@@ -128,16 +145,14 @@ class MqttInformer(MqttBase):
         while True:
             try:
                 logging.debug('MqttInformer: waiting for messages')
-                logging.debug('MQTT ChannelQueue size: %d', self._msq.qsize())
-                
+                #logging.debug('MQTT ChannelQueue size: %d', self._msq.qsize())
                 # Use a non-blocking iterator with a timeout
-                iterator = self._msq.listen(timeout=3)  
+                iterator = self._msq.listen(timeout=3)
                 try:
                     _message = next(iterator)
                 except StopIteration:
                     logging.error('StopIteration: No message received, continuing...')
                     continue
-                    
                 if not _message:
                     logging.debug('MqttInfomer no message received')
                     continue
@@ -158,8 +173,6 @@ class MqttInformer(MqttBase):
                             self._web_app.set_state(_str_parts[1])
                         if _str_parts[0] == 'KT':
                             self._kt.set_state(_str_parts[1])
- #                       if _str_parts[0] == 'SWV':
- #                           self._swv.set_state(_str_parts[1])
                         # treat sensors from telnet pm buffer
                         if _str_parts[0] in self.config.wanted and _str_parts[0] in self._sensors:
                             logging.info('updating state of sensor:%s',_str_parts[0])
@@ -175,7 +188,7 @@ class MqttInformer(MqttBase):
                         logging.debug("BL_ADDR:%s",self._dict["BL_ADDR"])
                     else:
                         logging.debug("BL_ADDR missing")
-                    # temporary version: we use only BL_ADDR to init the device_info
+                    # temporary version: we use only BL_ADDR to init device_info
                     # todo enrich the device_info with info from telnet dialog
                     # and implement a way to inform MqttActuator in a differed way
                     if 'BL_ADDR' in self._dict:
@@ -194,4 +207,3 @@ class MqttInformer(MqttBase):
         # whenever we exit the loop, we unsubscribe from the channel
         self._com.unsubscribe(self._channel, self._msq)
         self._msq = None
-
