@@ -2,19 +2,16 @@
 Module for MQTT client to handle to boiler
 """
 
-import typing
+
 import logging
 from queue import Empty
-from threading import Thread
 from ha_mqtt_discoverable import Settings, DeviceInfo
 from ha_mqtt_discoverable.sensors import Sensor, SensorInfo
-from ha_mqtt_discoverable.sensors import Button, ButtonInfo
-from paho.mqtt.client import Client, MQTTMessage
 
 import hargconfig
-from actuator import ThreadedMqttActuator, MqttBase
+from actuator import MqttBase
 
-from pubsub.pubsub import PubSub
+from pubsub.pubsub import PubSub,ChanelQueue
 
 
 
@@ -48,13 +45,9 @@ class MqttInformer(MqttBase):
     It will create the device_info and sensors from the boiler data.
 
     Name: will be BL_ADDR ip adress of the boiler
-    Identifiers:
-    - $login key:
-    - $SN:
-    - $setkomm: mandatory , i choose this as a primary identifiers (Boiler number)
 
     """
-#    _info_queue: Queue
+    _msq: ChanelQueue | None = None  # Message queue for receiving messages
     _com: PubSub
     _channel= "info" # Channel to receive info about the boiler
 
@@ -64,12 +57,11 @@ class MqttInformer(MqttBase):
     _web_app: Sensor
     _key: Sensor
     _kt: Sensor
-    #_swv: Sensor = None
-    _ma: ThreadedMqttActuator | None = None
+#    _ma: ThreadedMqttActuator | None = None
     _device_info: DeviceInfo | None = None
     def __init__(self,communicator: PubSub):
         super().__init__()
-        self._ma = None
+#        self._ma = None
         self._device_info = None
         self._com = communicator
         self._dict = {}
@@ -87,15 +79,6 @@ class MqttInformer(MqttBase):
             logging.debug('KEY in dict --> set')
             self._key.set_state(self._dict['KEY'])
 
-    def _create_device_info(self):
-        lstr= list()
-        lstr.append(self._dict["BL_ADDR"])
-        self._device_info = DeviceInfo(
-                            name=self._dict['BL_ADDR'],
-                            manufacturer="Hargassner",
-                            sw_version="1.0",
-                            hw_version="1.0",
-                           identifiers=lstr)
     def _create_sensor(self, _name: str, _id: str) -> Sensor:
         if _id in self._dict:
             _state= self._dict[_id]
@@ -126,7 +109,6 @@ class MqttInformer(MqttBase):
         self._key = MySensor("Login Key", "KEY", self._dict, self.config, self._device_info, self.mqtt_settings)
         # sensors coming in normal mode
         self._kt = self._create_sensor("KT","KT")
-        #self._swv = self._create_sensor("Software Version", "SWV")
         # sensors wanted from the pm buffer
         for _part in self.config.wanted:
             if _part not in self.config.desc:
@@ -149,7 +131,7 @@ class MqttInformer(MqttBase):
                 logging.debug('MQTT ChannelQueue size: %d', self._msq.qsize())
                 
                 # Use a non-blocking iterator with a timeout
-                iterator = self._msq.listen(timeout=1)  
+                iterator = self._msq.listen(timeout=3)  
                 try:
                     _message = next(iterator)
                 except StopIteration:
@@ -193,26 +175,14 @@ class MqttInformer(MqttBase):
                         logging.debug("BL_ADDR:%s",self._dict["BL_ADDR"])
                     else:
                         logging.debug("BL_ADDR missing")
-                    if 'SETKOMM' in self._dict:
-                        logging.debug("SETKOMM:%s", self._dict["SETKOMM"])
-                    else:
-                        logging.debug("SETKOMM missing")
-                    if 'HSV' in self._dict:
-                        logging.debug("HSV:%s", self._dict['HSV'])
-                    else:
-                        logging.debug("HSV missing")
-                    # we create the MqttActuator as soon as we have the BL_ADDR
-                    if ('BL_ADDR' in self._dict) and not self._ma:
-                        logging.debug("BL_ADDR present but no actuator found")
-                        logging.debug('we create and launch a ThreadedMqttActuator in a separate thread')
-                        self._ma = ThreadedMqttActuator(self._com, self._device_info)
-                        self._ma.start()
-                        
-                    if ('BL_ADDR' in self._dict) and ('SETKOMM' in self._dict):
+                    # temporary version: we use only BL_ADDR to init the device_info
+                    # todo enrich the device_info with info from telnet dialog
+                    # and implement a way to inform MqttActuator in a differed way
+                    if 'BL_ADDR' in self._dict:
                         # we have all the info to init device_info
                         logging.info('Boiler device_info is complete')
                         # Define the device. At least one of `identifiers` or `connections` must be supplied
-                        self._create_device_info()
+                        self._create_device_info(self._dict["BL_ADDR"])
                         logging.debug("Device Info initialized")
                         self._create_all_sensors()
                         _stage = 'device_info_ok'

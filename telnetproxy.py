@@ -8,7 +8,7 @@ import time
 import platform
 import logging
 from threading import Thread
-from typing import Annotated, Tuple
+from typing import Annotated
 import annotated_types
 
 from pubsub.pubsub import PubSub
@@ -16,6 +16,7 @@ from pubsub.pubsub import PubSub
 from telnethelper import TelnetClient
 from shared import ChanelReceiver,BUFF_SIZE
 from analyser import Analyser
+from actuator import ThreadedMqttActuator, MqttBase
 
 # $login token
 #   $00A000A0
@@ -141,7 +142,7 @@ from analyser import Analyser
 
 
 
-class TelnetService():
+class TelnetService:
     """
     implements telnet service receiving requests and forwarding them to the boiler
     """
@@ -149,7 +150,6 @@ class TelnetService():
     _telnet= None
 
     def __init__(self, src_iface: bytes):
-        super().__init__()
         self._listen = s.socket(s.AF_INET, s.SOCK_STREAM)
         if platform.system() == 'Linux':
             self._listen.setsockopt(s.SOL_SOCKET, s.SO_BINDTODEVICE, src_iface)
@@ -174,13 +174,13 @@ class TelnetService():
         return _addr[1]
     def send(self, data: bytes)-> int:
         return self._telnet.send(data)
-    def socket(self):
-        return self._telnet
-    def recvfrom(self) -> Tuple[bytes, bytes]:
-        return self._telnet.recvfrom(BUFF_SIZE)
+    def socket(self) -> s.socket | None:
+        return self._telnet if self._telnet else None
+    def recv(self) -> bytes:
+        return self._telnet.recv(BUFF_SIZE)
 
 
-class TelnetProxy(ChanelReceiver):
+class TelnetProxy(ChanelReceiver, MqttBase):
     """
     This class implements the TelnetProxy
     """
@@ -192,21 +192,27 @@ class TelnetProxy(ChanelReceiver):
     _client: TelnetClient # to request the boiler
     _service1: TelnetService # to service the IGW gateaway
     _service2: TelnetService # to service other requests
+    _active_sockets: set[s.socket] # Track which sockets are still active
  #   _telnet: s.socket
     _analyser: Analyser
 #    _pmstamp: int = 0
 #    _values: dict = None # telnet pm values
+    _ma: ThreadedMqttActuator | None = None
+
 
     def __init__(self, communicator: PubSub, src_iface, dst_iface, port):
-        super().__init__(communicator)
+        ChanelReceiver.__init__(self, communicator)
+        MqttBase.__init__(self)
         self.src_iface = src_iface
         self.dst_iface = dst_iface
         self.port = port
-        self._analyser= Analyser(communicator)
-        self._service1= TelnetService(self.src_iface)
-        self._service2= TelnetService(self.src_iface)
+        self._analyser = Analyser(communicator)
+        self._service1 = TelnetService(self.src_iface)
+        self._service2 = TelnetService(self.src_iface)
         # we will now create the socket to resend the telnet request
-        self._client= None
+        self._client = None
+        self._ma = None
+        self._active_sockets = set()
 
     def bind1(self):
         """bind the telnet socket"""
@@ -230,9 +236,17 @@ class TelnetProxy(ChanelReceiver):
         """accept a telnet connection"""
         # remember the source port from which gateway is telneting
         self.gwt_port = self._service1.accept()
+        # Re-add service1 socket to active sockets in the loop
+        if hasattr(self, '_active_sockets'):
+            self._active_sockets.add(self._service1.socket())
+            logging.debug('Re-added service1 socket to active set')
     def accept2(self):
         """accept a telnet connection"""
         self._service2.accept()
+        # Re-add service2 socket to active sockets in the loop
+        if hasattr(self, '_active_sockets'):
+            self._active_sockets.add(self._service2.socket())
+            logging.debug('Re-added service2 socket to active set')
 
     # wait for the boiler address and port to be discovered
     def discover(self):
@@ -261,7 +275,7 @@ class TelnetProxy(ChanelReceiver):
 
     def get_boiler_config(self):
         """get the boiler configuration
-        
+
         Returns:
             dict[str, list[str]]: A dictionary with the parameter name as key and a list of non-zero values
         """
@@ -271,6 +285,7 @@ class TelnetProxy(ChanelReceiver):
             
         logging.debug('telnet getting boiler config from %s', repr(self.bl_addr))
         # ask for changed parameters
+        #todo use a more accurate last time stamp
         self._client.send(b'$par get changed \"2023-11-12 18:21:37\"\r\n')
         
         try:
@@ -294,63 +309,143 @@ class TelnetProxy(ChanelReceiver):
         _sock: s.socket
         _data: bytes
         _addr: tuple
-        read_sockets: list[s.socket]
+        read_sockets: list[s.socket] = []
         write_sockets: list[s.socket]
         error_sockets: list[s.socket]
         _state: str = '' # state of the request/response dialog
         _buffer: bytes = b'' # buffer to store the data received until we have a complete response
-#        _pm: bytes = b'' # buffer to store special "pm" response
         _mode: str = ''
         _caller: int = 0 # to recall which caller we have to reply to (service1 or service 2)
-        while True:
-            logging.debug('telnet waiting data')
+        
+        # Initialize active sockets if not already done
+        service1_socket = self._service1.socket()
+        if service1_socket is not None:
+            self._active_sockets.add(service1_socket)
+            logging.debug('Added service1 socket to active set')
+            
+        service2_socket = self._service2.socket()
+        if service2_socket is not None:
+            self._active_sockets.add(service2_socket)
+            logging.debug('Added service2 socket to active set')
+            
+        if self._client is not None:
+            client_socket = self._client.socket()
+            if client_socket is not None:
+                self._active_sockets.add(client_socket)
+                logging.debug('Added client socket to active set')
+            
+        logging.debug('Active sockets: %d', len(self._active_sockets))
+
+        while self._active_sockets:  # Continue as long as we have active sockets
             if self._msq:
                 logging.debug('TelnetProxy ChannelQueue size: %d', self._msq.qsize())
-            if self._service2.socket() == None:
-                read_sockets, write_sockets, error_sockets = select.select(
-                    [self._service1.socket(), self._client.socket()], [], [])
-            else:
-                read_sockets, write_sockets, error_sockets = select.select(
-                    [self._service1.socket(), self._service2.socket(), self._client.socket()], [], [])
+            try:
+                read_sockets, write_sockets, error_sockets = select.select(list(self._active_sockets), [], [], 1.0)
+            except select.error as err:
+                logging.error("Select error: %s", str(err))
+                continue
+            except Exception as err:
+                logging.error("Unexpected error in select: %s", str(err))
+                continue
 #                [self._service1.socket(), self._client.socket()], [], [])
             for _sock in read_sockets:
                 if _sock == self._service1.socket():
                     # so we received a request
-                    _data, _addr = self._service1.recvfrom()
-                    logging.debug('service1 received  request %d bytes ==>%s',
-                                 len(_data), repr(_data))
-                    _caller= 1
-                    if not _data:
-                        logging.warning('service1 received empty request')
-                        continue
-                    _state = self._analyser.parse_request(_data)
-                    logging.debug('_state-->%s',_state)
-                    # we should resend it
-                    logging.debug('resending %d bytes to %s:%d',
-                                 len(_data), repr(self.bl_addr), self.port)
-                    #todo manage partial send data
-                    self._client.send(_data)
+                    try:
+                        _data = self._service1.recv()
+                        if not _data:
+                            logging.warning('service1 received empty request - client disconnected')
+                            sock = self._service1.socket()
+                            if sock is not None:
+                                try:
+                                    sock.close()
+                                    self._active_sockets.discard(sock)
+                                except Exception as close_err:
+                                    logging.error("Error closing service1 socket: %s", str(close_err))
+                            raise s.error("service1: Client disconnected")
+                            
+                        logging.debug('service1 received request %d bytes ==>%s', len(_data), repr(_data))
+                        _caller = 1
+                        # ask the Analyser() to analyse the IGW request
+                        _state = self._analyser.parse_request(_data)
+                        logging.debug('_state-->%s', _state)
+                        # we should resend it
+                        logging.debug('service1 resending %d bytes to %s:%d',
+                                    len(_data), repr(self.bl_addr), self.port)
+                        #todo manage partial send data
+                        self._client.send(_data)
+                    except s.error as err:
+                        logging.error("Socket error in service1 recv: %s", str(err))
+                        sock = self._service1.socket()
+                        if sock is not None:
+                            try:
+                                sock.close()
+                                self._active_sockets.discard(sock)
+                            except Exception as close_err:
+                                logging.error("Error closing service1 socket: %s", str(close_err))
+                        # Raise with service identification
+                        raise s.error(f"service1: {str(err)}")
+                    except Exception as err:
+                        logging.critical("Unexpected error in service1 recv: %s", type(err))
+                        if self._service1.socket() is not None:
+                            try:
+                                self._service1.socket().close()
+                            except:
+                                pass
+                        # Raise with service identification
+                        raise s.error(f"service1: {str(err)}")
+                        
                 if _sock == self._service2.socket():
-                    _data, _addr = self._service2.recvfrom()
-                    logging.debug('service2 received  request %d bytes ==>%s',
-                                 len(_data), repr(_data))
-                    _caller= 2
-                    for i in str(_sock).split():
-                            logging.debug(i)
-                    #self._service2.send(b'Thank you for calling')
+                    try:
+                        _data = self._service2.recv()
+                        if not _data:
+                            logging.warning('service2 received empty request')
+                            continue
+                            
+                        logging.debug('service2 received request %d bytes ==>%s', len(_data), repr(_data))
+                        _caller = 2
+                        # we should resend it
+                        logging.debug('service2 resending %d bytes to %s:%d',
+                                    len(_data), repr(self.bl_addr), self.port)
+                        #todo manage partial send data
+                        self._client.send(_data)
+                    except s.error as err:
+                        logging.error("Socket error in service2 recv: %s", str(err))
+                        sock = self._service2.socket()
+                        if sock is not None:
+                            try:
+                                sock.close()
+                                self._active_sockets.discard(sock)
+                            except Exception as close_err:
+                                logging.error("Error closing service2 socket: %s", str(close_err))
+                        # Raise with service identification
+                        raise s.error(f"service2: {str(err)}")
+                    except Exception as err:
+                        logging.critical("Unexpected error in service2 recv: %s", type(err))
+                        if self._service2.socket() is not None:
+                            try:
+                                sock = self._service2.socket()
+                                sock.close()
+                                self._active_sockets.discard(sock)
+                            except Exception as close_err:
+                                logging.error("Error closing service2 socket: %s", str(close_err))
+                        # Raise with service identification
+                        raise s.error(f"service2: {str(err)}")
                 if _sock ==self._client.socket():
                     # so we received a reply
                     try:
-                        _data, _addr = self._client.recvfrom()
+                        _data = self._client.recv(BUFF_SIZE)
                     except Exception as err:
                         logging.critical("Exception on client telnet socket: %s", type(err))
-                        self._client.close()
-                        return
+                        if self._client is not None:
+                            self._client.close()
+                        raise  # Re-raise to be caught by loop() to continue with other sockets
 
                     if not _data:
                         logging.warning('client received empty response')
-                        self._client.close()
-                        return
+                        if self._client is not None:
+                            self._client.close()
+                        raise s.error("Empty response from client")
 
                     if not _data.startswith(b'pm'):
                         logging.debug('telnet received response %d bytes ==>%s',len(_data), repr(_data))
@@ -361,7 +456,7 @@ class TelnetProxy(ChanelReceiver):
                     #todo manage exceptions
                     try:
                         # sending data back to the caller
-                        # we imagine we receive the response quickly enough, 
+                        # we imagine we receive the response quickly enough,
                         # before receiving a new request from the other caller
                         # also this doesn't work if the pm buffer is split in several chunks
                         # would need a more robust logic here
@@ -371,25 +466,83 @@ class TelnetProxy(ChanelReceiver):
                             _sent= self._service2.send(_data)
                         else:
                             logging.warning('Beware received a response with not registered caller %d', _caller)
-                        if  _sent!= len(_data):
-                            logging.error('telnet send error: not all data sent %d/%d',_sent, len(_data))
+                        if _sent != len(_data):
+                            logging.error('telnet send error: not all data sent %d/%d', _sent, len(_data))
                         logging.debug('telnet sent back response to client')
                     except Exception as err:
                         logging.critical("Exception: %s", type(err))
                         raise
-                    # analyse the response
+                    # ask Analyser() to analyse the pellet boiler response
                     _buffer, _mode, _state = self._analyser.analyse_data_buffer(_data,
                                _buffer, _mode, _state)
 
+    def restart_service1(self):
+        """Restart service1 after failure"""
+        logging.info("Restarting service1...")
+        try:
+            self._service1 = TelnetService(self.src_iface)
+            self.bind1()
+            self.listen1()
+            self.accept1()
+            return True
+        except Exception as err:
+            logging.error("Failed to restart service1: %s", str(err))
+            return False
+
+    def restart_service2(self):
+        """Restart service2 after failure"""
+        logging.info("Restarting service2...")
+        try:
+            self._service2 = TelnetService(self.src_iface)
+            self.bind2()
+            self.listen2()
+            self.accept2()
+            return True
+        except Exception as err:
+            logging.error("Failed to restart service2: %s", str(err))
+            return False
+
+    def restart_client(self):
+        """Restart client connection after failure"""
+        logging.info("Restarting client connection...")
+        try:
+            self.connect()
+            self.get_boiler_config()
+            return True
+        except Exception as err:
+            logging.error("Failed to restart client: %s", str(err))
+            return False
+
     def service(self):
-        logging.debug('TelnetProxy::service()')
+        """Main service loop that handles reconnections"""
+        logging.debug('TelnetProxy::service')
+        
+        # Initial setup
+        if not self.restart_client():
+            raise RuntimeError("Failed initial client connection")
+            
         while True:
-            self.connect() # will connect or reconnect to the boiler
-            # now we can loop waiting requests and replies
-            self.get_boiler_config()  # get the boiler configuration
-            # we will now loop waiting requests and replies
-            logging.debug('TelnetProxy::service() starting loop')
-            self.loop()
+            try:
+                logging.debug('TelnetProxy::service starting loop')
+                self.loop()
+            except s.error as err:
+                if "service1" in str(err):
+                    logging.error("Service1 failed, attempting restart: %s", str(err))
+                    if self.restart_service1():
+                        continue
+                elif "service2" in str(err):
+                    logging.error("Service2 failed, attempting restart: %s", str(err))
+                    if self.restart_service2():
+                        continue
+                else:
+                    logging.error("Client connection failed, attempting restart: %s", str(err))
+                    if self.restart_client():
+                        continue
+                # If we get here, restart failed
+                time.sleep(5)  # Wait before retry
+            except Exception as err:
+                logging.critical("Fatal error in service: %s", str(err))
+                raise  # Re-raise fatal errors
 
 class ThreadedTelnetProxy(Thread):
     """This class implements a Thread to run the TelnetProxy"""
@@ -400,20 +553,39 @@ class ThreadedTelnetProxy(Thread):
         # Add any additional initialization logic here
 
     def run(self):
-        _ts: Thread= None
+        _ts: Thread | None = None
         logging.info('telnet proxy started: %s , %s', self.tp.src_iface, self.tp.dst_iface)
 
         # we will first discover the boiler
         self.tp.discover()
 
+        # if we have a BL_ADDR, we create the ThreadedMqttActuator
+        if not self.tp._ma:
+            logging.debug("BL_ADDR present but no actuator found")
+            logging.debug('we create and launch a ThreadedMqttActuator in a separate thread')
+            self.tp._create_device_info(self.tp.bl_addr.decode('ascii'))
+            self.tp._ma = ThreadedMqttActuator(self.tp._com, self.tp._device_info)
+            self.tp._ma.start()
+
         # then we can bind/listen/accept and service()
         self.tp.bind1()
+        self.tp.bind2()
         self.tp.listen1()
-        self.tp.accept1()
-        #we will service the accepted connexion in a separate thread
-        _ts= Thread(target=self.tp.service, name='TelnetProxyService')
+        self.tp.listen2()
+        
+        # Create separate threads for accepting connections
+        _accept1_thread = Thread(target=self.tp.accept1, name='AcceptService1')
+        _accept2_thread = Thread(target=self.tp.accept2, name='AcceptService2')
+        
+        # Start both accept threads
+        _accept1_thread.start()
+        _accept2_thread.start()
+        
+        # Service thread will handle the communication
+        _ts = Thread(target=self.tp.service, name='TelnetProxyService')
         _ts.start()
-#        self.tp.bind2()
-#        self.tp.listen2()
-#        self.tp.accept2()
+        
+        # Wait for all threads
+        _accept1_thread.join()
+        _accept2_thread.join()
         _ts.join()

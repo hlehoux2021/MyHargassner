@@ -96,50 +96,50 @@ class ChanelReceiver(NetworkData):
                 If not provided, defaults to self.decode_message.
                 The function should accept a string argument.
         """
-        logging.debug(f"handle() called on {self.name()} with channel {self._channel} message_handler={message_handler}")
+        logging.debug(f"handle called on {self.name()} with channel {self._channel} message_handler={message_handler}")
         
         if not self._msq:
-            logging.error('handle(): No message queue available')
+            logging.error('handle: No message queue available')
             return
             
         try:
-            logging.debug('handle(): attempting to get next message')
+            logging.debug('handle: attempting to get next message')
             # Use non-blocking listen with timeout
-            iterator = self._msq.listen(timeout=1.0)  # 1 second timeout
+            iterator = self._msq.listen(timeout=3.0)  # 1 second timeout
             try:
                 _message = next(iterator)
-                logging.debug('handle(): received message from queue: %s', _message)
+                logging.debug('handle: received message from queue: %s', _message)
             except StopIteration:
-                logging.debug('handle(): no message available')
+                logging.debug('handle: no message available')
                 return
                 
             if not _message or 'data' not in _message:
-                logging.debug('handle(): invalid message format received')
+                logging.debug('handle: invalid message format received')
                 return
                 
             msg = _message['data']
             if isinstance(msg, bytes):
                 msg = msg.decode('utf-8')
-            logging.debug('handle(): decoded message: %s', msg)
+            logging.debug('handle: decoded message: %s', msg)
             
             # Use the provided message handler if available, otherwise use decode_message
             handler = message_handler if message_handler is not None else self.decode_message
-            logging.debug('handle(): calling handler %s with message', handler.__name__ if hasattr(handler, '__name__') else str(handler))
+            logging.debug('handle: calling handler %s with message', handler.__name__ if hasattr(handler, '__name__') else str(handler))
             
             try:
                 handler(msg)
-                logging.debug('handle(): handler completed successfully')
+                logging.debug('handle: handler completed successfully')
             except Exception as e:
-                logging.error('handle(): error in message handler: %s', str(e), exc_info=True)
+                logging.error('handle: error in message handler: %s', str(e), exc_info=True)
                 raise
                 
         except Empty:
-            logging.debug('handle(): Empty message received')
+            logging.debug('handle: Empty message received')
         except Exception as e:
-            logging.error('handle(): unexpected error: %s', str(e), exc_info=True)
+            logging.error('handle: unexpected error: %s', str(e), exc_info=True)
             raise
         
-        logging.debug('handle(): end of method')
+        logging.debug('handle: end of method')
 
     def loop(self):
         """
@@ -291,7 +291,7 @@ class ListenerSender(ChanelReceiver):
             
             try:
                 # Set socket timeout
-                self.listen.settimeout(1.0)  # 1 second timeout
+                self.listen.settimeout(3.0)  # 1 second timeout
                 data, addr = self.listen.recvfrom(BUFF_SIZE)
                 
                 if data:  # Only process if we actually got data

@@ -275,7 +275,7 @@ class SharedSimulator:
                 return response
         
         print(f"Unknown command: {command}")
-        return None
+        return b"Unknown command\r\n"
 
     def handle_telnet_connection(self, client, commands_list=None):
         """Handle an individual telnet client connection"""

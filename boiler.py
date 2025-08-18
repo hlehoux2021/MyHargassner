@@ -55,7 +55,7 @@ class BoilerListenerSender(ListenerSender):
         self._msq = self._com.subscribe(self._channel, self.name())
         while self.gw_port == 0:
             self.handle()
-        logging.info('BoilerListenerSender discovered gateway %s:%d', self.gw_addr, self.gw_port)
+        logging.info('BoilerListenerSender received gateway information %s:%d', self.gw_addr, self.gw_port)
         #unsubscribe from the channel to avoid receiving further messages
         logging.info('BoilerListenerSender unsubscribe from channel %s', self._channel)
         self._com.unsubscribe(self._channel,self._msq)
@@ -88,9 +88,7 @@ class BoilerListenerSender(ListenerSender):
             logging.info('HSV discovered')
             logging.info('HSV=%s',data[2:32].decode())
             self._com.publish(self._channel, f"HSV££{data[2:32].decode()}")
-            #self._mq.put('HSV££' + data[2:32].decode())  # Uncomment if you want to use the queue
             logging.info('SYS=%s',data[len(data)-16:len(data)].decode())
-            #self._mq.put('SYS££' + data[len(data)-16:len(data)].decode())
             self._com.publish(self._channel, f"SYS££{data[len(data)-16:len(data)].decode()}")
 
 class ThreadedBoilerListenerSender(Thread):
