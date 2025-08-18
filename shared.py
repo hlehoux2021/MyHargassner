@@ -6,6 +6,7 @@ import socket
 import platform
 import logging
 from typing import Annotated, Union
+
 import annotated_types
 
 from pubsub.pubsub import PubSub,  ChanelQueue, ChanelPriorityQueue
@@ -14,10 +15,9 @@ from pubsub.pubsub import PubSub,  ChanelQueue, ChanelPriorityQueue
 BUFF_SIZE= 1024
 UDP_LISTENER_TIMEOUT = 5  # Timeout for UDP listener  
 
-# Add socket constants that might not be defined on all systems
+# Runtime check and setting with warning suppressions
 if not hasattr(socket, 'SO_BINDTODEVICE'):
-    socket.SO_BINDTODEVICE = 25  # From Linux <socket.h>
-
+    socket.SO_BINDTODEVICE = 25  # type: ignore[attr-defined] # pylint: disable=attribute-defined-outside-init
 #----------------------------------------------------------#
 
 class HargInfo():
@@ -79,10 +79,10 @@ class ChanelReceiver(NetworkData):
     It defines a method to handle received messages.
     """
     _channel= "bootstrap" # Channel to exchange bootstrap information about boiler and gateway, addr, port, etc
-    _com: PubSub # every data receiver should have a PubSub communicator
+    _com: Union[PubSub, None] = None # every data receiver should have a PubSub communicator
     _msq: Union[ChanelQueue, ChanelPriorityQueue, None] = None # Message queue for receiving data
 
-    def __init__(self, communicator: PubSub = None):
+    def __init__(self, communicator: Union[PubSub, None] = None):
         super().__init__()
         self._com = communicator
 
@@ -181,7 +181,7 @@ class ListenerSender(ChanelReceiver):
         self.listen.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
         self.listen.settimeout(UDP_LISTENER_TIMEOUT)  # Set a timeout for the listener
         logging.debug(f'system={platform.system()}')
-        
+
         # Configure listen socket
         if platform.system() == 'Linux':
             # Linux: use SO_BINDTODEVICE
