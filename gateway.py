@@ -1,10 +1,9 @@
 """
-This module implements the gateway listener
-it discovers the IGW when receiving broadcasted udp messages
-it forwards messages from the IGW to the boiler
+This module implements the gateway listener.
+It discovers the IGW when receiving UDP broadcast messages
+and forwards messages from the IGW to the boiler.
 """
 import logging
-import platform
 from queue import Queue
 from threading import Thread
 from typing import Annotated, Tuple
@@ -13,6 +12,12 @@ import annotated_types
 from pubsub.pubsub import PubSub
 
 from shared import ListenerSender
+from socket_manager import (
+    SocketSendError,
+    SocketTimeoutError,
+    SocketBindError,
+    InterfaceError
+)
 
 class GatewayListenerSender(ListenerSender):
     """
@@ -43,20 +48,16 @@ class GatewayListenerSender(ListenerSender):
         self._com.publish(self._channel, f"GW_ADDR:{addr[0]}")
         self._com.publish(self._channel, f"GW_PORT:{addr[1]}")
 
-    def get_resender_binding(self) -> Tuple[str, int]:
+    def get_resender_port(self) -> int:
         """
-        This method returns the binding details for the resender.
+        Get the base port number for the resender socket.
+        The gateway resends from the port it was discovered on.
+
+        Returns:
+            int: Base port number (delta handling done by SocketManager)
         """
-        #todo sort usage of delta between MacOS and Linux
-        if platform.system() == 'Darwin':
-            # On macOS, we bind to the specific interface IP
-            bind_port = self.gw_port - self.delta
-            logging.debug('Binding details - IP: %s, Port: %d, Delta: %d, Original Port: %d',
-                self.dst_ip, bind_port, self.delta, self.gw_port)
-            return (self.dst_ip, bind_port)
-        else:
-            # On Linux, we already used SO_BINDTODEVICE
-            return ('', self.gw_port)
+        logging.debug('Getting gateway resend port: %d', self.gw_port)
+        return self.gw_port
 
 
 
@@ -66,30 +67,54 @@ class GatewayListenerSender(ListenerSender):
         """
         return self.queue()
 
-    def send(self, data):
+    def send(self, data: bytes) -> None:
         """
-        This method sends received data to the boiler.
-        """
-		#to act as the gateway, we rebroadcast the udp frame
-        logging.debug('resending %d bytes to %s : %d',
-                      len(data), self.dst_iface.decode(), self.udp_port+self.delta)
-        self.resend.sendto(data, ('<broadcast>', self.udp_port+self.delta))
-        logging.debug('resent %d bytes to %s : %d',
-                     len(data), self.dst_iface.decode(), self.udp_port+self.delta)
+        Send received data to the boiler with error handling.
+        Rebroadcasts the UDP frame to act as the gateway.
 
-    def bind(self):
-        """ This method binds the listener mimicking the gateway."""
-        if platform.system() == 'Darwin remove':
-            # On macOS, we need to bind to the specific interface IP
-            logging.debug('binding listener to IP %s, port %d', self.src_ip, self.udp_port)
-            self.listen.bind((self.src_ip, self.udp_port))
-            logging.debug('listener bound to IP %s, port %d', self.src_ip, self.udp_port)
-        else:
-            # On Linux, we already used SO_BINDTODEVICE, so we can bind to all interfaces
-            logging.debug('binding listener to '', port %d', self.udp_port)
-            self.listen.bind(('', self.udp_port))
-            logging.debug('listener bound to '', port %d', self.udp_port)
-        self.bound = True
+        Args:
+            data: The bytes to send
+
+        Raises:
+            SocketSendError: If sending fails
+            SocketTimeoutError: If send times out
+            InterfaceError: If interface specification is invalid
+        """
+        try:
+            self.send_manager.send_with_delta(
+                data=data,
+                port=self.udp_port,
+                delta=self.delta
+            )
+            logging.debug('Successfully sent %d bytes', len(data))
+        except (SocketSendError, SocketTimeoutError, InterfaceError) as e:
+            logging.error('Failed to send data: %s', str(e))
+            raise
+
+    def bind(self) -> None:
+        """
+        Bind the listener socket using platform-specific binding.
+        The gateway listens on the broadcast port directly (no delta adjustment needed).
+        Platform-specific details are handled by SocketManager:
+        - On macOS: Validates and binds to specific IP address
+        - On Linux: Uses interface name with SO_BINDTODEVICE
+        
+        Raises:
+            SocketBindError: If binding fails
+            InterfaceError: If interface configuration is invalid
+        """
+        try:
+            logging.debug('Binding gateway listener on port %d', self.udp_port)
+            # Use bind_with_delta with delta=0 since gateway listens on the actual port
+            self.listen_manager.bind_with_delta(
+                port=self.udp_port,
+                delta=0  # Gateway listens on the actual port, no adjustment needed
+            )
+            self.bound = True
+            logging.debug('Gateway listener bound successfully')
+        except (SocketBindError, InterfaceError) as e:
+            logging.error('Failed to bind listener: %s', str(e))
+            raise
 
     def handle_data(self, data: bytes, addr: tuple):
         """handle udp data
@@ -123,12 +148,6 @@ class ThreadedGatewayListenerSender(Thread):
         super().__init__(name='GatewayListener')
         self.gls= GatewayListenerSender(communicator, src_iface, dst_iface, udp_port, delta)
 
-#    def queue(self) -> Queue:
-#        """
-#        This method returns the queue to receive data from.
-#        """
-#        return self.gls.queue()
-#
     def run(self):
         logging.info('GatewayListenerSender started')
         self.gls.bind()

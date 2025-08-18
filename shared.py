@@ -6,19 +6,15 @@ import socket
 import platform
 import logging
 from typing import Annotated, Union, Optional, Callable, Tuple
+from abc import ABC, abstractmethod
 
 import annotated_types
 
 from pubsub.pubsub import PubSub, ChanelQueue, ChanelPriorityQueue
+from socket_manager import SocketManager, HargSocketError, SocketBindError, InterfaceError, SocketTimeoutError
 
 #----------------------------------------------------------#
 BUFF_SIZE = 1024
-UDP_LISTENER_TIMEOUT = 5  # Timeout for UDP listener
-
-# Runtime check and setting with warning suppressions
-if not hasattr(socket, 'SO_BINDTODEVICE'):
-    socket.SO_BINDTODEVICE = 25  # type: ignore[attr-defined] # pylint: disable=attribute-defined-outside-init
-#----------------------------------------------------------#
 
 class HargInfo():
     """ a data class to store the HargInfo"""
@@ -74,7 +70,7 @@ class NetworkData():
             logging.warning('decode_message: unknown message %s', msg)
 
 
-class ChanelReceiver(NetworkData):
+class ChanelReceiver(NetworkData, ABC):
     """
     This class extends NetworkData class with the possibility to receive messages on a ChanelQueue.
     It defines a method to handle received messages.
@@ -136,15 +132,15 @@ class ChanelReceiver(NetworkData):
             raise
         logging.debug('handle: end of method')
 
+    @abstractmethod
     def loop(self) -> None:
         """
         This method is the main loop of the class.
         It should be overridden in subclasses to implement specific behavior.
         """
-        logging.error("loop() not implemented in %s", self.name())
-        raise NotImplementedError("Subclasses must implement this method")
+        pass
 
-class ListenerSender(ChanelReceiver):
+class ListenerSender(ChanelReceiver, ABC):
     """
     This class extends ChanelReceiver class with a socket to listen
     and a socket to resend data.
@@ -167,53 +163,50 @@ class ListenerSender(ChanelReceiver):
             return False
 
     def __init__(self, communicator: PubSub, src_iface: bytes, dst_iface: bytes) -> None:
+        """
+        Initialize the ListenerSender with source and destination interfaces.
+
+        Args:
+            communicator: PubSub instance for communication
+            src_iface: Source interface for listening (name on Linux, IP on MacOS)
+            dst_iface: Destination interface for sending (name on Linux, IP on MacOS)
+
+        Raises:
+            HargSocketError: If socket initialization fails
+            InterfaceError: If interface specification is invalid for the platform
+        """
         super().__init__(communicator)
         self.src_iface = src_iface  # network interface where to listen
         self.dst_iface = dst_iface  # network interface where to resend
         self.bound = False
         self.resender_bound = False
 
-        # Initialize sockets without type annotations
-        self.listen = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
-        self.listen.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
-        self.listen.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-        self.listen.settimeout(UDP_LISTENER_TIMEOUT)  # Set a timeout for the listener
-        logging.debug('system=%s', platform.system())
+        try:
+            # Initialize listener socket
+            self.listen_manager = SocketManager(src_iface, is_broadcast=True)
+            self.listen = self.listen_manager.create_socket()
 
-        # Configure listen socket
-        if platform.system() == 'Linux':
-            # Linux: use SO_BINDTODEVICE
-            self.listen.setsockopt(socket.SOL_SOCKET, socket.SO_BINDTODEVICE, src_iface) # type: ignore[attr-defined]
-            logging.debug('listen to device %s', src_iface)
-        elif platform.system() == 'Darwin':
-            # macOS: bind to interface IP
-            src_ip: str
-            src_ip = src_iface.decode('utf-8')
-            if not self._is_ip_address(src_ip):
-                logging.error("On macOS, please provide the IP address instead of interface name")
-                logging.error("For example: use '192.168.1.100' instead of 'en4'")
-                raise ValueError(f"Invalid IP address for macOS interface: {src_ip}")
-            self.src_ip = src_ip  # Store for later binding
-            logging.debug('configured listen IP %s', src_ip)
+            # Initialize sender socket
+            self.send_manager = SocketManager(dst_iface, is_broadcast=True)
+            self.resend = self.send_manager.create_socket()
 
-        # Configure resend socket
-        self.resend = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
-        self.resend.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
-        self.resend.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+            logging.debug('Sockets initialized on system: %s', platform.system())
 
-        if platform.system() == 'Linux':
-            # Linux: use SO_BINDTODEVICE
-            self.resend.setsockopt(socket.SOL_SOCKET, socket.SO_BINDTODEVICE, dst_iface) # type: ignore[attr-defined]
-        elif platform.system() == 'Darwin':
-            # macOS: bind to interface IP
-            dst_ip: str
-            dst_ip = dst_iface.decode('utf-8')
-            if not self._is_ip_address(dst_ip):
-                logging.error("On macOS, please provide the IP address instead of interface name")
-                logging.error("For example: use '192.168.1.100' instead of 'en4'")
-                raise ValueError(f"Invalid IP address for macOS interface: {dst_ip}")
-            self.dst_ip = dst_ip  # Store for later binding
-            logging.debug('configured resend IP %s', dst_ip)
+            if platform.system() == 'Darwin':
+                # Store IP for MacOS binding
+                self.src_ip = src_iface.decode('utf-8')
+                self.dst_ip = dst_iface.decode('utf-8')
+
+                # Validate IPs
+                if not self.listen_manager.is_valid_ip(self.src_ip):
+                    raise InterfaceError(f"Invalid source IP for MacOS: {self.src_ip}")
+                if not self.send_manager.is_valid_ip(self.dst_ip):
+                    raise InterfaceError(f"Invalid destination IP for MacOS: {self.dst_ip}")
+
+                logging.debug('Configured source IP: %s, destination IP: %s', self.src_ip, self.dst_ip)
+        except (HargSocketError, InterfaceError) as e:
+            logging.error('Failed to initialize sockets: %s', str(e))
+            raise
 
     def handle_first(self, data: bytes, addr: Tuple[str, int]) -> None:
         """
@@ -222,48 +215,56 @@ class ListenerSender(ChanelReceiver):
         logging.debug('first packet, resender not bound yet')
         self.publish_discovery(addr)  # Call the method to publish discovery
 
-        # first time we receive a packet, bind from the source port
+        # first time we receive a packet, bind the resender
         if self.resender_bound:
             logging.debug('resender already bound, skipping bind operation')
         else:
             try:
-                self.resend.bind(self.get_resender_binding())
+                # Get base port from child class
+                port = self.get_resender_port()
+                # Use send_manager to handle platform-specific binding
+                self.send_manager.bind_with_delta(
+                    port=port,
+                    delta=0  # Delta is handled by send_with_delta during sending
+                )
                 self.resender_bound = True
-                logging.debug('resender bound')
-            except OSError as e:
+                logging.debug('resender bound to port %d', port)
+            except (SocketBindError, InterfaceError) as e:
                 logging.error('Failed to bind resender: %s', str(e))
                 raise
 
-    def get_resender_binding(self) -> Tuple[str, int]:
+    @abstractmethod
+    def get_resender_port(self) -> int:
         """
-        This method returns the binding details for the resender.
+        Get the base port number for the resender socket.
+        Must be implemented by subclasses.
         """
-        logging.error("get_resender_binding() not implemented in %s", self.name())
-        raise NotImplementedError("Subclasses must implement this method")
+        pass
 
+    @abstractmethod
     def send(self, data: bytes) -> None:
         """
         This method resends received data to the destination.
-        This method must be implemented in the child class.
+        Must be implemented in the child class.
         """
-        logging.error("send() not implemented in %s", self.name())
-        raise NotImplementedError("Subclasses must implement this method")
+        pass
 
+    @abstractmethod
     def handle_data(self, data: bytes, addr: Tuple[str, int]) -> None:
         """
         This method handles received data.
-        This method must be implemented in the child class.
+        Must be implemented in the child class.
         """
-        logging.error("handle_data() not implemented in %s", self.name())
-        raise NotImplementedError("Subclasses must implement this method")
+        pass
 
+    @abstractmethod
     def publish_discovery(self, addr: Tuple[str, int]) -> None:
         """
         This method publishes the discovery of the Listener (gateway or boiler) to the Channel Queue.
         It sends the gateway/boiler address and port to the shared queue.
+        Must be implemented in the child class.
         """
-        logging.error("publish_discovery() not implemented in %s", self.name())
-        raise NotImplementedError("Subclasses must implement this method")
+        pass
 
     def loop(self) -> None:
         """
@@ -284,22 +285,23 @@ class ListenerSender(ChanelReceiver):
             addr = ('', 0)
 
             try:
-                # Set socket timeout
-                self.listen.settimeout(3.0)  # 1 second timeout
-                data, addr = self.listen.recvfrom(BUFF_SIZE)
+                # Use socket manager to receive data with built-in timeout
+                data, addr = self.listen_manager.receive(BUFF_SIZE)
                 if data:  # Only process if we actually got data
-                    logging.debug('received buffer of %d bytes from %s : %d', len(data), addr[0], addr[1])
-                    logging.debug('%s', data)
-                    # if destination is not yet discovered, handle first packet and bind the resend socket
+                    logging.debug('Received buffer of %d bytes from %s:%d', len(data), addr[0], addr[1])
+                    logging.debug('Data: %s', data)
+
+                    # If destination is not yet discovered, handle first packet and bind the resend socket
                     if not self.resender_bound:
                         self.handle_first(data, addr)
                     self.handle_data(data, addr)
                     self.send(data)
-            except socket.timeout:
+
+            except SocketTimeoutError:
                 # This is normal - just continue the loop
                 logging.debug('No data received within timeout period')
                 continue
-            except socket.error as e:
-                # This is an actual error
+            except HargSocketError as e:
+                # This is an actual error from our socket manager
                 logging.error("Socket error in loop: %s", e)
                 break

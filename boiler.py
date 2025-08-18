@@ -4,13 +4,16 @@ This module implements the boiler proxy
 
 import logging
 
-import platform
 from threading import Thread
-from typing import Tuple
-
 from pubsub.pubsub import PubSub
 
 from shared import ListenerSender
+from socket_manager import (
+    SocketSendError,
+    SocketTimeoutError,
+    SocketBindError,
+    InterfaceError
+)
 
 class BoilerListenerSender(ListenerSender):
     """
@@ -35,19 +38,44 @@ class BoilerListenerSender(ListenerSender):
         self._com.publish(self._channel, f"BL_ADDR:{addr[0]}")
         self._com.publish(self._channel, f"BL_PORT:{self.bl_port}")
 
-    def get_resender_binding(self) -> Tuple[str, int]:
+    def get_resender_port(self) -> int:
         """
-        This method returns the binding details for the resender.
-        """
-        #todo sort usage of delta between MacOS and Linux
-        return (self.bl_addr.decode('utf-8'), self.bl_port - self.delta)
+        Get the base port number for the resender socket.
+        The boiler resends from the port it was discovered on.
 
-    def send(self, data):
-        logging.debug('resending %d bytes to %s : %d',
-                      len(data), self.gw_addr.decode(), self.gw_port)
-        self.resend.sendto(data, (self.gw_addr, self.gw_port))
-        logging.debug('resent %d bytes to %s : %d',
-                     len(data), self.gw_addr.decode(), self.gw_port)
+        Returns:
+            int: Base port number (delta handling done by SocketManager)
+        """
+        logging.debug('Getting boiler resend port: %d', self.bl_port)
+        return self.bl_port
+
+    def send(self, data: bytes) -> None:
+        """Send data to the gateway using platform-aware socket management.
+        
+        Args:
+            data: The bytes to send
+
+        Raises:
+            SocketSendError: If sending fails
+            SocketTimeoutError: If send times out
+            InterfaceError: If interface specification is invalid
+        """
+        try:
+            # Decode gateway address for sending
+            gw_addr = self.gw_addr.decode('utf-8')
+            
+            # Use platform-aware sending with delta
+            self.send_manager.send_with_delta(
+                data=data,
+                port=self.gw_port,
+                delta=-self.delta,  # Note: negative delta because we're subtracting
+                dest=gw_addr
+            )
+            logging.debug('Successfully sent %d bytes to gateway', len(data))
+            
+        except (SocketSendError, SocketTimeoutError, InterfaceError) as e:
+            logging.error('Failed to send data to gateway: %s', str(e))
+            raise
 
     def discover(self):
         """ This method discovers the gateway ip address and port. ip address and port."""
@@ -61,21 +89,33 @@ class BoilerListenerSender(ListenerSender):
         self._com.unsubscribe(self._channel,self._msq)
         self._msq = None  # Clear the message queue reference
 
-    def bind(self):
-        """ This method binds the listener mimicking the gateway."""
-        logging.debug('BoilerListenerSender binding listener gw_port=%d delta=%d',self.gw_port, self.delta)
-        if platform.system() == 'Darwin':
-            # On macOS, we need to bind to the specific IP address
-            bind_port= self.gw_port- self.delta
-            logging.debug('binding listener to IP %s, port %d', self.src_ip, bind_port)
-            self.listen.bind((self.src_ip, bind_port))
-            logging.debug('listener bound to IP %s, port %d', self.src_ip, bind_port)
-        else:
-            # On Linux, we've already set SO_BINDTODEVICE, so we can bind to any address
-            logging.debug('binding listener to '', port %d', self.gw_port)
-            self.listen.bind(('', self.gw_port))
-            logging.debug('listener bound to port %d', self.gw_port)
-        self.bound = True  # Set this after successful binding
+    def bind(self) -> None:
+        """Bind the listener socket using platform-specific binding.
+        
+        The binding details are handled by the socket manager, which takes care of:
+        - Platform-specific binding (IP vs interface)
+        - Port delta calculations for same-machine scenarios
+        - Input validation
+        
+        Raises:
+            SocketBindError: If binding fails
+            InterfaceError: If interface configuration is invalid
+        """
+        try:
+            logging.debug('Binding listener (gw_port=%d, delta=%d)', self.gw_port, self.delta)
+            
+            # Let socket manager handle platform-specific binding
+            self.listen_manager.bind_with_delta(
+                port=self.gw_port,
+                delta=-self.delta  # Note: negative delta because we're subtracting
+            )
+            
+            self.bound = True
+            logging.debug('Listener bound successfully')
+            
+        except (SocketBindError, InterfaceError) as e:
+            logging.error('Failed to bind listener: %s', str(e))
+            raise
     def handle_data(self, data: bytes, addr: tuple):
         """handle udp data"""
         _str: str = ''
