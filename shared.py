@@ -5,10 +5,10 @@ from queue import Queue, Empty
 import socket
 import platform
 import logging
-from typing import Annotated
+from typing import Annotated, Union
 import annotated_types
 
-from pubsub.pubsub import PubSub,ChanelQueue
+from pubsub.pubsub import PubSub,  ChanelQueue, ChanelPriorityQueue
 
 #----------------------------------------------------------#
 BUFF_SIZE= 1024
@@ -80,7 +80,7 @@ class ChanelReceiver(NetworkData):
     """
     _channel= "bootstrap" # Channel to exchange bootstrap information about boiler and gateway, addr, port, etc
     _com: PubSub # every data receiver should have a PubSub communicator
-    _msq: ChanelQueue | None = None  # Message queue for receiving data
+    _msq: Union[ChanelQueue, ChanelPriorityQueue, None] = None # Message queue for receiving data
 
     def __init__(self, communicator: PubSub = None):
         super().__init__()

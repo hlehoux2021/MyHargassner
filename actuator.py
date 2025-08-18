@@ -4,12 +4,14 @@ This module defines MqttActuator, a class for controlling MQTT-enabled devices.
 
 
 from threading import Thread
-import typing
+
+from typing import Optional, Dict, List, Generic, TypeVar
+
 import logging
 
 from paho.mqtt.client import Client, MQTTMessage
-from ha_mqtt_discoverable import Settings, DeviceInfo
-from ha_mqtt_discoverable.sensors import Select, SelectInfo
+from ha_mqtt_discoverable import Settings, DeviceInfo  # type: ignore
+from ha_mqtt_discoverable.sensors import Select, SelectInfo  # type: ignore
 
 import hargconfig
 from shared import ChanelReceiver, BUFF_SIZE
@@ -25,25 +27,42 @@ class MqttBase():
     _device_info: DeviceInfo | None
 
     def __init__(self):
-        self.config= hargconfig.HargConfig()
-        #TODO remove password from code. note, this is an experimental dev jeedom without internet access
-        self.mqtt_settings= Settings.MQTT(host="192.168.100.8",
+        """
+        Initialize the MqttBase class.
+        Sets up the configuration and MQTT settings with default values.
+        Initializes device info as None.
+        """
+        self.config = hargconfig.HargConfig()
+        #TODO remove password from code.
+        self.mqtt_settings = Settings.MQTT(host="192.168.100.8",
                 username="jeedom",
                 password="eBg3UokK76KOWEDDUTWGEXUHxntZpV9XUDGQ8C5Xub0v4o4pE0fS2ofPxDa52A2i")
         self._device_info = None
 
-    def name(self):
+    def name(self) -> str:
+        """
+        Get the class name of the instance.
+
+        Returns:
+            str: The name of the class.
+        """
         return self.__class__.__name__
 
-    def _create_device_info(self, _name: str):
-        lstr= list()
+    def _create_device_info(self, _name: str) -> None:
+        """
+        Create device information for MQTT discovery.
+
+        Args:
+            _name (str): The name to use for the device.
+        """
+        lstr = list()
         lstr.append(_name)
         self._device_info = DeviceInfo(
-                            name= _name,
+                            name=_name,
                             manufacturer="Hargassner",
                             sw_version="1.0",
                             hw_version="1.0",
-                           identifiers=lstr)
+                            identifiers=lstr)
 
 
 class MqttActuator(ChanelReceiver, MqttBase):
@@ -52,16 +71,23 @@ class MqttActuator(ChanelReceiver, MqttBase):
     It extends MqttBase to provide functionality for sending commands to devices.
     """
 
-    _selects: dict[str, Select] = {}  # Store all Select instances
-    _main_client: Client | None = None  # Store the main MQTT client
-    _boiler_config: dict[str, list[str]] | None = None
-    _parameter_ids: dict[str, str] = {}  # Maps parameter names to their PR codes
-    _client: TelnetClient | None = None  # to request the boiler
+    _selects: Dict[str, Select] = {}
+    _main_client: Optional[Client] = None
+    _boiler_config: Optional[Dict[str, List[str]]] = None
+    _parameter_ids: Dict[str, str] = {}
+    _client: Optional[TelnetClient] = None
 
     def __init__(self, communicator: PubSub, device_info: DeviceInfo):
         """
-        Initializes the MqttActuator with device information.
-        device_info: DeviceInfo - Information about the device to control (passed by caller)
+        Initialize the MqttActuator with communication and device settings.
+
+        Args:
+            communicator (PubSub): The publish/subscribe communication system
+            device_info (DeviceInfo): Information about the device to control
+
+        Note:
+            This initializes both the ChanelReceiver and MqttBase parent classes,
+            sets up device information, and creates a telnet client connection.
         """
         logging.debug("MqttActuator instantiated")
         logging.debug("MqttActuator.__init__ called")
@@ -69,17 +95,17 @@ class MqttActuator(ChanelReceiver, MqttBase):
         MqttBase.__init__(self)  # Initialize MqttBase
 
         self._device_info = device_info
-        self._client = None
+        self._client = TelnetClient(b'localhost', 4000)
 
     def _parse_parameter_response(self, data: bytes) -> dict[str, list[str]]:
         """Parse parameter responses from the boiler (PR001, PR011, etc)
-        
+
         Args:
             data: Raw response from the boiler, can contain multiple parameters
                  separated by \r\n
 
         Returns:
-            dict[str, list[str]]: A dictionary with parameter names as keys and lists of non-zero values
+            dict[str, list[str]]: A dictionary with parameter names as keys and lists of values
             Example: {
                 'Mode': ['Manu', 'Arr', 'Ballon', 'Auto', 'Arr combustion'],
                 'Zone 1 Mode': ['Arr', 'Auto', 'Réduire', 'Confort', '1x Confort', 'Refroid.']
@@ -95,41 +121,40 @@ class MqttActuator(ChanelReceiver, MqttBase):
         try:
             # Split into individual responses - using latin1 for special characters like é
             responses = data.decode('latin1').split('\r\n')
-            
             # Process each response
             for response in responses:
                 # Skip empty responses or end marker
                 if not response or response == '$--':
                     continue
-                    
+
                 # Split the response into items
                 items = response.strip().split(';')
-                
+
                 # Validate format starts with $PR
                 if not items[0].startswith('$PR'):
                     logging.error('Invalid format: expected $PR..., got %s', items[0])
                     continue
-                
+
                 parameter_id = items[0][1:]  # Remove the $ prefix
                 logging.info('Parsing parameter %s', parameter_id)
-                
+
                 # Get number of items to search
                 try:
                     num_items = int(items[1])
                 except (ValueError, IndexError):
                     logging.error('Invalid number of items format for %s', parameter_id)
                     continue
-                
+
                 # Get the key (Mode or Zone 1 Mode in the examples)
                 try:
                     key = items[8]
                     # Store the mapping between parameter name and its PR code
                     self._parameter_ids[key] = parameter_id
-                    logging.debug(f"Mapped parameter '{key}' to {parameter_id}")
+                    logging.debug("Mapped parameter '%s' to %s", key, parameter_id)
                 except IndexError:
                     logging.error('No key found at position 8 for %s', parameter_id)
                     continue
-                
+
                 # Get the values (items after the key, excluding zeros and empty values)
                 values: list[str] = []
                 try:
@@ -141,13 +166,12 @@ class MqttActuator(ChanelReceiver, MqttBase):
                 except IndexError:
                     logging.error('Not enough items in the response for %s', parameter_id)
                     continue
-                
                 result[key] = values
                 logging.info('Successfully parsed %s parameter', parameter_id)
-            
+
         except Exception as e:
             logging.error('Error parsing parameter responses: %s', str(e))
-            
+
         return result
 
     def _display_parameters_config(self, config: dict[str, list[str]]) -> None:
@@ -163,24 +187,29 @@ class MqttActuator(ChanelReceiver, MqttBase):
         if not config:
             logging.info("No parameters configuration available")
             return
-        
         logging.info("Boiler Parameters Configuration:")
         logging.info("-" * 40)
-        
         for key, values in config.items():
             logging.info("Parameter: %s", key)
             logging.info("Available values:")
             for idx, value in enumerate(values, 1):
                 logging.info("  %d. %s", idx, value)
             logging.info("-" * 40)
-        
+
         logging.info("Total parameters found: %d", len(config))
 
-    def decode_boiler_config(self, msg: str):
-        """Decode the boiler configuration message.
+    def decode_boiler_config(self, msg: str) -> None:
+        """
+        Decode the boiler configuration message and store it in the instance.
 
         Args:
-            msg: String containing the boiler configuration, possibly prefixed with 'BoilerConfig:'
+            msg (str): Configuration message, possibly prefixed with 'BoilerConfig:'
+                      Expected format is a series of parameter definitions in the form:
+                      $PR001;6;1;4;1;0;0;0;Mode;Manu;Arr;Ballon;Auto;Arr combustion;
+
+        Note:
+            The decoded configuration is stored in self._boiler_config
+            and includes parameter names, valid values, and their mappings.
         """
         logging.debug("MqttActuator.decode_boiler_config called with msg: %s", msg)
 
@@ -197,8 +226,19 @@ class MqttActuator(ChanelReceiver, MqttBase):
             logging.warning("Failed to parse boiler configuration from message")
 
     # wait for the boiler configuration to be discovered
-    def discover(self):
-        """wait for the boiler configuration to be discovered"""
+    def discover(self) -> None:
+        """
+        Wait for and process the boiler configuration.
+
+        This method subscribes to the communication channel and waits until
+        the boiler configuration is received and processed. It uses the
+        decode_boiler_config method to parse incoming messages.
+
+        Note:
+            - Blocks until configuration is received or an error occurs
+            - Uses self._channel for communication
+            - Updates self._boiler_config when successful
+        """
         self._msq = self._com.subscribe(self._channel, self.name())
         logging.debug("MqttActuator.discover called, subscribed to channel %s", self._channel)
 
@@ -206,64 +246,102 @@ class MqttActuator(ChanelReceiver, MqttBase):
             logging.debug('Waiting for boiler configuration, calling handle with decode_boiler_config')
             try:
                 self.handle(self.decode_boiler_config)
-                logging.debug('Handle method completed. Boiler config status: %s', 
+                logging.debug('Handle method completed. Boiler config status: %s',
                             'received' if self._boiler_config else 'not received yet')
             except Exception as e:
                 logging.error('Error in discovery loop: %s', str(e))
                 break
-                
+
         logging.debug("MqttActuator.discover finished, unsubscribing from channel")
         self._com.unsubscribe(self._channel, self._msq)
         self._msq = None
 
-    # Callback for select state changes
-    def callback(self, client: Client, data: str, message: MQTTMessage):
+    def _get_client(self) -> TelnetClient:
+        """
+        Get the telnet client, raising an exception if it's not initialized.
+        
+        Returns:
+            TelnetClient: The initialized telnet client
+            
+        Raises:
+            RuntimeError: If the client is not initialized
+        """
+        if self._client is None:
+            raise RuntimeError("TelnetClient is not initialized")
+        return self._client
+
+    def callback(self, client: Client, data: str, message: MQTTMessage) -> None:
+        """
+        Handle MQTT select state change messages.
+
+        This callback processes state changes from Home Assistant and sends
+        corresponding commands to the boiler.
+
+        Args:
+            client (Client): The MQTT client that received the message
+            data (str): The parameter name that changed (user_data from Select entity)
+            message (MQTTMessage): The MQTT message containing the new state
+
+        Note:
+            The command sent to the boiler has the format:
+            $par set "PRxxx;6;index" where:
+            - PRxxx is the parameter ID
+            - 6 is a fixed value
+            - index is the 0-based position of the selected option
+        """
         logging.debug("MqttActuator.callback called with data: %s", data)
         try:
             payload = message.payload.decode()
             logging.debug("Received payload: %s", payload)
             if not self._boiler_config or data not in self._boiler_config:
-                logging.error(f"Received callback for unknown parameter: {data}")
+                logging.error("Received callback for unknown parameter: %s", data)
                 return
 
             valid_options = self._boiler_config[data]
             if payload not in valid_options:
-                logging.error(f"Invalid option '{payload}' for {data}. Valid options: {valid_options}")
+                logging.error("Invalid option '%s' for %s. Valid options: %s", payload, data, valid_options)
                 return
 
             # Find the position of the selected option in the list (0-based index is what we want)
             option_index = valid_options.index(payload)
-            
             # Get the parameter ID for this parameter name
             if data not in self._parameter_ids:
-                logging.error(f"No parameter ID found for {data}")
+                logging.error("No parameter ID found for %s", data)
                 return
-                
+
             # Construct the command in the format $par set "PRxxx;6;index"
             param_id = self._parameter_ids[data]
             command = f'$par set "{param_id};6;{option_index}"\r\n'
-            logging.info(f"Sending command: {command}")
-            
+            logging.info("Sending command: %s", command)
             # Send the command to the boiler
-            self._client.send(command.encode('latin1'))
-        
+            self._get_client().send(command.encode('latin1'))
             try:
-                _data = self._client.recv(BUFF_SIZE)
+                _data = self._get_client().recv(BUFF_SIZE)
             except Exception as e:
                 logging.error('Failed to receive data: %s', str(e))
                 return
             logging.debug('received response %d bytes ==>%s', len(_data), repr(_data))
 
         except Exception as e:
-            logging.error(f"Error processing {data} selection: {str(e)}")
+            logging.error("Error processing %s selection: %s", data, str(e))
 
-    def create_subscribers(self):
+    def create_subscribers(self) -> None:
         """
-        Creates MQTT subscribers for the actuator.
-        Creates one Select entity for each parameter in the boiler configuration.
+        Create MQTT subscribers for each boiler parameter.
+
+        This method creates Home Assistant MQTT Select entities for each parameter
+        in the boiler configuration. Each Select entity:
+        - Has a unique ID based on the parameter name
+        - Is associated with the device
+        - Uses the callback method to handle state changes
+        - Is registered for MQTT auto-discovery
+
+        Note:
+            - Requires self._boiler_config to be populated
+            - Stores Select instances in self._selects
+            - Sets self._main_client from the first created Select
         """
         logging.debug("MqttActuator.create_subscribers called")
-        
         if not self._boiler_config:
             logging.warning("No boiler configuration available. Cannot create subscribers.")
             return
@@ -296,20 +374,31 @@ class MqttActuator(ChanelReceiver, MqttBase):
         else:
             logging.error("No selects were created")
 
-    def service(self):
+    def service(self) -> None:
         """
-        Starts the MQTT actuator and keeps it running forever.
-        This method should be called to begin operation.
-        Uses MQTT client's loop_forever() which properly handles
-        reconnections and doesn't block the process.
+        Start and run the MQTT actuator service.
+
+        This method:
+        1. Discovers the boiler configuration
+        2. Establishes connection to the boiler
+        3. Creates MQTT subscribers for each parameter
+        4. Starts the MQTT client loop
+        5. Handles graceful shutdown on interruption
+
+        The service runs indefinitely until interrupted or an error occurs.
+        Uses MQTT client's loop_forever() which properly handles reconnections
+        and maintains the MQTT connection.
+
+        Raises:
+            RuntimeError: If MQTT client initialization fails
+            Exception: For other unexpected errors during operation
         """
 
         logging.debug("MqttActuator.service called")
         # Discover the boiler configuration
         self.discover()
         # connect to the boiler
-        self._client= TelnetClient('localhost', 4000)
-        self._client.connect()
+        self._get_client().connect()
 
         # Create all subscribers first
         self.create_subscribers()
@@ -330,7 +419,7 @@ class MqttActuator(ChanelReceiver, MqttBase):
             for select in self._selects.values():
                 select.mqtt_client.disconnect()
         except Exception as e:
-            logging.error(f"Error in MQTT loop: {str(e)}")
+            logging.error("Error in MQTT loop: %s", str(e))
             if self._main_client:
                 self._main_client.disconnect()
             # Disconnect all select clients
@@ -338,29 +427,32 @@ class MqttActuator(ChanelReceiver, MqttBase):
                 select.mqtt_client.disconnect()
             raise
 
-EntityType = typing.TypeVar("EntityType", bound= MqttActuator)
+T = TypeVar("T", bound=MqttActuator)
 
-
-
-class Threaded(typing.Generic[EntityType]):
+class Threaded(Generic[T]):
     """
     A generic class that runs an entity in a separate thread.
 
     Args:
-        entity (EntityType): The entity instance to be run in a thread. The entity must implement a `service()` method.
+        entity (T): The entity instance to be run in a thread. The entity must implement a `service()` method.
 
     Attributes:
-        _entity (EntityType): The entity being threaded.
+        _entity (T): The entity being threaded.
         _thread (Thread): The thread running the entity's service method.
     """
-    def __init__(self, entity: EntityType) -> None:
+    def __init__(self, entity: T) -> None:
         """
-        Initializes the Threaded class with the given entity and prepares the thread.
+        Initialize the Threaded wrapper with an entity to run in a thread.
 
         Args:
-            entity (EntityType): The entity instance to be threaded.
+            entity (T): The entity instance to be threaded.
+                        Must implement a service() method.
+
+        Note:
+            Creates a thread named "Thread-{EntityClassName}" but does not start it.
+            The thread will execute the entity's service method when started.
         """
-        logging.debug(f"Threaded<{type(entity).__name__}> instantiated")
+        logging.debug("Threaded<%s> instantiated", type(entity).__name__)
         logging.debug("Threaded.__init__ called")
         self._entity = entity
         thread_name = f"Thread-{type(entity).__name__}"
@@ -368,7 +460,15 @@ class Threaded(typing.Generic[EntityType]):
 
     def start(self) -> None:
         """
-        Starts the thread, running the entity's service method in a separate thread.
+        Start the entity's service in a separate thread.
+
+        This method starts the thread created in __init__, which runs
+        the entity's service method. The thread runs independently of
+        the calling thread.
+
+        Note:
+            This is a non-blocking call. The thread continues to run
+            after this method returns.
         """
         logging.debug("Threaded.start called")
         self._thread.start()
@@ -387,12 +487,17 @@ class ThreadedMqttActuator(Threaded[MqttActuator]):
         >>> threaded_actuator = ThreadedMqttActuator(device_info)
         >>> threaded_actuator.start()
     """
-    def __init__(self, communicator: PubSub, device_info: DeviceInfo):
+    def __init__(self, communicator: PubSub, device_info: DeviceInfo) -> None:
         """
-        Initializes the ThreadedMqttActuator with the given device information.
+        Initialize a threaded MQTT actuator for the device.
 
         Args:
-            device_info (DeviceInfo): The device information for the actuator.
+            communicator (PubSub): The publish/subscribe communication system
+            device_info (DeviceInfo): Information about the device to control
+
+        This class combines the MqttActuator with the Threaded wrapper to allow
+        the actuator to run in its own thread. The actuator is created but not
+        started - use the start() method to begin operation.
         """
         logging.debug("ThreadedMqttActuator instantiated")
         logging.debug("ThreadedMqttActuator.__init__ called")
