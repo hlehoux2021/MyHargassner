@@ -193,3 +193,22 @@ The `hargconfig.py` file contains extensive mapping of boiler parameters includi
 - Error codes
 
 You can customize which parameters to monitor by modifying the `wanted` list in `HargConfig` class.
+
+PR001;6;2;4;1;0;0;0;Mode;Manu;Arr;Ballon;Auto;Arr combustion;0;\n
+PR003;6;3;3;3;0;0;0;Progr. HKM1;Manu;Arr;Ballon;Auto;0;\n
+PR004;6;3;3;3;0;0;0;Progr. HKM2;Manu;Arr;Ballon;Auto;0;\n
+PR010;6;1;5;1;0;0;0;Zone A Mode;Arr;Auto;R\xe9duire;Confort;1x Confort;Refroid.;0;\n>>\r\n$<<
+PR011;6;0;5;1;0;0;0;Zone 1 Mode;Arr;Auto;R\xe9duire;Confort;1x Confort;Refroid.;0;\n
+PR012;6;1;5;1;0;0;0;Zone 2 Mode;Arr;Auto;R\xe9duire;Confort;1x Confort;Refroid.;0;\n
+PR013;6;1;5;1;0;0;0;Zone 3 Mode;Arr;Auto;R\xe9duire;Confort;1x Confort;Refroid.;0;\n
+PR014;6;1;5;1;0;0;0;Zone 4 Mode;Arr;Auto;R\xe9duire;Confort;1x Confort;Refroid.;0;\n
+PR015;6;1;5;1;0;0;0;Zone 5 Mode;Arr;Auto;R\xe9duire;Confort;1x Confort;Refroid.;0;\n
+PR016;6;1;5;1;0;0;0;Zone 6 Mode;Arr;Auto;R\xe9duire;Confort;1x Confort;Refroid.;0;\n
+PR017;6;1;5;1;0;0;0;Zone B Mode;Arr;Auto;R\xe9duire;Confort;1x Confort;Refroid.;0;\n
+PR030;6;0;6;0;0;0;0;Choix progr. hebdo KNX;0;1;2;3;4;5;6;0;\n
+PR040;6;0;1;0;0;0;0;Tampon D\xe9marrer chrgt;Non;Oui;0;\n
+PR041;6;0;1;0;0;0;0;Ballon A D\xe9marrer chrgt;Non;Oui;0;\n
+PR042;6;0;1;0;0;0;0;Ballon 1 D\xe9marrer chrgt;Non;Oui;0;\n
+PR043;6;0;1;0;0;0;0;Ballon 2 D\xe9marrer chrgt;Non;Oui;0;\n
+PR044;6;0;1;0;0;0;0;Ballon 3 D\xe9marrer chrgt;Non;Oui;0;\n
+PR045;6;0;1;0;0;0;0;Ballon B D\xe9marrer chrgt;Non;Oui;0;\n

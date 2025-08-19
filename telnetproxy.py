@@ -280,27 +280,28 @@ class TelnetProxy(ChanelReceiver, MqttBase):
         Returns:
             dict[str, list[str]]: A dictionary with the parameter name as key and a list of non-zero values
         """
+        message: str = 'BoilerConfig:'
+        commands= [
+            b'$par get PR001\r\n',
+            b'$par get PR011\r\n',
+            b'$par get PR012\r\n'
+        ]
         if not self._client._connected:
             logging.error('Client not connected')
             return {}
         logging.debug('telnet getting boiler config from %s', repr(self.bl_addr))
-        # ask for changed parameters
-        #todo use a more accurate last time stamp
-        #self._client.send(b'$par get changed \"2023-01-01 18:21:37\"\r\n')
-        self._client.send(b'$par get all\r\n')
-        try:
-            _data = self._client.recv(BUFF_SIZE)
-        except Exception as e:
-            logging.error('Failed to receive data: %s', str(e))
-            return {}
-        if not _data:
-            logging.error('No data received')
-            return {}
-        logging.debug('telnet received boiler config %d bytes ==>%s', len(_data), repr(_data))
-        # we publish the boiler configuration (intended for the MqttActuator to use it)
-        message = f"BoilerConfig:{_data.decode('latin1')}"
+
+        for cmd in commands:
+            try:
+                self._client.send(cmd)
+                resp = self._client.recv(BUFF_SIZE)
+                if resp:
+                    message += resp.decode('latin1')  # Use latin-1 to avoid UnicodeDecodeError
+            except Exception as e:
+                logging.error('Failed to send/recv command %s: %s', cmd, str(e))
+                continue
         self._com.publish(self._channel, message)
-        logging.debug('BoilerConfig published on channel %s', self._channel)
+        logging.debug('Published combined message for commands %s', message)
 
     def loop(self):
         """loop waiting requests and replies"""

@@ -270,9 +270,11 @@ class Analyser():
 #            logging.debug('analyse_pm %d :%s',i,_part)
             if ((i in self._values) and (_part != self._values[i])) or (i not in self._values):
                 if i in self._values:
-                    logging.debug('analyse_pm changed %d :%s was %s', i, _part, self._values[i])
+                    #logging.debug('analyse_pm changed %d :%s was %s', i, _part, self._values[i])
+                    pass
                 else:
-                    logging.debug('analyse_pm     new %d :%s', i, _part)
+                    #logging.debug('analyse_pm     new %d :%s', i, _part)
+                    pass 
                 self._values[i]= _part
                 if i in self.config.map:
                     logging.info('pm %s --> %s', self.config.map[i],_part)
