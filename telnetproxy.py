@@ -462,6 +462,7 @@ class TelnetProxy(ChanelReceiver, MqttBase):
                         # also this doesn't work if the pm buffer is split in several chunks
                         # would need a more robust logic here
                         _sent = 0
+                        logging.debug('telnet sending response to caller %d', _caller)
                         if _caller==1:
                             _sent= self._service1.send(_data)
                         elif _caller==2:
