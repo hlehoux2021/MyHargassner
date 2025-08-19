@@ -95,7 +95,7 @@ class MqttActuator(ChanelReceiver, MqttBase):
         MqttBase.__init__(self)  # Initialize MqttBase
         self.src_iface = src_iface
         self._device_info = device_info
-        self._client = TelnetClient(b'localhost', b'', 4000)
+        self._client = TelnetClient(self.src_iface, b'', 4000)
 
     def _parse_parameter_response(self, data: bytes) -> dict[str, list[str]]:
         """Parse parameter responses from the boiler (PR001, PR011, etc)
