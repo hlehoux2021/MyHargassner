@@ -21,7 +21,7 @@ from socket_manager import SocketManager
 
 # $login token
 #   $00A000A0
-# $login key
+# $login key xxxxx
 #   zclient login (x)
 #   $ack
 # $apiversion

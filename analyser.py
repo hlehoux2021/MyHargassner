@@ -58,7 +58,7 @@ class Analyser():
 
         _str_parts = data.decode('ascii').split('\r\n')
         for _part in _str_parts:
-            logging.debug('_part=%s',_part)
+            #logging.debug('_part=%s',_part)
             if _part.startswith('$login token'):
                 logging.debug('$login token detected')
                 _state = '$login token'
@@ -121,9 +121,10 @@ class Analyser():
                 logging.debug('$erract detected')
                 _state = '$erract'
             elif _part == '':
-                logging.debug('empty _part')
+                #logging.debug('empty _part')
+                pass
             else:
-                logging.debug('else unknown state')
+                logging.error('Analyser.parse_requestunknown part %s --> unknown state',_part)
                 _state = 'unknown'
         logging.debug('_state/_part: %s/%s', _state, _part)
         return _state
@@ -135,7 +136,7 @@ class Analyser():
         _subpart: str = None
         _str_parts: list[str] = None
 
-        logging.debug('_parse_response input _state=%s _part=%s',_state, _part)
+        logging.debug('Analyser.parse_response_buffer _state=%s _part=%s',_state, _part)
         _str_parts= repr(buffer)[2:-1].split('\\r\\n')
         for _part in _str_parts:
             logging.debug('part:%s', _part)
@@ -148,6 +149,7 @@ class Analyser():
                 # b'zclient login (0)\r\n$ack\r\n'
                 if "zclient login" in _part:
                     logging.debug('zclient login detected')
+                    logging.info('login done, should get_boiler_config')
                 if _part.startswith('$ack'):
                     logging.debug('$login key $ack detected')
                     _state = ''
@@ -302,7 +304,7 @@ class Analyser():
                 if (self._pmstamp == 0) or ((_time - self._pmstamp) > self.config.scan):
                     self._pm = _data
                     self._pmstamp = _time
-                    logging.debug('pm detected (%d bytes)',len(self._pm))
+                    logging.debug('pm full buffer detected (%d bytes)',len(self._pm))
                     self.analyse_pm(self._pm)
                 _mode = ''
             else:
