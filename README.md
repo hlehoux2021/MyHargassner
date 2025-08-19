@@ -18,21 +18,16 @@ HARG is a Python-based gateway project designed to interface with Hargassner pel
 
 1. **Install DHCP Server**
    ```bash
-   sudo apt-get install dhcpcd
    sudo apt-get install dnsmasq
    ```
 
 2. **Configure Static IP for eth1**
-   Edit `/etc/dhcpcd.conf`:
-   ```bash
-   sudo nano /etc/dhcpcd.conf
+   Using Network Manager
    ```
-   Add the following:
-   ```
-   interface eth1
-   static ip_address=10.0.0.1
-   static routers=10.0.0.1
-   nogateway
+   sudo nmcli con add type ethernet ifname eth1 con-name eth1-static ipv4.method manual ipv4.addresses 10.0.0.1/24 ipv4.gateway ""
+   sudo nmcli con mod eth1-static ipv4.dns ""
+   sudo nmcli con up eth1-static
+
    ```
 
 3. **Configure DHCP Server**
@@ -105,11 +100,17 @@ Note: The secondary interface (eth1) will only be active when the Ethernet cable
 
 To install the required packages:
 ```bash
-pip install paho-mqtt ha-mqtt-discoverable pydantic annotated_types
+pip install paho-mqtt ha-mqtt-discoverable pydantic annotated_types psutil
 ```
 
 ### Installation
-1. Clone the repository
+1. Clone the repositories
+   ```
+   git clone https://github.com/hlehoux2021/harg.git
+   cd harg
+   https://github.com/hlehoux2021/pubsub.git
+   ```
+
 2. Configure the network interfaces in `main.py`:
    ```python
    GW_IFACE = b'eth0'  # network interface connected to the gateway

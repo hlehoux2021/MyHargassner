@@ -28,7 +28,7 @@ class TelnetClient:
     """
     _connected: bool = False
 
-    def __init__(self, addr: bytes, port: int = 0):
+    def __init__(self, addr: bytes, dst_iface: bytes, port: int = 0):
         """
         Initialize a new TelnetClient instance.
 
@@ -46,10 +46,12 @@ class TelnetClient:
         else:
             # we assume on Darwin for testing that the port of BoilerSimulator is 24 
             if platform.system() == 'Darwin':
-                self._port = 24  # port of boiler simulator 
-            elif platform.system() == 'Linux' and SocketManager.is_valid_ip(addr.decode('utf-8')):
+                self._port = 24  # port of boiler simulator
+            elif platform.system() == 'Linux' and SocketManager.are_same_machines(addr, dst_iface):
+                #on linux if the discover ip of boiler is the same as the dst_iface then we simulate the boiler to port 24
                 self._port = 24  # port of boiler simulator
             else:
+                # we assume a connection to a real boiler  
                 self._port = 23  # default telnet port
 
     def connect(self) -> None:

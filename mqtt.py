@@ -151,7 +151,7 @@ class MqttInformer(MqttBase):
                 try:
                     _message = next(iterator)
                 except StopIteration:
-                    logging.error('StopIteration: No message received, continuing...')
+                    logging.debug('StopIteration: No message received, continuing...')
                     continue
                 if not _message:
                     logging.debug('MqttInfomer no message received')

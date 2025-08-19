@@ -86,7 +86,7 @@ class BoilerListenerSender(ListenerSender):
             self.handle()
         logging.info('BoilerListenerSender received gateway information %s:%d', self.gw_addr, self.gw_port)
         #unsubscribe from the channel to avoid receiving further messages
-        logging.info('BoilerListenerSender unsubscribe from channel %s', self._channel)
+        logging.debug('BoilerListenerSender unsubscribe from channel %s', self._channel)
         self._com.unsubscribe(self._channel,self._msq)
         self._msq = None  # Clear the message queue reference
 
@@ -114,7 +114,7 @@ class BoilerListenerSender(ListenerSender):
             )
             
             self.bound = True
-            logging.debug('Listener bound successfully')
+            logging.info('BoilerListener bound successfully (gw_port=%d, delta=%d)', self.gw_port, self.delta)
             
         except (SocketBindError, InterfaceError) as e:
             logging.error('Failed to bind listener: %s', str(e))

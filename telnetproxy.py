@@ -269,8 +269,8 @@ class TelnetProxy(ChanelReceiver, MqttBase):
         self._analyser.push('BL_PORT',str(self.bl_port))
     def connect(self):
         """connect to the boiler"""
-        logging.debug('telnet connecting to %s ', repr(self.bl_addr))
-        self._client= TelnetClient(self.bl_addr)
+        logging.debug('TelnetProxy connecting to boiler bl_addr=%s  dst_iface=%s', repr(self.bl_addr), repr(self.dst_iface))
+        self._client= TelnetClient(self.bl_addr, self.dst_iface)
         self._client.connect()
 
 
