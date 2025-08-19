@@ -461,6 +461,7 @@ class TelnetProxy(ChanelReceiver, MqttBase):
                         # before receiving a new request from the other caller
                         # also this doesn't work if the pm buffer is split in several chunks
                         # would need a more robust logic here
+                        _sent = 0
                         if _caller==1 or _data.startswith(b'pm'):
                             _sent= self._service1.send(_data)
                         elif _caller==2:
@@ -508,7 +509,9 @@ class TelnetProxy(ChanelReceiver, MqttBase):
         logging.info("Restarting client connection...")
         try:
             self.connect()
-            self.get_boiler_config()
+            # we cannot get_boiler_config until gateway and boiler have exchanged login token and login key
+            # because we would receive b'$permission denied\r\n' from the boiler
+            #self.get_boiler_config()
             return True
         except Exception as err:
             logging.error("Failed to restart client: %s", str(err))
