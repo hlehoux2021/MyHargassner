@@ -11,6 +11,7 @@ import time
 from typing import Tuple
 
 from shared import BUFF_SIZE
+from socket_manager import SocketManager
 
 class TelnetClient:
     """
@@ -45,7 +46,9 @@ class TelnetClient:
         else:
             # we assume on Darwin for testing that the port of BoilerSimulator is 24 
             if platform.system() == 'Darwin':
-                self._port = 24  # default telnet port
+                self._port = 24  # port of boiler simulator 
+            elif platform.system() == 'Linux' and SocketManager.is_valid_ip(addr.decode('utf-8')):
+                self._port = 24  # port of boiler simulator
             else:
                 self._port = 23  # default telnet port
 
