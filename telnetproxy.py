@@ -17,6 +17,7 @@ from telnethelper import TelnetClient
 from shared import ChanelReceiver,BUFF_SIZE
 from analyser import Analyser
 from actuator import ThreadedMqttActuator, MqttBase
+from socket_manager import SocketManager
 
 # $login token
 #   $00A000A0
@@ -151,7 +152,7 @@ class TelnetService:
 
     def __init__(self, src_iface: bytes):
         self._listen = s.socket(s.AF_INET, s.SOCK_STREAM)
-        if platform.system() == 'Linux':
+        if platform.system() == 'Linux' and not SocketManager.is_valid_ip(src_iface.decode('utf-8')):
             self._listen.setsockopt(s.SOL_SOCKET, s.SO_BINDTODEVICE, src_iface)
         self._listen.setsockopt(s.SOL_SOCKET, s.SO_REUSEPORT, 1)
         self._listen.setsockopt(s.SOL_SOCKET, s.SO_REUSEADDR, 1)
