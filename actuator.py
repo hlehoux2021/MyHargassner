@@ -487,7 +487,7 @@ class ThreadedMqttActuator(Threaded[MqttActuator]):
         >>> threaded_actuator = ThreadedMqttActuator(device_info)
         >>> threaded_actuator.start()
     """
-    def __init__(self, communicator: PubSub, device_info: DeviceInfo) -> None:
+    def __init__(self, communicator: PubSub, device_info: DeviceInfo, src_iface: bytes) -> None:
         """
         Initialize a threaded MQTT actuator for the device.
 
@@ -501,5 +501,5 @@ class ThreadedMqttActuator(Threaded[MqttActuator]):
         """
         logging.debug("ThreadedMqttActuator instantiated")
         logging.debug("ThreadedMqttActuator.__init__ called")
-        entity = MqttActuator(communicator, device_info)
+        entity = MqttActuator(communicator, device_info, src_iface)
         super().__init__(entity)
