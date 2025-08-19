@@ -113,7 +113,7 @@ class ChanelReceiver(NetworkData, ABC):
                 return
             msg = _message['data']
             if isinstance(msg, bytes):
-                msg = msg.decode('utf-8')
+                msg = msg.decode('latin-1')  # Use latin-1 to avoid UnicodeDecodeError
             logging.debug('handle: decoded message: %s', msg)
             # Use the provided message handler if available, otherwise use decode_message
             handler = message_handler if message_handler is not None else self.decode_message
