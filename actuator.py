@@ -131,7 +131,7 @@ class MqttActuator(ChanelReceiver, MqttBase):
 
                 # Validate format starts with $PR
                 if not items[0].startswith('$PR'):
-                    logging.error('Invalid format: expected $PR..., got %s', items[0])
+                    logging.warning('Unexpected format: expected $PR..., got %s', items[0])
                     continue
 
                 parameter_id = items[0][1:]  # Remove the $ prefix
