@@ -75,8 +75,9 @@ class MqttActuator(ChanelReceiver, MqttBase):
     _boiler_config: Optional[Dict[str, List[str]]] = None
     _parameter_ids: Dict[str, str] = {}
     _client: Optional[TelnetClient] = None
+    src_iface: bytes
 
-    def __init__(self, communicator: PubSub, device_info: DeviceInfo):
+    def __init__(self, communicator: PubSub, device_info: DeviceInfo, src_iface: bytes) -> None:
         """
         Initialize the MqttActuator with communication and device settings.
 
@@ -92,7 +93,7 @@ class MqttActuator(ChanelReceiver, MqttBase):
         logging.debug("MqttActuator.__init__ called")
         ChanelReceiver.__init__(self, communicator)  # Initialize ChanelReceiver
         MqttBase.__init__(self)  # Initialize MqttBase
-
+        self.src_iface = src_iface
         self._device_info = device_info
         self._client = TelnetClient(b'localhost', b'', 4000)
 

@@ -4,11 +4,14 @@ This module provides a robust interface for establishing and managing telnet con
 with proper error handling and connection management.
 """
 
-import socket as s
+import socket
 import logging
 import platform
 import time
+import re
 from typing import Tuple
+
+import psutil
 
 from shared import BUFF_SIZE
 from socket_manager import SocketManager
@@ -39,7 +42,7 @@ class TelnetClient:
         logging.debug("TelnetClient.__init__ called with addr: %s, port: %d", repr(addr), port)
         self._addr = addr
         self._connected = False
-        self._sock: s.socket | None = None
+        self._sock: socket.socket | None = None
 
         if port:
             self._port = port
@@ -54,6 +57,21 @@ class TelnetClient:
                 # we assume a connection to a real boiler  
                 self._port = 23  # default telnet port
 
+    def _get_ip_from_iface(self, iface_bytes: bytes) -> str:
+        """
+        Convert a network interface name (e.g., b'eth0' or b'en0') to its IPv4 address using psutil.
+        Returns the IP as a string, or raises RuntimeError if not found.
+        Works on Linux and macOS.
+        """
+        iface = iface_bytes.decode('utf-8') if isinstance(iface_bytes, bytes) else str(iface_bytes)
+        addrs = psutil.net_if_addrs()
+        if iface not in addrs:
+            raise RuntimeError(f"Interface {iface} not found.")
+        for addr in addrs[iface]:
+            if addr.family == socket.AF_INET:
+                return addr.address
+        raise RuntimeError(f"No IPv4 address found for interface {iface}.")
+
     def connect(self) -> None:
         """
         Connect to the boiler using the address specified during initialization.
@@ -63,21 +81,33 @@ class TelnetClient:
             socket.error: If connection fails. The method will retry after a delay.
         """
         logging.debug("TelnetClient.connect called")
-        logging.debug('TelnetClient connecting to %s on port %d', repr(self._addr), self._port)
-        if not self._addr:
+        addr = self._addr
+        # If addr looks like an interface name (not an IP), convert it
+        try:
+            # Accept both bytes and str, check if it's not an IP
+            addr_str = addr.decode('utf-8') if isinstance(addr, bytes) else str(addr)
+
+            if not re.match(r"^\d+\.\d+\.\d+\.\d+$", addr_str):
+                addr_str = self._get_ip_from_iface(addr)
+        except Exception as e:
+            logging.error(f"Failed to resolve interface to IP: {e}")
+            raise RuntimeError("Invalid address/interface:") from e
+
+        logging.debug('TelnetClient connecting to %s on port %d', repr(addr_str), self._port)
+        if not addr_str:
             raise RuntimeError("No address specified")
-            
-        logging.info('TelnetClient connecting to %s on port %d', repr(self._addr), self._port)
+
+        logging.info('TelnetClient connecting to %s on port %d', repr(addr_str), self._port)
         while not self._connected:
             try:
                 # we will now create the socket
-                self._sock = s.socket(s.AF_INET, s.SOCK_STREAM)
-                self._sock.setsockopt(s.SOL_SOCKET, s.SO_REUSEPORT, 1)
-                self._sock.setsockopt(s.SOL_SOCKET, s.SO_REUSEADDR, 1)
-                self._sock.connect((self._addr, self._port))
+                self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+                self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                self._sock.connect((addr_str, self._port))
                 self._connected = True
-                logging.info('telnet connected to %s on port %d', repr(self._addr), self._port)
-            except s.error as e:
+                logging.info('telnet connected to %s on port %d', repr(addr_str), self._port)
+            except socket.error as e:
                 logging.error('telnet connection error: %s', e)
                 if self._sock:
                     self._sock.close()
@@ -92,7 +122,7 @@ class TelnetClient:
             try:
                 logging.info('telnet closing connection')
                 self._sock.close()
-            except s.error as e:
+            except socket.error as e:
                 logging.error('Error closing connection: %s', e)
             finally:
                 self._sock = None
@@ -115,12 +145,12 @@ class TelnetClient:
             raise RuntimeError("Not connected")
         try:
             self._sock.send(data)
-        except s.error as e:
+        except socket.error as e:
             logging.error('Error sending data: %s', e)
             self.close()
             raise
 
-    def socket(self) -> s.socket | None:
+    def socket(self) -> socket.socket | None:
         """
         Get the underlying socket object.
 
@@ -147,7 +177,7 @@ class TelnetClient:
             raise RuntimeError("Not connected")
         try:
             return self._sock.recv(size)
-        except s.error as e:
+        except socket.error as e:
             logging.error('Error receiving data: %s', e)
             self.close()
             raise
@@ -167,7 +197,7 @@ class TelnetClient:
             raise RuntimeError("Not connected")
         try:
             return self._sock.recvfrom(BUFF_SIZE)
-        except s.error as e:
+        except socket.error as e:
             logging.error('Error receiving data: %s', e)
             self.close()
             raise
