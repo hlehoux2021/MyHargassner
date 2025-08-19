@@ -462,10 +462,15 @@ class TelnetProxy(ChanelReceiver, MqttBase):
                         # also this doesn't work if the pm buffer is split in several chunks
                         # would need a more robust logic here
                         _sent = 0
-                        if _caller==1 or _data.startswith(b'pm'):
+                        if _caller==1:
                             _sent= self._service1.send(_data)
                         elif _caller==2:
                             _sent= self._service2.send(_data)
+                        elif _data.startswith(b'pm'):
+                            if self._service1 is not None:
+                                _sent = self._service1.send(_data)
+                            else:
+                                logging.warning('Received a pm response but no service1 socket registered yet')
                         else:
                             logging.warning('Beware received a response with not registered caller %d', _caller)
                         if _sent != len(_data):
