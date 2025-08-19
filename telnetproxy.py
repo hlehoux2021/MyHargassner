@@ -468,7 +468,7 @@ class TelnetProxy(ChanelReceiver, MqttBase):
                         elif _caller==2:
                             _sent= self._service2.send(_data)
                         elif _data.startswith(b'pm'):
-                            if self._service1 is not None:
+                            if self._service1.socket() is not None:
                                 logging.debug('telnet sending pm response to service1')
                                 _sent = self._service1.send(_data)
                             else:
