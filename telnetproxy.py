@@ -283,22 +283,18 @@ class TelnetProxy(ChanelReceiver, MqttBase):
         if not self._client._connected:
             logging.error('Client not connected')
             return {}
-            
         logging.debug('telnet getting boiler config from %s', repr(self.bl_addr))
         # ask for changed parameters
         #todo use a more accurate last time stamp
-        self._client.send(b'$par get changed \"2023-11-12 18:21:37\"\r\n')
-        
+        self._client.send(b'$par get changed \"2025-08-12 18:21:37\"\r\n')
         try:
             _data = self._client.recv(BUFF_SIZE)
         except Exception as e:
             logging.error('Failed to receive data: %s', str(e))
             return {}
-            
         if not _data:
             logging.error('No data received')
             return {}
-            
         logging.debug('telnet received boiler config %d bytes ==>%s', len(_data), repr(_data))
         # we publish the boiler configuration (intended for the MqttActuator to use it)
         message = f"BoilerConfig:{_data.decode('latin1')}"
@@ -317,24 +313,22 @@ class TelnetProxy(ChanelReceiver, MqttBase):
         _buffer: bytes = b'' # buffer to store the data received until we have a complete response
         _mode: str = ''
         _caller: int = 0 # to recall which caller we have to reply to (service1 or service 2)
-        
+
         # Initialize active sockets if not already done
         service1_socket = self._service1.socket()
         if service1_socket is not None:
             self._active_sockets.add(service1_socket)
             logging.debug('Added service1 socket to active set')
-            
         service2_socket = self._service2.socket()
         if service2_socket is not None:
             self._active_sockets.add(service2_socket)
             logging.debug('Added service2 socket to active set')
-            
         if self._client is not None:
             client_socket = self._client.socket()
             if client_socket is not None:
                 self._active_sockets.add(client_socket)
                 logging.debug('Added client socket to active set')
-            
+
         logging.debug('Active sockets: %d', len(self._active_sockets))
 
         while self._active_sockets:  # Continue as long as we have active sockets
@@ -364,7 +358,6 @@ class TelnetProxy(ChanelReceiver, MqttBase):
                                 except Exception as close_err:
                                     logging.error("Error closing service1 socket: %s", str(close_err))
                             raise s.error("service1: Client disconnected")
-                            
                         logging.debug('service1 received request %d bytes ==>%s', len(_data), repr(_data))
                         _caller = 1
                         # ask the Analyser() to analyse the IGW request
@@ -395,14 +388,12 @@ class TelnetProxy(ChanelReceiver, MqttBase):
                                 pass
                         # Raise with service identification
                         raise s.error(f"service1: {str(err)}")
-                        
                 if _sock == self._service2.socket():
                     try:
                         _data = self._service2.recv()
                         if not _data:
                             logging.warning('service2 received empty request')
                             continue
-                            
                         logging.debug('service2 received request %d bytes ==>%s', len(_data), repr(_data))
                         _caller = 2
                         # we should resend it
@@ -482,8 +473,12 @@ class TelnetProxy(ChanelReceiver, MqttBase):
                         logging.critical("Exception: %s", type(err))
                         raise
                     # ask Analyser() to analyse the pellet boiler response
-                    _buffer, _mode, _state = self._analyser.analyse_data_buffer(_data,
+                    _login_done: bool = False
+                    _buffer, _mode, _state, _login_done = self._analyser.analyse_data_buffer(_data,
                                _buffer, _mode, _state)
+                    if _login_done:
+                        logging.info('login done, should get_boiler_config')
+                        self.get_boiler_config()
 
     def restart_service1(self):
         """Restart service1 after failure"""
@@ -527,11 +522,9 @@ class TelnetProxy(ChanelReceiver, MqttBase):
     def service(self):
         """Main service loop that handles reconnections"""
         logging.debug('TelnetProxy::service')
-        
         # Initial setup
         if not self.restart_client():
             raise RuntimeError("Failed initial client connection")
-            
         while True:
             try:
                 logging.debug('TelnetProxy::service starting loop')
@@ -583,19 +576,15 @@ class ThreadedTelnetProxy(Thread):
         self.tp.bind2()
         self.tp.listen1()
         self.tp.listen2()
-        
         # Create separate threads for accepting connections
         _accept1_thread = Thread(target=self.tp.accept1, name='AcceptService1')
         _accept2_thread = Thread(target=self.tp.accept2, name='AcceptService2')
-        
         # Start both accept threads
         _accept1_thread.start()
         _accept2_thread.start()
-        
         # Service thread will handle the communication
         _ts = Thread(target=self.tp.service, name='TelnetProxyService')
         _ts.start()
-        
         # Wait for all threads
         _accept1_thread.join()
         _accept2_thread.join()

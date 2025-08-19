@@ -3,10 +3,9 @@
 """
 import logging
 import time
-#from queue import Queue
-from pubsub.pubsub import PubSub
-
 from typing import Tuple
+
+from pubsub.pubsub import PubSub
 
 import hargconfig
 
@@ -18,7 +17,7 @@ class Analyser():
     _channel= "info" # Channel to publish discoverd info about the boiler (from the dialog between gateway and boiler)
     _com: PubSub # every data receiver should have a PubSub communicator
 
-    _pmstamp: int = 0
+    _pmstamp: float = 0.0
     _values: dict # telnet pm values
     _pm: bytes = b''
 
@@ -51,10 +50,10 @@ class Analyser():
         """parse the telnet request
         set _state to the state of the request/response dialog
         extract _subpart from the request"""
-        _state: str = None
-        _part: str = None
-        _subpart: str = None
-        _str_parts: list[str] = None
+        _state: str = ''
+        _part: str = ''
+        _subpart: str = ''
+        _str_parts: list[str] = []
 
         _str_parts = data.decode('ascii').split('\r\n')
         for _part in _str_parts:
@@ -129,12 +128,13 @@ class Analyser():
         logging.debug('_state/_part: %s/%s', _state, _part)
         return _state
 
-    def _parse_response_buffer(self, state: str, buffer: bytes) -> str:
+    def _parse_response_buffer(self, state: str, buffer: bytes) -> Tuple[str, bool]:
         """parse the response buffer sent by boiler"""
         _state: str = state
-        _part: str = None
-        _subpart: str = None
-        _str_parts: list[str] = None
+        _part: str = ''
+        _subpart: str = ''
+        _str_parts: list[str] = []
+        _login_done: bool = False
 
         logging.debug('Analyser.parse_response_buffer _state=%s _part=%s',_state, _part)
         _str_parts= repr(buffer)[2:-1].split('\\r\\n')
@@ -150,6 +150,7 @@ class Analyser():
                 if "zclient login" in _part:
                     logging.debug('zclient login detected')
                     logging.info('login done, should get_boiler_config')
+                    _login_done = True
                 if _part.startswith('$ack'):
                     logging.debug('$login key $ack detected')
                     _state = ''
@@ -254,15 +255,15 @@ class Analyser():
             else:
                 logging.debug('unknown state:%s', _state)
                 _state = ''
-        return _state
+        return _state, _login_done
 
     def analyse_pm(self, pm: bytes):
         """
         analyse the pm buffer regularly sent by the boiler and publish what's found
         """
-        _part: str = None
+        _part: str = ''
         i: int = -1
-        _str_parts: list[str] = None
+        _str_parts: list[str] = []
         logging.debug('analyse_pm %d bytes ==>%s',len(pm), repr(pm))
         _str_parts = pm.decode('ascii').split(' ')
         for _part in _str_parts:
@@ -280,7 +281,7 @@ class Analyser():
 
     def analyse_data_buffer(self, _data: bytes,
                                buffer: bytes,
-                               mode: str, state: str) -> Tuple[bytes, str, str]:
+                               mode: str, state: str) -> Tuple[bytes, str, str, bool]:
         """analyse the data buffer sent by the boiler
         it can be a buffer response for a request of the IGW
             values split by \\r\\n
@@ -293,6 +294,7 @@ class Analyser():
         _mode: str = mode
         _state: str = state
         _buffer: bytes = buffer
+        _login_done: bool = False
 
         if self.is_pm_response(_data):
             logging.debug('pm response detected')
@@ -309,7 +311,7 @@ class Analyser():
                 _mode = ''
             else:
                 self._pm = self._pm + _data
-            return _buffer, _mode, _state
+            return _buffer, _mode, _state, False
 
         #here _mode is not 'pm'
         logging.debug('normal response detected')
@@ -327,7 +329,7 @@ class Analyser():
             if self.is_daq_desc(_buffer):
                 logging.info('dac desq detected (%d bytes), skipped',len(_buffer))
             else:
-                _state = self._parse_response_buffer(_state, _buffer)
+                _state, _login_done = self._parse_response_buffer(_state, _buffer)
             _buffer = b'' #clear working buffer
         #return after processing _buffer
-        return _buffer, _mode, _state
+        return _buffer, _mode, _state, _login_done
