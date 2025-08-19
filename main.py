@@ -16,13 +16,13 @@ and mqqt
 
 import logging
 import argparse
+import time
+import threading
 from telnetproxy import ThreadedTelnetProxy
 from boiler import ThreadedBoilerListenerSender
 from gateway import ThreadedGatewayListenerSender
 from mqtt import MqttInformer
 
-import time
-import threading
 from pubsub.pubsub import PubSub
 
 #----------------------------------------------------------#
@@ -89,13 +89,12 @@ logging.info('Started')
 
 #from queue import Queue,Empty
 
-communicator= PubSub()
+pub = PubSub()
 
 class PubSubListener(threading.Thread):
     """ Class defining a listener used in a thread """
 
-    def __init__(self, chanel_name, full_thread_name,
-                 communicator):
+    def __init__(self, chanel_name, full_thread_name, communicator):
         """
         Constructor for this listener
         parameters :
@@ -121,26 +120,26 @@ class PubSubListener(threading.Thread):
             logging.info("receives : id : %d : %s",
                   message['id'], message['data'])
             time.sleep(0.1)
-            is_running = (message['data'] != "End")
+            is_running = message['data'] != "End"
             counter += 1
 
-pln= PubSubListener('test', 'PubSubListener', communicator)
-pln.start()              
+pln= PubSubListener('test', 'PubSubListener', pub)
+pln.start()
 
 # MqttInfomer will receive info on the mq queue
-mi = MqttInformer(communicator)
+mi = MqttInformer(pub)
 
 # create a telnet proxy. this will forward info to the mq queue
-tln= ThreadedTelnetProxy(communicator, GW_IFACE, BL_IFACE, port=23,)
+tln= ThreadedTelnetProxy(pub, GW_IFACE, BL_IFACE, port=23,)
 
 # create a BoilerListener
 # it will discover the boiler and forward its addr:port to Telnet Proxy through the tln queue
-bls= ThreadedBoilerListenerSender(communicator, BL_IFACE, GW_IFACE,delta=100)
+bls= ThreadedBoilerListenerSender(pub, BL_IFACE, GW_IFACE,delta=100)
 
 # create a gateway listener
 # it will forward info to MqttInformer through the mq queue
 # it will discover the IGW and forward its addr:port to Boiler Listener through the bls queue
-gls= ThreadedGatewayListenerSender(communicator, GW_IFACE, BL_IFACE, UDP_PORT,delta=100)
+gls= ThreadedGatewayListenerSender(pub, GW_IFACE, BL_IFACE, UDP_PORT,delta=100)
 
 tln.start()
 bls.start()

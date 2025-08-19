@@ -5,6 +5,7 @@ This module implements the boiler proxy
 import logging
 
 from threading import Thread
+from typing import Tuple
 from pubsub.pubsub import PubSub
 
 from shared import ListenerSender
@@ -38,7 +39,7 @@ class BoilerListenerSender(ListenerSender):
         self._com.publish(self._channel, f"BL_ADDR:{addr[0]}")
         self._com.publish(self._channel, f"BL_PORT:{self.bl_port}")
 
-    def get_resender_port(self) -> int:
+    def get_resender_port(self) -> Tuple[int, int]:
         """
         Get the base port number for the resender socket.
         The boiler resends from the port it was discovered on.
@@ -47,7 +48,7 @@ class BoilerListenerSender(ListenerSender):
             int: Base port number (delta handling done by SocketManager)
         """
         logging.debug('Getting boiler resend port: %d', self.bl_port)
-        return self.bl_port
+        return self.bl_port, 0
 
     def send(self, data: bytes) -> None:
         """Send data to the gateway using platform-aware socket management.
@@ -68,7 +69,7 @@ class BoilerListenerSender(ListenerSender):
             self.send_manager.send_with_delta(
                 data=data,
                 port=self.gw_port,
-                delta=-self.delta,  # Note: negative delta because we're subtracting
+                delta=0, # No delta adjustment needed here we send to port 50000
                 dest=gw_addr
             )
             logging.debug('Successfully sent %d bytes to gateway', len(data))
@@ -107,7 +108,9 @@ class BoilerListenerSender(ListenerSender):
             # Let socket manager handle platform-specific binding
             self.listen_manager.bind_with_delta(
                 port=self.gw_port,
-                delta=-self.delta  # Note: negative delta because we're subtracting
+                # if same machine we will bind to 50000-100
+                delta=-self.delta,
+                broadcast=False  # No broadcast for boiler listener
             )
             
             self.bound = True

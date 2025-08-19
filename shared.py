@@ -132,13 +132,13 @@ class ChanelReceiver(NetworkData, ABC):
             raise
         logging.debug('handle: end of method')
 
-    @abstractmethod
-    def loop(self) -> None:
-        """
-        This method is the main loop of the class.
-        It should be overridden in subclasses to implement specific behavior.
-        """
-        pass
+#    @abstractmethod
+#    def loop(self) -> None:
+#        """
+#        This method is the main loop of the class.
+#        It should be overridden in subclasses to implement specific behavior.
+#        """
+#        pass
 
 class ListenerSender(ChanelReceiver, ABC):
     """
@@ -183,11 +183,11 @@ class ListenerSender(ChanelReceiver, ABC):
 
         try:
             # Initialize listener socket
-            self.listen_manager = SocketManager(src_iface, is_broadcast=True)
+            self.listen_manager = SocketManager(src_iface, dst_iface, is_broadcast=True)
             self.listen = self.listen_manager.create_socket()
 
             # Initialize sender socket
-            self.send_manager = SocketManager(dst_iface, is_broadcast=True)
+            self.send_manager = SocketManager(dst_iface, src_iface, is_broadcast=True)
             self.resend = self.send_manager.create_socket()
 
             logging.debug('Sockets initialized on system: %s', platform.system())
@@ -221,11 +221,11 @@ class ListenerSender(ChanelReceiver, ABC):
         else:
             try:
                 # Get base port from child class
-                port = self.get_resender_port()
+                port, delta = self.get_resender_port()
                 # Use send_manager to handle platform-specific binding
                 self.send_manager.bind_with_delta(
                     port=port,
-                    delta=0  # Delta is handled by send_with_delta during sending
+                    delta=delta
                 )
                 self.resender_bound = True
                 logging.debug('resender bound to port %d', port)
@@ -234,7 +234,7 @@ class ListenerSender(ChanelReceiver, ABC):
                 raise
 
     @abstractmethod
-    def get_resender_port(self) -> int:
+    def get_resender_port(self) -> Tuple[int, int]:
         """
         Get the base port number for the resender socket.
         Must be implemented by subclasses.

@@ -48,7 +48,7 @@ class GatewayListenerSender(ListenerSender):
         self._com.publish(self._channel, f"GW_ADDR:{addr[0]}")
         self._com.publish(self._channel, f"GW_PORT:{addr[1]}")
 
-    def get_resender_port(self) -> int:
+    def get_resender_port(self) -> Tuple[int, int]:
         """
         Get the base port number for the resender socket.
         The gateway resends from the port it was discovered on.
@@ -56,8 +56,8 @@ class GatewayListenerSender(ListenerSender):
         Returns:
             int: Base port number (delta handling done by SocketManager)
         """
-        logging.debug('Getting gateway resend port: %d', self.gw_port)
-        return self.gw_port
+        logging.debug('Getting gateway resend port: %d delta:%d', self.gw_port, -self.delta)
+        return self.gw_port, -self.delta
 
 
 
@@ -84,6 +84,7 @@ class GatewayListenerSender(ListenerSender):
             self.send_manager.send_with_delta(
                 data=data,
                 port=self.udp_port,
+                # if same machine we will send to 35601 + 100
                 delta=self.delta
             )
             logging.debug('Successfully sent %d bytes', len(data))
@@ -108,7 +109,8 @@ class GatewayListenerSender(ListenerSender):
             # Use bind_with_delta with delta=0 since gateway listens on the actual port
             self.listen_manager.bind_with_delta(
                 port=self.udp_port,
-                delta=0  # Gateway listens on the actual port, no adjustment needed
+                delta=0,  # Gateway listens on the actual port 35601, no adjustment needed
+                broadcast=True  # Gateway uses broadcast for discovery
             )
             self.bound = True
             logging.debug('Gateway listener bound successfully')

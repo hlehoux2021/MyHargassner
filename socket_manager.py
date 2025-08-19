@@ -46,24 +46,31 @@ class SocketManager:
     - Detection of same-machine scenarios for port adjustment
     """
 
-    def __init__(self, interface: Union[str, bytes], is_broadcast: bool = False) -> None:
+    def __init__(self, src_iface: Union[str, bytes], dst_iface: Union[str, bytes], is_broadcast: bool = False) -> None:
         """
         Initialize the socket manager.
 
         Args:
-            interface: Network interface name (Linux) or IP address (macOS)
+            src_iface: Network src_iface name (Linux) or IP address (macOS)
+            dst_iface: Network dst_iface name (Linux) or IP address (macOS)
             is_broadcast: Whether the socket needs broadcast capability
 
         Raises:
-            InterfaceError: If interface specification is invalid for the platform
-            ValueError: If interface is not bytes or str
+            InterfaceError: If src_iface specification is invalid for the platform
+            ValueError: If src_iface is not bytes or str
         """
-        if isinstance(interface, bytes):
-            self.interface = interface.decode('utf-8')
-        elif isinstance(interface, str):
-            self.interface = interface
+        if isinstance(src_iface, bytes):
+            self.src_iface = src_iface.decode('utf-8')
+        elif isinstance(src_iface, str):
+            self.src_iface = src_iface
         else:
-            raise ValueError("Interface must be either bytes or str")
+            raise ValueError("src_iface must be either bytes or str")
+        if isinstance(dst_iface, bytes):
+            self.dst_iface = dst_iface.decode('utf-8')
+        elif isinstance(dst_iface, str):
+            self.dst_iface = dst_iface
+        else:
+            raise ValueError("dst_iface must be either bytes or str")
 
         self.is_broadcast = is_broadcast
         self._socket: Optional[socket.socket] = None
@@ -76,9 +83,14 @@ class SocketManager:
         Raises:
             InterfaceError: If interface specification is invalid
         """
-        if platform.system() == 'Darwin' and not self.is_valid_ip(self.interface):
+        if platform.system() == 'Darwin' and not self.is_valid_ip(self.src_iface):
             raise InterfaceError(
-                f"MacOS requires IP address, got interface name: {self.interface}. "
+                f"MacOS requires IP address, got interface name: {self.src_iface}. "
+                "Please provide IP address instead of interface name."
+            )
+        if platform.system() == 'Darwin' and not self.is_valid_ip(self.dst_iface):
+            raise InterfaceError(
+                f"MacOS requires IP address, got interface name: {self.dst_iface}. "
                 "Please provide IP address instead of interface name."
             )
 
@@ -118,27 +130,29 @@ class SocketManager:
             SocketBindError: If socket creation fails
         """
         try:
+            logging.debug('SocketManager: Creating UDP socket')
             self._socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
             self._socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
-            
+            logging.debug('SocketManager: Set SO_REUSEPORT')
             if self.is_broadcast:
                 self._socket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-
+                logging.debug('SocketManager: Set SO_BROADCAST')
             self._socket.settimeout(DEFAULT_TIMEOUT)
-
+            logging.debug('SocketManager: Set socket timeout to %s', DEFAULT_TIMEOUT)
             if platform.system() == 'Linux':
                 # On Linux, bind to interface name
                 # SO_BINDTODEVICE = 25 from Linux <socket.h>
                 self._socket.setsockopt(
                     socket.SOL_SOCKET,
                     25,  # SO_BINDTODEVICE
-                    self.interface.encode('utf-8')
+                    self.src_iface.encode('utf-8')
                 )
+                logging.debug('SocketManager: Set SO_BINDTODEVICE to %s', self.src_iface)
             # On MacOS, binding to IP is done during bind() call
-
+            logging.debug('SocketManager: Socket created successfully')
             return self._socket
-
         except socket.error as e:
+            logging.error('SocketManager: Failed to create socket: %s', str(e))
             raise SocketBindError(f"Failed to create socket: {str(e)}") from e
 
     def bind(self, port: int, specific_ip: Optional[str] = None) -> None:
@@ -153,20 +167,24 @@ class SocketManager:
             SocketBindError: If binding fails
         """
         if not self._socket:
+            logging.error('SocketManager: Cannot bind, socket not created')
             raise SocketBindError("Socket not created")
-
         try:
             # On MacOS or when specific IP is provided
             if platform.system() == 'Darwin' or specific_ip:
-                bind_ip = specific_ip or self.interface
+                bind_ip = specific_ip or self.src_iface
+                logging.debug('SocketManager: Binding to IP %s, port %d', bind_ip, port)
                 self._socket.bind((bind_ip, port))
             else:
                 # On Linux, we've already bound to interface, so bind to all interfaces
+                logging.debug('SocketManager: Binding to all interfaces, port %d', port)
                 self._socket.bind(('', port))
+            logging.debug('SocketManager: Bind successful')
         except socket.error as e:
+            logging.error('SocketManager: Failed to bind socket: %s', str(e))
             raise SocketBindError(f"Failed to bind socket: {str(e)}") from e
 
-    def bind_with_delta(self, port: int, delta: int = 0) -> None:
+    def bind_with_delta(self, port: int, delta: int = 0, broadcast: bool = False) -> None:
         """
         Bind socket with platform-specific handling and port delta adjustment.
         When delta is negative, it means we need to bind to a lower port than
@@ -181,34 +199,35 @@ class SocketManager:
             InterfaceError: If interface specification is invalid
         """
         if not self._socket:
+            logging.error('SocketManager: Cannot bind_with_delta, socket not created')
             raise SocketBindError("Socket not created")
-
         try:
             # Platform-specific binding with port adjustment
-            platform_type = platform.system()
-            if platform_type == 'Darwin':
-                # Validate IP on MacOS
-                if not self.is_valid_ip(self.interface):
-                    raise InterfaceError(f"Invalid source IP for MacOS: {self.interface}")
-                    
-                # Calculate final port (e.g. 50000 + (-100) = 49900)
-                adjusted_port = port + delta
-                logging.debug(
-                    'Binding to IP %s on port %d (original port %d with delta %d)',
-                    self.interface, adjusted_port, port, delta
-                )
-                self._socket.bind((self.interface, adjusted_port))
+            if self.is_same_machine():
+                adjusted_port = port + delta # the caller tells what delta to use if same machine
+                logging.debug('SocketManager: Same machine detected, adjusting port from %d to %d (delta: %d)',
+                                  port, adjusted_port, delta)
             else:
-                # On Linux, we've already bound to interface via SO_BINDTODEVICE
-                # Just bind to the adjusted port
-                adjusted_port = port + delta
-                logging.debug(
-                    'Binding to all interfaces on port %d (original port %d with delta %d)',
-                    adjusted_port, port, delta
-                )
+                adjusted_port = port
+            # choose binding address based on platform (Linux/MacOS) and broadcast parameter
+            if platform.system() == 'Darwin':
+                # On MacOS, we decide based on broadcast parameter
+                if broadcast:
+                    logging.debug('SocketManager: Binding to all interfaces (0.0.0.0) on port %d (original port %d with delta %d)',
+                          adjusted_port, port, delta)
+                    self._socket.bind(('', adjusted_port))
+                else:
+                    logging.debug('SocketManager: Binding to %s on port %d (original port %d with delta %d)',
+                          self.src_iface, adjusted_port, port, delta)
+                    self._socket.bind((self.src_iface, adjusted_port))
+            else:
+                # assuming we're on Linux, we always bind to any because we have set SO_BINDTODEVICE on an interface name
+                logging.debug('SocketManager: Binding to all interfaces (0.0.0.0) on port %d (original port %d with delta %d)',
+                          adjusted_port, port, delta)
                 self._socket.bind(('', adjusted_port))
-                
+            logging.debug('SocketManager: bind_with_delta successful')
         except socket.error as e:
+            logging.error('SocketManager: Failed to bind_with_delta: %s', str(e))
             raise SocketBindError(f"Failed to bind socket: {str(e)}") from e
 
     def send_with_delta(self, data: bytes, port: int, delta: int = 0, dest: str = '<broadcast>') -> None:
@@ -228,38 +247,37 @@ class SocketManager:
             SocketTimeoutError: If send times out
             InterfaceError: If interface specification is invalid
         """
-        if not self._socket:
-            raise SocketSendError("Socket not created")
 
+        logging.debug('SocketManager: send_with_delta called port=%d, delta=%d, dest=%s', port, delta, dest)
+        logging.debug('SocketManager: src_iface %s dst_iface %s', self.src_iface, self.dst_iface)
+        if not self._socket:
+            logging.error('SocketManager: Cannot send_with_delta, socket not created')
+            raise SocketSendError("Socket not created")
+        platform_type = platform.system()
+        if platform_type == 'Darwin' and not self.is_valid_ip(self.src_iface):
+            # Validate IP on MacOS
+            logging.error('SocketManager: Invalid source IP for MacOS: %s', self.src_iface)
+            raise InterfaceError(f"Invalid source IP for MacOS: {self.src_iface}")
         try:
             # Platform-specific address handling
-            platform_type = platform.system()
-            if platform_type == 'Darwin':
-                # Validate IP on MacOS
-                if not self.is_valid_ip(self.interface):
-                    raise InterfaceError(f"Invalid source IP for MacOS: {self.interface}")
-                
+            
                 # Calculate final port (e.g. 50000 + (-100) = 49900)
-                if dest != '<broadcast>' and self.is_same_machine(self.interface, dest):
-                    adjusted_port = port + delta  # e.g. 50000 + (-100) = 49900
-                    logging.debug('Same machine detected, adjusting port from %d to %d (delta: %d)',
-                                port, adjusted_port, delta)
-                else:
-                    adjusted_port = port
+            if self.is_same_machine():
+                adjusted_port = port + delta # the caller tells what delta to use if same machine
+                logging.debug('SocketManager: Same machine detected, adjusting port from %d to %d (delta: %d)',
+                                  port, adjusted_port, delta)
             else:
-                # On Linux, just use the base port
                 adjusted_port = port
 
-            logging.debug(
-                'Sending from %s to %s on port %d',
-                self.interface, dest, adjusted_port
-            )
-            
+            logging.debug('SocketManager: Sending from %s to %s on port %d',
+                          self.src_iface, dest, adjusted_port)
             self._socket.sendto(data, (dest, adjusted_port))
-            
+            logging.debug('SocketManager: send_with_delta successful')
         except socket.timeout as e:
+            logging.error('SocketManager: Send operation timed out')
             raise SocketTimeoutError("Send operation timed out") from e
         except socket.error as e:
+            logging.error('SocketManager: Failed to send data: %s', str(e))
             raise SocketSendError(f"Failed to send data: {str(e)}") from e
 
     def send(self, data: bytes, address: Tuple[str, int]) -> None:
@@ -300,13 +318,18 @@ class SocketManager:
             SocketTimeoutError: If receive times out
         """
         if not self._socket:
+            logging.error('SocketManager: Cannot receive, socket not created')
             raise SocketReceiveError("Socket not created")
-
         try:
-            return self._socket.recvfrom(buffer_size)
+            logging.debug('SocketManager: Waiting to receive data (buffer size %d)', buffer_size)
+            result = self._socket.recvfrom(buffer_size)
+            logging.debug('SocketManager: Received %d bytes from %s:%d', len(result[0]), result[1][0], result[1][1])
+            return result
         except socket.timeout as e:
+            logging.debug('SocketManager: Receive operation timed out')
             raise SocketTimeoutError("Receive operation timed out") from e
         except socket.error as e:
+            logging.error('SocketManager: Failed to receive data: %s', str(e))
             raise SocketReceiveError(f"Failed to receive data: {str(e)}") from e
 
     def close(self) -> None:
@@ -320,7 +343,7 @@ class SocketManager:
         self.close()
 
     @staticmethod
-    def is_same_machine(addr1: str, addr2: str) -> bool:
+    def are_same_machines(addr1: str|bytes, addr2: str|bytes) -> bool:
         """
         Check if two IP addresses belong to the same machine.
 
@@ -337,3 +360,12 @@ class SocketManager:
         # Check if either is localhost
         localhost = {'127.0.0.1', 'localhost', '::1'}
         return addr1 in localhost and addr2 in localhost
+
+    def is_same_machine(self) -> bool:
+        """
+        Check if the source interface is the same as the destination interface.
+        
+        Returns:
+            bool: True if source and destination interfaces are the same
+        """
+        return self.are_same_machines(self.src_iface, self.dst_iface)
