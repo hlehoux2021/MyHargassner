@@ -295,10 +295,19 @@ class TelnetProxy(ChanelReceiver, MqttBase):
             logging.debug('telnet sending command %s', cmd)
             try:
                 self._client.send(cmd)
-                resp = self._client.recv(BUFF_SIZE)
-                if resp:
-                    logging.debug('telnet received response %s', resp)
-                    message += resp.decode('latin1')  # Use latin-1 to avoid UnicodeDecodeError
+                resp_chunks = []
+                while True:
+                    resp = self._client.recv(BUFF_SIZE)
+                    if resp:
+                        resp_chunks.append(resp)
+                        if resp.endswith(b'\r\n'):
+                            break
+                    else:
+                        break
+                full_resp = b''.join(resp_chunks)
+                if full_resp:
+                    logging.debug('telnet received response %s', full_resp)
+                    message += full_resp.decode('latin1')  # Use latin-1 to avoid UnicodeDecodeError
             except Exception as e:
                 logging.error('Failed to send/recv command %s: %s', cmd, str(e))
                 continue
