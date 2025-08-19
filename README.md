@@ -93,6 +93,7 @@ Note: The secondary interface (eth1) will only be active when the Ethernet cable
   - `ha-mqtt-discoverable`: Home Assistant MQTT discovery integration
   - `pydantic`: Data validation using Python type annotations
   - `annotated_types`: Support for annotated type hints
+  - `psutil`
 - Dependencies automatically installed with the above:
   - `typing`
   - `logging`

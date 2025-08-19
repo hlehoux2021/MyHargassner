@@ -139,7 +139,7 @@ class SocketManager:
                 logging.debug('SocketManager: Set SO_BROADCAST')
             self._socket.settimeout(DEFAULT_TIMEOUT)
             logging.debug('SocketManager: Set socket timeout to %s', DEFAULT_TIMEOUT)
-            if platform.system() == 'Linux':
+            if platform.system() == 'Linux' and not self.is_valid_ip(self.src_iface):
                 # On Linux, bind to interface name
                 # SO_BINDTODEVICE = 25 from Linux <socket.h>
                 self._socket.setsockopt(
