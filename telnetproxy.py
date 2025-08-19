@@ -292,10 +292,12 @@ class TelnetProxy(ChanelReceiver, MqttBase):
         logging.debug('telnet getting boiler config from %s', repr(self.bl_addr))
 
         for cmd in commands:
+            logging.debug('telnet sending command %s', cmd)
             try:
                 self._client.send(cmd)
                 resp = self._client.recv(BUFF_SIZE)
                 if resp:
+                    logging.debug('telnet received response %s', resp)
                     message += resp.decode('latin1')  # Use latin-1 to avoid UnicodeDecodeError
             except Exception as e:
                 logging.error('Failed to send/recv command %s: %s', cmd, str(e))
