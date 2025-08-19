@@ -286,7 +286,8 @@ class TelnetProxy(ChanelReceiver, MqttBase):
         logging.debug('telnet getting boiler config from %s', repr(self.bl_addr))
         # ask for changed parameters
         #todo use a more accurate last time stamp
-        self._client.send(b'$par get changed \"2023-01-01 18:21:37\"\r\n')
+        #self._client.send(b'$par get changed \"2023-01-01 18:21:37\"\r\n')
+        self._client.send(b'$par get all\r\n')
         try:
             _data = self._client.recv(BUFF_SIZE)
         except Exception as e:
