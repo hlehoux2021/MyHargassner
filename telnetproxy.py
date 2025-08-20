@@ -145,7 +145,7 @@ from socket_manager import SocketManager
 #PR001;6;2;4;1;0;0;0;Mode;Manu;Arr;Ballon;Auto;Arr combustion;0;\n
 #PR003;6;3;3;3;0;0;0;Progr. HKM1;Manu;Arr;Ballon;Auto;0;\n
 #PR004;6;3;3;3;0;0;0;Progr. HKM2;Manu;Arr;Ballon;Auto;0;\n
-#PR010;6;1;5;1;0;0;0;Zone A Mode;Arr;Auto;R\xe9duire;Confort;1x Confort;Refroid.;0;\n>>\r\n$<<
+#PR010;6;1;5;1;0;0;0;Zone A Mode;Arr;Auto;R\xe9duire;Confort;1x Confort;Refroid.;0;\n
 #PR011;6;0;5;1;0;0;0;Zone 1 Mode;Arr;Auto;R\xe9duire;Confort;1x Confort;Refroid.;0;\n
 #PR012;6;1;5;1;0;0;0;Zone 2 Mode;Arr;Auto;R\xe9duire;Confort;1x Confort;Refroid.;0;\n
 #PR013;6;1;5;1;0;0;0;Zone 3 Mode;Arr;Auto;R\xe9duire;Confort;1x Confort;Refroid.;0;\n
@@ -223,7 +223,7 @@ class TelnetService:
         Returns:
             socket.socket: The socket object.
         """
-        return self._telnet if self._telnet else None
+        return self._telnet if hasattr(self, "_telnet") and self._telnet else None
 
     def recv(self) -> bytes:
         """
