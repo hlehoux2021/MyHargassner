@@ -1,7 +1,7 @@
 """
 This module implements the TelnetProxy
 """
-import socket as s
+import socket
 import select
 import time
 
@@ -9,8 +9,9 @@ import platform
 import logging
 from threading import Thread
 from typing import Annotated
-import annotated_types
+from typing import Tuple
 
+import annotated_types
 from pubsub.pubsub import PubSub
 
 from telnethelper import TelnetClient
@@ -140,68 +141,116 @@ from socket_manager import SocketManager
 #   zHK1 Restwaerme\r\n
 #   zkeine Anforderung\r\n
 #   zPuffer Aus\r\n
+#
+#PR001;6;2;4;1;0;0;0;Mode;Manu;Arr;Ballon;Auto;Arr combustion;0;\n
+#PR003;6;3;3;3;0;0;0;Progr. HKM1;Manu;Arr;Ballon;Auto;0;\n
+#PR004;6;3;3;3;0;0;0;Progr. HKM2;Manu;Arr;Ballon;Auto;0;\n
+#PR010;6;1;5;1;0;0;0;Zone A Mode;Arr;Auto;R\xe9duire;Confort;1x Confort;Refroid.;0;\n>>\r\n$<<
+#PR011;6;0;5;1;0;0;0;Zone 1 Mode;Arr;Auto;R\xe9duire;Confort;1x Confort;Refroid.;0;\n
+#PR012;6;1;5;1;0;0;0;Zone 2 Mode;Arr;Auto;R\xe9duire;Confort;1x Confort;Refroid.;0;\n
+#PR013;6;1;5;1;0;0;0;Zone 3 Mode;Arr;Auto;R\xe9duire;Confort;1x Confort;Refroid.;0;\n
+#PR014;6;1;5;1;0;0;0;Zone 4 Mode;Arr;Auto;R\xe9duire;Confort;1x Confort;Refroid.;0;\n
+#PR015;6;1;5;1;0;0;0;Zone 5 Mode;Arr;Auto;R\xe9duire;Confort;1x Confort;Refroid.;0;\n
+#PR016;6;1;5;1;0;0;0;Zone 6 Mode;Arr;Auto;R\xe9duire;Confort;1x Confort;Refroid.;0;\n
+#PR017;6;1;5;1;0;0;0;Zone B Mode;Arr;Auto;R\xe9duire;Confort;1x Confort;Refroid.;0;\n
+#PR030;6;0;6;0;0;0;0;Choix progr. hebdo KNX;0;1;2;3;4;5;6;0;\n
+#PR040;6;0;1;0;0;0;0;Tampon D\xe9marrer chrgt;Non;Oui;0;\n
+#PR041;6;0;1;0;0;0;0;Ballon A D\xe9marrer chrgt;Non;Oui;0;\n
+#PR042;6;0;1;0;0;0;0;Ballon 1 D\xe9marrer chrgt;Non;Oui;0;\n
+#PR043;6;0;1;0;0;0;0;Ballon 2 D\xe9marrer chrgt;Non;Oui;0;\n
+#PR044;6;0;1;0;0;0;0;Ballon 3 D\xe9marrer chrgt;Non;Oui;0;\n
+#PR045;6;0;1;0;0;0;0;Ballon B D\xe9marrer chrgt;Non;Oui;0;\n
 
 
 
 class TelnetService:
     """
-    implements telnet service receiving requests and forwarding them to the boiler
+    Implements telnet service receiving requests and forwarding them to the boiler.
     """
-    _listen= None
-    _telnet= None
+    _listen: socket.socket # socket to listen for telnet connections
+    _telnet: socket.socket # socket to handle accepted telnet connections
 
     def __init__(self, src_iface: bytes):
-        self._listen = s.socket(s.AF_INET, s.SOCK_STREAM)
+        """
+        Initialize the TelnetService with the given source interface.
+        """
+        self._listen = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         if platform.system() == 'Linux' and not SocketManager.is_valid_ip(src_iface.decode('utf-8')):
-            self._listen.setsockopt(s.SOL_SOCKET, s.SO_BINDTODEVICE, src_iface)
-        self._listen.setsockopt(s.SOL_SOCKET, s.SO_REUSEPORT, 1)
-        self._listen.setsockopt(s.SOL_SOCKET, s.SO_REUSEADDR, 1)
+            self._listen.setsockopt(socket.SOL_SOCKET, socket.SO_BINDTODEVICE, src_iface)
+        self._listen.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+        self._listen.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 
     def bind(self, port: int):
-        """bind the telnet socket"""
+        """
+        Bind the telnet socket to the specified port.
+        """
         logging.debug('TelnetService binding to port %d', port)
         self._listen.bind(('', port))
+
     def listen(self):
-        """listen for a telnet connection"""
+        """
+        Start listening for a telnet connection.
+        """
         logging.debug('TelnetService listening')
         self._listen.listen()
-    def accept(self) -> bytes:
-        """accept a telnet connection"""
-        _addr: tuple
+
+    def accept(self) -> int:
+        """
+        Accept a telnet connection and return the source port of the connecting client.
+        Returns:
+            int: The port number of the connecting client.
+        """
+        _addr: Tuple[str, int] = ('', 0)
         logging.info('TelnetService accepting a connection')
         self._telnet, _addr = self._listen.accept()
         logging.info('TelnetService connection from %s:%d accepted', _addr[0], _addr[1])
         # reply the source port from which gateway is telneting
         return _addr[1]
-    def send(self, data: bytes)-> int:
+
+    def send(self, data: bytes) -> int:
+        """
+        Send data to the connected telnet client.
+        Args:
+            data (bytes): The data to send.
+        Returns:
+            int: The number of bytes sent.
+        """
         return self._telnet.send(data)
-    def socket(self) -> s.socket | None:
-        return self._telnet if self._telnet else None
+
+    def socket(self) -> socket.socket:
+        """
+        Get the socket object for the accepted telnet connection.
+        Returns:
+            socket.socket: The socket object.
+        """
+        return self._telnet
+
     def recv(self) -> bytes:
+        """
+        Receive data from the connected telnet client.
+        Returns:
+            bytes: The received data.
+        """
         return self._telnet.recv(BUFF_SIZE)
 
 
 class TelnetProxy(ChanelReceiver, MqttBase):
     """
-    This class implements the TelnetProxy
+    This class implements the TelnetProxy.
     """
     src_iface: bytes
     dst_iface: bytes
     port: Annotated[int, annotated_types.Gt(0)]
- #   _listen: s.socket
- #  _resend: s.socket
     _client: TelnetClient # to request the boiler
-    _service1: TelnetService # to service the IGW gateaway
+    _service1: TelnetService # to service the IGW gateway
     _service2: TelnetService # to service other requests
-    _active_sockets: set[s.socket] # Track which sockets are still active
- #   _telnet: s.socket
+    _active_sockets: set[socket.socket] # Track which sockets are still active
     _analyser: Analyser
-#    _pmstamp: int = 0
-#    _values: dict = None # telnet pm values
-    _ma: ThreadedMqttActuator | None = None
-
 
     def __init__(self, communicator: PubSub, src_iface, dst_iface, port):
+        """
+        Initialize the TelnetProxy with communication channel, interfaces, and port.
+        """
         ChanelReceiver.__init__(self, communicator)
         MqttBase.__init__(self)
         self.src_iface = src_iface
@@ -210,48 +259,62 @@ class TelnetProxy(ChanelReceiver, MqttBase):
         self._analyser = Analyser(communicator)
         self._service1 = TelnetService(self.src_iface)
         self._service2 = TelnetService(self.src_iface)
-        # we will now create the socket to resend the telnet request
-        self._client = None
-        self._ma = None
+        # self._client = None
         self._active_sockets = set()
 
     def bind1(self):
-        """bind the telnet socket"""
+        """
+        Bind the first telnet service socket to the configured port.
+        """
         logging.debug('telnet binding to port %s', self.port)
         self._service1.bind(self.port)
+
     def bind2(self):
-        """bind the telnet socket"""
+        """
+        Bind the second telnet service socket to port 4000.
+        """
         logging.debug('telnet binding to port 4000')
         self._service2.bind(4000)
 
     def listen1(self):
-        """listen for a telnet connection"""
+        """
+        Start listening for a telnet connection on the first service.
+        """
         logging.debug('telnet listening')
         self._service1.listen()
+
     def listen2(self):
-        """listen for a telnet connection"""
+        """
+        Start listening for a telnet connection on the second service.
+        """
         logging.debug('telnet listening')
         self._service2.listen()
 
     def accept1(self):
-        """accept a telnet connection"""
+        """
+        Accept a telnet connection on the first service and track the socket.
+        """
         # remember the source port from which gateway is telneting
         self.gwt_port = self._service1.accept()
         # Re-add service1 socket to active sockets in the loop
         if hasattr(self, '_active_sockets'):
             self._active_sockets.add(self._service1.socket())
             logging.debug('Re-added service1 socket to active set')
+
     def accept2(self):
-        """accept a telnet connection"""
+        """
+        Accept a telnet connection on the second service and track the socket.
+        """
         self._service2.accept()
         # Re-add service2 socket to active sockets in the loop
         if hasattr(self, '_active_sockets'):
             self._active_sockets.add(self._service2.socket())
             logging.debug('Re-added service2 socket to active set')
 
-    # wait for the boiler address and port to be discovered
     def discover(self):
-        """wait for the boiler address and port to be discovered"""
+        """
+        Wait for the boiler address and port to be discovered.
+        """
         self._msq = self._com.subscribe(self._channel, self.name())
 
         while (self.bl_port == 0) or (self.bl_addr == b''):
@@ -267,18 +330,19 @@ class TelnetProxy(ChanelReceiver, MqttBase):
         #todo check if useless
         self._analyser.push('BL_ADDR',str(self.bl_addr,'ascii'))
         self._analyser.push('BL_PORT',str(self.bl_port))
+
     def connect(self):
-        """connect to the boiler"""
+        """
+        Connect to the boiler using the discovered address and interface.
+        """
         logging.debug('TelnetProxy connecting to boiler bl_addr=%s  dst_iface=%s', repr(self.bl_addr), repr(self.dst_iface))
         self._client= TelnetClient(self.bl_addr, self.dst_iface)
         self._client.connect()
 
+    def get_boiler_config(self) -> None:
+        """
+        Get the boiler configuration.
 
-    def get_boiler_config(self):
-        """get the boiler configuration
-
-        Returns:
-            dict[str, list[str]]: A dictionary with the parameter name as key and a list of non-zero values
         """
         message: str = 'BoilerConfig:'
         commands= [
@@ -314,14 +378,16 @@ class TelnetProxy(ChanelReceiver, MqttBase):
         self._com.publish(self._channel, message)
         logging.debug('Published combined message for commands %s', message)
 
-    def loop(self):
-        """loop waiting requests and replies"""
-        _sock: s.socket
+    def loop(self) -> None:
+        """
+        Main loop waiting for requests and replies, handling all active sockets.
+        """
+        _sock: socket.socket
         _data: bytes
         _addr: tuple
-        read_sockets: list[s.socket] = []
-        write_sockets: list[s.socket]
-        error_sockets: list[s.socket]
+        read_sockets: list[socket.socket] = []
+        write_sockets: list[socket.socket]
+        error_sockets: list[socket.socket]
         _state: str = '' # state of the request/response dialog
         _buffer: bytes = b'' # buffer to store the data received until we have a complete response
         _mode: str = ''
@@ -355,7 +421,6 @@ class TelnetProxy(ChanelReceiver, MqttBase):
             except Exception as err:
                 logging.error("Unexpected error in select: %s", str(err))
                 continue
-#                [self._service1.socket(), self._client.socket()], [], [])
             for _sock in read_sockets:
                 if _sock == self._service1.socket():
                     # so we received a request
@@ -370,7 +435,7 @@ class TelnetProxy(ChanelReceiver, MqttBase):
                                     self._active_sockets.discard(sock)
                                 except Exception as close_err:
                                     logging.error("Error closing service1 socket: %s", str(close_err))
-                            raise s.error("service1: Client disconnected")
+                            raise socket.error("service1: Client disconnected")
                         logging.debug('service1 received request %d bytes ==>%s', len(_data), repr(_data))
                         _caller = 1
                         # ask the Analyser() to analyse the IGW request
@@ -381,7 +446,7 @@ class TelnetProxy(ChanelReceiver, MqttBase):
                                     len(_data), repr(self.bl_addr), self.port)
                         #todo manage partial send data
                         self._client.send(_data)
-                    except s.error as err:
+                    except socket.error as err:
                         logging.error("Socket error in service1 recv: %s", str(err))
                         sock = self._service1.socket()
                         if sock is not None:
@@ -391,7 +456,7 @@ class TelnetProxy(ChanelReceiver, MqttBase):
                             except Exception as close_err:
                                 logging.error("Error closing service1 socket: %s", str(close_err))
                         # Raise with service identification
-                        raise s.error(f"service1: {str(err)}")
+                        raise socket.error(f"service1: {str(err)}")
                     except Exception as err:
                         logging.critical("Unexpected error in service1 recv: %s", type(err))
                         if self._service1.socket() is not None:
@@ -400,7 +465,7 @@ class TelnetProxy(ChanelReceiver, MqttBase):
                             except:
                                 pass
                         # Raise with service identification
-                        raise s.error(f"service1: {str(err)}")
+                        raise socket.error(f"service1: {str(err)}")
                 if _sock == self._service2.socket():
                     try:
                         _data = self._service2.recv()
@@ -414,7 +479,7 @@ class TelnetProxy(ChanelReceiver, MqttBase):
                                     len(_data), repr(self.bl_addr), self.port)
                         #todo manage partial send data
                         self._client.send(_data)
-                    except s.error as err:
+                    except socket.error as err:
                         logging.error("Socket error in service2 recv: %s", str(err))
                         sock = self._service2.socket()
                         if sock is not None:
@@ -424,7 +489,7 @@ class TelnetProxy(ChanelReceiver, MqttBase):
                             except Exception as close_err:
                                 logging.error("Error closing service2 socket: %s", str(close_err))
                         # Raise with service identification
-                        raise s.error(f"service2: {str(err)}")
+                        raise socket.error(f"service2: {str(err)}")
                     except Exception as err:
                         logging.critical("Unexpected error in service2 recv: %s", type(err))
                         if self._service2.socket() is not None:
@@ -435,7 +500,7 @@ class TelnetProxy(ChanelReceiver, MqttBase):
                             except Exception as close_err:
                                 logging.error("Error closing service2 socket: %s", str(close_err))
                         # Raise with service identification
-                        raise s.error(f"service2: {str(err)}")
+                        raise socket.error(f"service2: {str(err)}")
                 if _sock ==self._client.socket():
                     # so we received a reply
                     try:
@@ -450,7 +515,7 @@ class TelnetProxy(ChanelReceiver, MqttBase):
                         logging.warning('client received empty response')
                         if self._client is not None:
                             self._client.close()
-                        raise s.error("Empty response from client")
+                        raise socket.error("Empty response from client")
 
                     if not _data.startswith(b'pm'):
                         logging.debug('telnet received response %d bytes ==>%s',len(_data), repr(_data))
@@ -493,8 +558,12 @@ class TelnetProxy(ChanelReceiver, MqttBase):
                         logging.info('login done, should get_boiler_config')
                         self.get_boiler_config()
 
-    def restart_service1(self):
-        """Restart service1 after failure"""
+    def restart_service1(self) -> bool:
+        """
+        Restart service1 after failure.
+        Returns:
+            bool: True if restart succeeded, False otherwise.
+        """
         logging.info("Restarting service1...")
         try:
             self._service1 = TelnetService(self.src_iface)
@@ -506,8 +575,12 @@ class TelnetProxy(ChanelReceiver, MqttBase):
             logging.error("Failed to restart service1: %s", str(err))
             return False
 
-    def restart_service2(self):
-        """Restart service2 after failure"""
+    def restart_service2(self) -> bool:
+        """
+        Restart service2 after failure.
+        Returns:
+            bool: True if restart succeeded, False otherwise.
+        """
         logging.info("Restarting service2...")
         try:
             self._service2 = TelnetService(self.src_iface)
@@ -519,8 +592,12 @@ class TelnetProxy(ChanelReceiver, MqttBase):
             logging.error("Failed to restart service2: %s", str(err))
             return False
 
-    def restart_client(self):
-        """Restart client connection after failure"""
+    def restart_client(self) -> bool:
+        """
+        Restart client connection after failure.
+        Returns:
+            bool: True if restart succeeded, False otherwise.
+        """
         logging.info("Restarting client connection...")
         try:
             self.connect()
@@ -532,8 +609,10 @@ class TelnetProxy(ChanelReceiver, MqttBase):
             logging.error("Failed to restart client: %s", str(err))
             return False
 
-    def service(self):
-        """Main service loop that handles reconnections"""
+    def service(self) -> None:
+        """
+        Main service loop that handles reconnections and error recovery.
+        """
         logging.debug('TelnetProxy::service')
         # Initial setup
         if not self.restart_client():
@@ -542,7 +621,7 @@ class TelnetProxy(ChanelReceiver, MqttBase):
             try:
                 logging.debug('TelnetProxy::service starting loop')
                 self.loop()
-            except s.error as err:
+            except socket.error as err:
                 if "service1" in str(err):
                     logging.error("Service1 failed, attempting restart: %s", str(err))
                     if self.restart_service1():
@@ -562,14 +641,34 @@ class TelnetProxy(ChanelReceiver, MqttBase):
                 raise  # Re-raise fatal errors
 
 class ThreadedTelnetProxy(Thread):
-    """This class implements a Thread to run the TelnetProxy"""
+    """
+    This class implements a Thread to run the TelnetProxy.
+    """
     _tserver: Thread
-    def __init__(self, communicator: PubSub, src_iface, dst_iface, port):
+    _com: PubSub
+    _src_iface: bytes
+    _dst_iface: bytes
+    _port: int
+    _ma: ThreadedMqttActuator | None = None
+
+    def __init__(self, communicator: PubSub, src_iface: bytes, dst_iface: bytes, port: int):
+        """
+        Initialize the ThreadedTelnetProxy with communication channel, interfaces, and port.
+        """
+        self._com = communicator
+        self._src_iface = src_iface
+        self._dst_iface = dst_iface
+        self._port = port
+        self._ma = None
+        # Initialize the TelnetProxy instance
         super().__init__(name='TelnetProxy')
         self.tp= TelnetProxy(communicator, src_iface, dst_iface, port)
         # Add any additional initialization logic here
 
-    def run(self):
+    def run(self) -> None:
+        """
+        Run the TelnetProxy in a separate thread, handling discovery and service threads.
+        """
         _ts: Thread | None = None
         logging.info('telnet proxy started: %s , %s', self.tp.src_iface, self.tp.dst_iface)
 
@@ -577,12 +676,12 @@ class ThreadedTelnetProxy(Thread):
         self.tp.discover()
 
         # if we have a BL_ADDR, we create the ThreadedMqttActuator
-        if not self.tp._ma:
+        if not self._ma:
             logging.debug("BL_ADDR present but no actuator found")
             logging.debug('we create and launch a ThreadedMqttActuator in a separate thread')
             self.tp._create_device_info(self.tp.bl_addr.decode('ascii'))
-            self.tp._ma = ThreadedMqttActuator(self.tp._com, self.tp._device_info,self.tp.src_iface)
-            self.tp._ma.start()
+            self._ma = ThreadedMqttActuator(self._com, self.tp._device_info,self._src_iface)
+            self._ma.start()
 
         # then we can bind/listen/accept and service()
         self.tp.bind1()

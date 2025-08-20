@@ -47,14 +47,14 @@ class TelnetClient:
         if port:
             self._port = port
         else:
-            # we assume on Darwin for testing that the port of BoilerSimulator is 24 
+            # we assume on Darwin for testing that the port of BoilerSimulator is 24
             if platform.system() == 'Darwin':
                 self._port = 24  # port of boiler simulator
             elif platform.system() == 'Linux' and SocketManager.are_same_machines(addr, dst_iface):
-                #on linux if the discover ip of boiler is the same as the dst_iface then we simulate the boiler to port 24
+                #on linux if the discover ip of boiler is the same as the dst_iface we simulate the boiler to port 24
                 self._port = 24  # port of boiler simulator
             else:
-                # we assume a connection to a real boiler  
+                # we assume a connection to a real boiler
                 self._port = 23  # default telnet port
 
     def _get_ip_from_iface(self, iface_bytes: bytes) -> str:

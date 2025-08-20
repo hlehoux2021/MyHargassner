@@ -165,8 +165,8 @@ class MqttInformer(MqttBase):
                 if _stage == 'device_info_ok':
                     # we are in normal mode, we handle new or modified values
                     logging.debug('normal mode analyse message')
+                    # we test either the value is changed or it is new
                     if ((_str_parts[0] in self._dict) and (_str_parts[1] != self._dict[_str_parts[0]])) or (not _str_parts[0] in self._dict):
-                        # the value is new or has changed
                         logging.info('adding new value:[%s/%s]', _str_parts[0], _str_parts[1])
                         self._dict[_str_parts[0]] = _str_parts[1]
                         if _str_parts[0] == 'HargaWebApp':

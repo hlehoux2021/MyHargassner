@@ -9,10 +9,10 @@ and mqqt
 # 100.84: <broadcast>	50000->35601	get services
 # 100.13: 100.84	35601->50000	HSV/CL etc *.cgi
 # 100.84: 100.13	51975-->23	$login token
-# 100.13: 100.84	23-->51975	$3313C1
+# 100.13: 100.84	23-->51975	$xxyyzz
 # 100.13: 100.84	23->51975	F2\r\n
-# 100.84: 100.13	51975->23	$login key 137171BD37643C72131D59797D966A730E\r\n
-# 100.13: 100.84	23->51975	zclient login (7421)\r\n$ack\r\n
+# 100.84: 100.13	51975->23	$login key AAAABBBBCCCCDDDDEEEEFFFF0000AAAAAA\r\n
+# 100.13: 100.84	23->51975	zclient login (9999)\r\n$ack\r\n
 
 import logging
 import argparse
@@ -27,7 +27,7 @@ from pubsub.pubsub import PubSub
 
 #----------------------------------------------------------#
 LOG_PATH = "./" #chemin où enregistrer les logs
-LOG_LEVEL= logging.DEBUG
+LOG_LEVEL= logging.INFO
 
 SOCKET_TIMEOUT= 0.2
 BUFF_SIZE= 1024
@@ -44,11 +44,11 @@ def parse_command_line():
     parser.add_argument('-g', '--GW_IFACE', type=str, help='Source interface')
     parser.add_argument('-b', '--BL_IFACE', type=str, help='Destination interface')
     parser.add_argument('-p', '--port', type=int, help='Source port')
-#    parser.add_argument('-d', '--debug', action='store_true', help='Enable debug logging')
-#    parser.add_argument('-i', '--info', action='store_true', help='info logging level')
-#    parser.add_argument('-w', '--warning', action='store_true', help='warning logging level')
-#    parser.add_argument('-e', '--error', action='store_true', help='error logging level')
-#    parser.add_argument('-c', '--critical', action='store_true', help='critical logging level')
+    parser.add_argument('-d', '--debug', action='store_true', help='Enable debug logging')
+    parser.add_argument('-i', '--info', action='store_true', help='info logging level')
+    parser.add_argument('-w', '--warning', action='store_true', help='warning logging level')
+    parser.add_argument('-e', '--error', action='store_true', help='error logging level')
+    parser.add_argument('-c', '--critical', action='store_true', help='critical logging level')
 
     args = parser.parse_args()
     return args
@@ -65,17 +65,17 @@ if command_line_args.BL_IFACE is not None:
 #if command_line_args.port is not None:
 #    UDP_PORT = int(command_line_args.port)
 
-#if command_line_args.debug is not None:
-#    LOG_LEVEL = logging.DEBUG
+if command_line_args.debug is not None:
+    LOG_LEVEL = logging.DEBUG
 
-#if command_line_args.info is not None:
-#    LOG_LEVEL = logging.INFO
-#if command_line_args.warning is not None:
-#    LOG_LEVEL = logging.WARNING
-#if command_line_args.error is not None:
-#    LOG_LEVEL = logging.ERROR
-#if command_line_args.critical is not None:
-#    LOG_LEVEL = logging.CRITICAL
+if command_line_args.info is not None:
+    LOG_LEVEL = logging.INFO
+if command_line_args.warning is not None:
+    LOG_LEVEL = logging.WARNING
+if command_line_args.error is not None:
+    LOG_LEVEL = logging.ERROR
+if command_line_args.critical is not None:
+    LOG_LEVEL = logging.CRITICAL
 
 
 #----------------------------------------------------------#
