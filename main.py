@@ -81,7 +81,8 @@ if command_line_args.critical is not None:
 #----------------------------------------------------------#
 logging.basicConfig(filename='trace.log', level=LOG_LEVEL,
                     format='%(asctime)s - %(levelname)s - %(threadName)s - %(message)s',
-                    filemode='a')
+                    filemode='a',
+                    force=True)
 
 logging.info('Started')
 
