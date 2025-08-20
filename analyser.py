@@ -283,7 +283,8 @@ class Analyser():
 
     def analyse_data_buffer(self, _data: bytes,
                                buffer: bytes,
-                               mode: str, state: str) -> Tuple[bytes, str, str, bool]:
+                               mode: str, state: str,
+                               caller: int) -> Tuple[bytes, str, str, bool, int]:
         """analyse the data buffer sent by the boiler
         it can be a buffer response for a request of the IGW
             values split by \\r\\n
@@ -297,6 +298,7 @@ class Analyser():
         _state: str = state
         _buffer: bytes = buffer
         _login_done: bool = False
+        _caller: int = caller
 
         if self.is_pm_response(_data):
             logging.debug('pm response detected')
@@ -313,7 +315,7 @@ class Analyser():
                 _mode = ''
             else:
                 self._pm = self._pm + _data
-            return _buffer, _mode, _state, False
+            return _buffer, _mode, _state, False, _caller
 
         #here _mode is not 'pm'
         logging.debug('normal response detected')
@@ -332,6 +334,7 @@ class Analyser():
                 logging.info('dac desq detected (%d bytes), skipped',len(_buffer))
             else:
                 _state, _login_done = self._parse_response_buffer(_state, _buffer)
+                _caller = 0 # reset caller since buffer complete
             _buffer = b'' #clear working buffer
         #return after processing _buffer
-        return _buffer, _mode, _state, _login_done
+        return _buffer, _mode, _state, _login_done, _caller

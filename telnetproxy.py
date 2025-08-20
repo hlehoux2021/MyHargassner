@@ -560,14 +560,13 @@ class TelnetProxy(ChanelReceiver, MqttBase):
                         raise
                     # ask Analyser() to analyse the pellet boiler response
                     _login_done: bool = False
-                    #we call the analyser only if request comes from IGW
-                    if _caller == 1:
-                        _buffer, _mode, _state, _login_done = self._analyser.analyse_data_buffer(_data,
-                                   _buffer, _mode, _state)
+                    #we call the analyser
+                    _buffer, _mode, _state, _login_done, _caller = self._analyser.analyse_data_buffer(_data,
+                                   _buffer, _mode, _state, _caller)
                     if _login_done:
                         logging.info('login done, should get_boiler_config')
                         self.get_boiler_config()
-                    _caller = 0
+                    # _caller = 0 is set in analyse_data_buffer when normal buffer completed
 
     def restart_service1(self) -> bool:
         """

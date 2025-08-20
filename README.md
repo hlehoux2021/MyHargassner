@@ -140,7 +140,7 @@ The project uses a multi-threaded architecture with several key components:
    - Handles Telnet responses from the pellet boiler and forwards them to IGW 
    - Handles Telnet requests from internal components, forwards them to boiler and provide replies to internal component
    - requests the pellet boiler configuration (Modes for the boiler or from different zones) from the boiler 
-        sends a "$par get changed " telnet request to the pellet boiler
+        sends a "$par" telnet request to the pellet boiler
         publishes the pellet boiler response to the "info" channel"
    - Creates an MqttActuator component as soon as the pellet boiler is discovered
    - requests Analyser() class to analyse telnet requests and responses
