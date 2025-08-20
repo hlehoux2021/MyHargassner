@@ -56,25 +56,26 @@ def parse_command_line():
 # Utilisation du parseur de ligne de commande
 command_line_args = parse_command_line()
 
-if command_line_args.GW_IFACE is not None:
+if command_line_args.GW_IFACE:
     GW_IFACE = bytes(command_line_args.GW_IFACE,'ascii')
 
-if command_line_args.BL_IFACE is not None:
+if command_line_args.BL_IFACE:
     BL_IFACE = bytes(command_line_args.BL_IFACE,'ascii')
 
 #if command_line_args.port is not None:
 #    UDP_PORT = int(command_line_args.port)
 
-if command_line_args.debug is not None:
-    LOG_LEVEL = logging.DEBUG
 
-if command_line_args.info is not None:
+# Set LOG_LEVEL based on command-line arguments, using boolean flags and elif for exclusivity
+if command_line_args.debug:
+    LOG_LEVEL = logging.DEBUG
+elif command_line_args.info:
     LOG_LEVEL = logging.INFO
-if command_line_args.warning is not None:
+elif command_line_args.warning:
     LOG_LEVEL = logging.WARNING
-if command_line_args.error is not None:
+elif command_line_args.error:
     LOG_LEVEL = logging.ERROR
-if command_line_args.critical is not None:
+elif command_line_args.critical:
     LOG_LEVEL = logging.CRITICAL
 
 
