@@ -690,8 +690,8 @@ class ThreadedTelnetProxy(Thread):
             logging.debug("BL_ADDR present but no actuator found")
             logging.debug('we create and launch a ThreadedMqttActuator in a separate thread')
             self.tp._create_device_info(self.tp.bl_addr.decode('ascii'))
-            self._ma = ThreadedMqttActuator(self._com, self.tp._device_info,self._src_iface)
-            self._ma.start()
+#            self._ma = ThreadedMqttActuator(self._com, self.tp._device_info,self._src_iface)
+#            self._ma.start()
 
         # then we can bind/listen/accept and service()
         self.tp.bind1()
