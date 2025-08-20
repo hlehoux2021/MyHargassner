@@ -552,8 +552,8 @@ class TelnetProxy(ChanelReceiver, MqttBase):
                                 _sent = self._service2.send(_data)
                             else:
                                 logging.warning('Beware received a response with not registered caller %d', _caller)
-                        if _sent != len(_data):
-                            logging.error('telnet send error: not all data sent %d/%d', _sent, len(_data))
+#                        if _sent != len(_data):
+#                            logging.error('telnet send error: not all data sent %d/%d', _sent, len(_data))
                         logging.debug('telnet sent back response to client')
                     except Exception as err:
                         logging.critical("Exception: %s", type(err))
