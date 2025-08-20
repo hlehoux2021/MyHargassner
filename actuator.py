@@ -329,6 +329,7 @@ class MqttActuator(ChanelReceiver, MqttBase):
             # Send the command to the boiler
             self._get_client().send(command.encode('latin1'))
             try:
+                #todo avoid 'pm' responses
                 _data = self._get_client().recv(BUFF_SIZE)
             except Exception as e:
                 logging.error('Failed to receive data: %s', str(e))

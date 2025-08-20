@@ -526,7 +526,7 @@ class TelnetProxy(ChanelReceiver, MqttBase):
                         logging.debug('telnet received response %d bytes ==>%s',len(_data), repr(_data))
                     else:
                         logging.debug('telnet received pm response %d bytes',len(_data))
-                    logging.debug('sending %d bytes to %s:%d',len(_data), self.gw_addr.decode(), self.gwt_port)
+                    #logging.debug('sending %d bytes to %s:%d',len(_data), self.gw_addr.decode(), self.gwt_port)
                     #todo manage when not all data is sent in one call
                     #todo manage exceptions
                     try:
@@ -557,8 +557,10 @@ class TelnetProxy(ChanelReceiver, MqttBase):
                         raise
                     # ask Analyser() to analyse the pellet boiler response
                     _login_done: bool = False
-                    _buffer, _mode, _state, _login_done = self._analyser.analyse_data_buffer(_data,
-                               _buffer, _mode, _state)
+                    #we call the analyser only if request comes from IGW
+                    if _caller == 1:
+                        _buffer, _mode, _state, _login_done = self._analyser.analyse_data_buffer(_data,
+                                   _buffer, _mode, _state)
                     if _login_done:
                         logging.info('login done, should get_boiler_config')
                         self.get_boiler_config()
