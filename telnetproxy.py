@@ -4,6 +4,7 @@ This module implements the TelnetProxy
 import socket
 import select
 import time
+import threading
 
 import platform
 import logging
@@ -247,8 +248,9 @@ class TelnetProxy(ChanelReceiver, MqttBase):
     _service2: TelnetService # to service other requests
     _active_sockets: set[socket.socket] # Track which sockets are still active
     _analyser: Analyser
+    _service_lock: threading.Lock
 
-    def __init__(self, communicator: PubSub, src_iface, dst_iface, port):
+    def __init__(self, communicator: PubSub, src_iface, dst_iface, port, lock: threading.Lock):
         """
         Initialize the TelnetProxy with communication channel, interfaces, and port.
         """
@@ -260,7 +262,7 @@ class TelnetProxy(ChanelReceiver, MqttBase):
         self._analyser = Analyser(communicator)
         self._service1 = TelnetService(self.src_iface)
         self._service2 = TelnetService(self.src_iface)
-        # self._client = None
+        self._service_lock = lock
         self._active_sockets = set()
 
     def bind1(self):
@@ -357,7 +359,7 @@ class TelnetProxy(ChanelReceiver, MqttBase):
         ]
         if not self._client._connected:
             logging.error('Client not connected')
-            return {}
+            return
         logging.debug('telnet getting boiler config from %s', repr(self.bl_addr))
 
         for cmd in commands:
@@ -428,6 +430,10 @@ class TelnetProxy(ChanelReceiver, MqttBase):
                 continue
             for _sock in read_sockets:
                 if _sock == self._service1.socket():
+                    # Only process service1 if lock is not held (by actuator sending commands to service2)
+                    if self._service_lock.locked():
+                        logging.debug('Service1 socket is paused/locked, skipping processing')
+                        continue
                     # so we received a request
                     try:
                         _data = self._service1.recv()
@@ -659,6 +665,7 @@ class ThreadedTelnetProxy(Thread):
     _dst_iface: bytes
     _port: int
     _ma: ThreadedMqttActuator | None = None
+    _service_lock: threading.Lock
 
     def __init__(self, communicator: PubSub, src_iface: bytes, dst_iface: bytes, port: int):
         """
@@ -669,9 +676,11 @@ class ThreadedTelnetProxy(Thread):
         self._dst_iface = dst_iface
         self._port = port
         self._ma = None
+        self._service_lock = threading.Lock()
+
         # Initialize the TelnetProxy instance
         super().__init__(name='TelnetProxy')
-        self.tp= TelnetProxy(communicator, src_iface, dst_iface, port)
+        self.tp= TelnetProxy(communicator, src_iface, dst_iface, port, self._service_lock)
         # Add any additional initialization logic here
 
     def run(self) -> None:
@@ -689,8 +698,8 @@ class ThreadedTelnetProxy(Thread):
             logging.debug("BL_ADDR present but no actuator found")
             logging.debug('we create and launch a ThreadedMqttActuator in a separate thread')
             self.tp._create_device_info(self.tp.bl_addr.decode('ascii'))
-#            self._ma = ThreadedMqttActuator(self._com, self.tp._device_info,self._src_iface)
-#            self._ma.start()
+            self._ma = ThreadedMqttActuator(self._com, self.tp._device_info,self._src_iface,self._service_lock)
+            self._ma.start()
 
         # then we can bind/listen/accept and service()
         self.tp.bind1()

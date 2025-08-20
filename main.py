@@ -129,7 +129,7 @@ pln= PubSubListener('test', 'PubSubListener', pub)
 pln.start()
 
 # MqttInfomer will receive info on the mq queue
-#mi = MqttInformer(pub)
+mi = MqttInformer(pub)
 
 # create a telnet proxy. this will forward info to the mq queue
 tln= ThreadedTelnetProxy(pub, GW_IFACE, BL_IFACE, port=23,)
@@ -145,5 +145,4 @@ gls= ThreadedGatewayListenerSender(pub, GW_IFACE, BL_IFACE, UDP_PORT,delta=100)
 
 tln.start()
 bls.start()
-gls.start()
-#mi.start()
+gls.start()#mi.start()

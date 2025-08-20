@@ -3,7 +3,7 @@ This module defines MqttActuator, a class for controlling MQTT-enabled devices.
 """
 
 
-from threading import Thread
+import threading
 
 from typing import Optional, Dict, List, Generic, TypeVar
 
@@ -89,8 +89,9 @@ class MqttActuator(ChanelReceiver, MqttBase):
     _parameter_ids: Dict[str, str] = {}
     _client: Optional[TelnetClient] = None
     src_iface: bytes
+    _service_lock: threading.Lock
 
-    def __init__(self, communicator: PubSub, device_info: DeviceInfo, src_iface: bytes) -> None:
+    def __init__(self, communicator: PubSub, device_info: DeviceInfo, src_iface: bytes, lock: threading.Lock) -> None:
         """
         Initialize the MqttActuator with communication and device settings.
 
@@ -108,6 +109,7 @@ class MqttActuator(ChanelReceiver, MqttBase):
         MqttBase.__init__(self)  # Initialize MqttBase
         self.src_iface = src_iface
         self._device_info = device_info
+        self._service_lock = lock
         self._client = TelnetClient(self.src_iface, b'', 4000)
 
     def _parse_parameter_response(self, data: bytes) -> dict[str, list[str]]:
@@ -303,74 +305,75 @@ class MqttActuator(ChanelReceiver, MqttBase):
             - index is the 0-based position of the selected option
         """
         logging.debug("MqttActuator.callback called with data: %s", data)
-        try:
-            payload = message.payload.decode()
-            logging.debug("Received payload: %s", payload)
-            if not self._boiler_config or data not in self._boiler_config:
-                logging.error("Received callback for unknown parameter: %s", data)
-                return
-
-            valid_options = self._boiler_config[data]
-            if payload not in valid_options:
-                logging.error("Invalid option '%s' for %s. Valid options: %s", payload, data, valid_options)
-                return
-
-            # Find the position of the selected option in the list (0-based index is what we want)
-            option_index = valid_options.index(payload)
-            # Get the parameter ID for this parameter name
-            if data not in self._parameter_ids:
-                logging.error("No parameter ID found for %s", data)
-                return
-
-            # Construct the command in the format $par set "PRxxx;6;index"
-            param_id = self._parameter_ids[data]
-            command = f'$par set "{param_id};6;{option_index}"\r\n'
-            logging.info("Sending command: %s", command)
-            # Send the command to the boiler
-            self._get_client().send(command.encode('latin1'))
-            # Loop to receive and parse until $ack is found
-            buffer = b''
-            found_ack = False
-            new_mode = None
+        with self._service_lock:
             try:
-                while not found_ack:
-                    chunk = self._get_client().recv(BUFF_SIZE)
-                    if not chunk:
-                        logging.warning('No data received from boiler')
-                        break
-                    logging.debug('Received chunk: %s', chunk)
-                    buffer += chunk
-                    # Split buffer into lines
-                    while b'\r\n' in buffer:
-                        line, buffer = buffer.split(b'\r\n', 1)
-                        line_str = line.decode('latin1', errors='replace').strip()
-                        if not line_str:
-                            continue
-                        if line_str.startswith('pm'):
-                            logging.debug('Discarded pm buffer: %s', line_str)
-                            continue
-                        if line_str == '$ack':
-                            found_ack = True
-                            logging.debug('Received $ack, ending response loop')
-                            break
-                        # Look for the new mode line
-                        # Example: zPa N: PR011 (Mode) = Auto
-                        if line_str.startswith(f'zPa N: {param_id}'):
-                            # Extract after '='
-                            parts = line_str.split('=', 1)
-                            if len(parts) == 2:
-                                new_mode = parts[1].strip()
-                                logging.info('Extracted new mode for %s: %s', param_id, new_mode)
-            except Exception as e:
-                logging.error('Failed to receive/parse data: %s', str(e))
-                return
-            if new_mode:
-                logging.info('Final new mode for %s: %s', param_id, new_mode)
-            else:
-                logging.info('No new mode found for %s in response', param_id)
+                payload = message.payload.decode()
+                logging.debug("Received payload: %s", payload)
+                if not self._boiler_config or data not in self._boiler_config:
+                    logging.error("Received callback for unknown parameter: %s", data)
+                    return
 
-        except Exception as e:
-            logging.error("Error processing %s selection: %s", data, str(e))
+                valid_options = self._boiler_config[data]
+                if payload not in valid_options:
+                    logging.error("Invalid option '%s' for %s. Valid options: %s", payload, data, valid_options)
+                    return
+
+                # Find the position of the selected option in the list (0-based index is what we want)
+                option_index = valid_options.index(payload)
+                # Get the parameter ID for this parameter name
+                if data not in self._parameter_ids:
+                    logging.error("No parameter ID found for %s", data)
+                    return
+
+                # Construct the command in the format $par set "PRxxx;6;index"
+                param_id = self._parameter_ids[data]
+                command = f'$par set "{param_id};6;{option_index}"\r\n'
+                logging.info("Sending command: %s", command)
+                # Send the command to the boiler
+                self._get_client().send(command.encode('latin1'))
+                # Loop to receive and parse until $ack is found
+                buffer = b''
+                found_ack = False
+                new_mode = None
+                try:
+                    while not found_ack:
+                        chunk = self._get_client().recv(BUFF_SIZE)
+                        if not chunk:
+                            logging.warning('No data received from boiler')
+                            break
+                        logging.debug('Received chunk: %s', chunk)
+                        buffer += chunk
+                        # Split buffer into lines
+                        while b'\r\n' in buffer:
+                            line, buffer = buffer.split(b'\r\n', 1)
+                            line_str = line.decode('latin1', errors='replace').strip()
+                            if not line_str:
+                                continue
+                            if line_str.startswith('pm'):
+                                logging.debug('Discarded pm buffer: %s', line_str)
+                                continue
+                            if line_str == '$ack':
+                                found_ack = True
+                                logging.debug('Received $ack, ending response loop')
+                                break
+                            # Look for the new mode line
+                            # Example: zPa N: PR011 (Mode) = Auto
+                            if line_str.startswith(f'zPa N: {param_id}'):
+                                # Extract after '='
+                                parts = line_str.split('=', 1)
+                                if len(parts) == 2:
+                                    new_mode = parts[1].strip()
+                                    logging.info('Extracted new mode for %s: %s', param_id, new_mode)
+                except Exception as e:
+                    logging.error('Failed to receive/parse data: %s', str(e))
+                    return
+                if new_mode:
+                    logging.info('Final new mode for %s: %s', param_id, new_mode)
+                else:
+                    logging.info('No new mode found for %s in response', param_id)
+            except Exception as e:
+                logging.error("Error processing %s selection: %s", data, str(e))
+            logging.debug("MqttActuator.callback finished, lock released")
 
     def create_subscribers(self) -> None:
         """
@@ -509,7 +512,7 @@ class Threaded(Generic[T]):
         logging.debug("Threaded.__init__ called")
         self._entity = entity
         thread_name = f"Thread-{type(entity).__name__}"
-        self._thread = Thread(target=self._entity.service, name=thread_name)
+        self._thread = threading.Thread(target=self._entity.service, name=thread_name)
 
     def start(self) -> None:
         """
@@ -540,7 +543,7 @@ class ThreadedMqttActuator(Threaded[MqttActuator]):
         >>> threaded_actuator = ThreadedMqttActuator(device_info)
         >>> threaded_actuator.start()
     """
-    def __init__(self, communicator: PubSub, device_info: DeviceInfo, src_iface: bytes) -> None:
+    def __init__(self, communicator: PubSub, device_info: DeviceInfo, src_iface: bytes, lock: threading.Lock) -> None:
         """
         Initialize a threaded MQTT actuator for the device.
 
@@ -554,5 +557,5 @@ class ThreadedMqttActuator(Threaded[MqttActuator]):
         """
         logging.debug("ThreadedMqttActuator instantiated")
         logging.debug("ThreadedMqttActuator.__init__ called")
-        entity = MqttActuator(communicator, device_info, src_iface)
+        entity = MqttActuator(communicator, device_info, src_iface, lock)
         super().__init__(entity)
