@@ -101,7 +101,7 @@ class ChanelReceiver(NetworkData, ABC):
         try:
             logging.debug('handle: attempting to get next message')
             # Use non-blocking listen with timeout
-            iterator = self._msq.listen(timeout=3.0)  # 1 second timeout
+            iterator = self._msq.listen(timeout=10.0)
             try:
                 _message = next(iterator)
                 logging.debug('handle: received message from queue: %s', _message)

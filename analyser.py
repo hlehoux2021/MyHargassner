@@ -29,9 +29,9 @@ class Analyser():
 
     def push(self, key: str, subpart: str):
         """
-        push a result to the queue where it will be used
+        publish a result to the queue where it will be used
         """
-        logging.debug("put %s --> %s", key, subpart)
+#        logging.debug("put %s --> %s", key, subpart)
         self._com.publish(self._channel, f"{key}££{subpart}")
 
     def is_pm_response(self, _data: bytes) -> bool:
@@ -136,10 +136,10 @@ class Analyser():
         _str_parts: list[str] = []
         _login_done: bool = False
 
-        logging.debug('Analyser.parse_response_buffer _state=%s _part=%s',_state, _part)
+        logging.debug('Analyser.parse_response_buffer _state=%s', _state)
         _str_parts= repr(buffer)[2:-1].split('\\r\\n')
         for _part in _str_parts:
-            logging.debug('part:%s', _part)
+            logging.debug('part %d:[%s]', len(_part), _part)
             if _state == '$login token':
                 # $wwxxyyzz
                 _subpart = _part[1:]
@@ -283,8 +283,8 @@ class Analyser():
 
     def analyse_data_buffer(self, _data: bytes,
                                buffer: bytes,
-                               mode: str, state: str,
-                               caller: int) -> Tuple[bytes, str, str, bool, int]:
+                               mode: str, state: str
+                            ) -> Tuple[bytes, str, str, bool]:
         """analyse the data buffer sent by the boiler
         it can be a buffer response for a request of the IGW
             values split by \\r\\n
@@ -298,7 +298,6 @@ class Analyser():
         _state: str = state
         _buffer: bytes = buffer
         _login_done: bool = False
-        _caller: int = caller
 
         if self.is_pm_response(_data):
             logging.debug('pm response detected')
@@ -315,7 +314,7 @@ class Analyser():
                 _mode = ''
             else:
                 self._pm = self._pm + _data
-            return _buffer, _mode, _state, False, _caller
+            return _buffer, _mode, _state, False
 
         #here _mode is not 'pm'
         logging.debug('normal response detected')
@@ -334,7 +333,6 @@ class Analyser():
                 logging.info('dac desq detected (%d bytes), skipped',len(_buffer))
             else:
                 _state, _login_done = self._parse_response_buffer(_state, _buffer)
-                _caller = 0 # reset caller since buffer complete
             _buffer = b'' #clear working buffer
         #return after processing _buffer
-        return _buffer, _mode, _state, _login_done, _caller
+        return _buffer, _mode, _state, _login_done
