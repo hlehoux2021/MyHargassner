@@ -328,13 +328,46 @@ class MqttActuator(ChanelReceiver, MqttBase):
             logging.info("Sending command: %s", command)
             # Send the command to the boiler
             self._get_client().send(command.encode('latin1'))
+            # Loop to receive and parse until $ack is found
+            buffer = b''
+            found_ack = False
+            new_mode = None
             try:
-                #todo avoid 'pm' responses
-                _data = self._get_client().recv(BUFF_SIZE)
+                while not found_ack:
+                    chunk = self._get_client().recv(BUFF_SIZE)
+                    if not chunk:
+                        logging.warning('No data received from boiler')
+                        break
+                    logging.debug('Received chunk: %s', chunk)
+                    buffer += chunk
+                    # Split buffer into lines
+                    while b'\r\n' in buffer:
+                        line, buffer = buffer.split(b'\r\n', 1)
+                        line_str = line.decode('latin1', errors='replace').strip()
+                        if not line_str:
+                            continue
+                        if line_str.startswith('pm'):
+                            logging.debug('Discarded pm buffer: %s', line_str)
+                            continue
+                        if line_str == '$ack':
+                            found_ack = True
+                            logging.debug('Received $ack, ending response loop')
+                            break
+                        # Look for the new mode line
+                        # Example: zPa N: PR011 (Mode) = Auto
+                        if line_str.startswith(f'zPa N: {param_id}'):
+                            # Extract after '='
+                            parts = line_str.split('=', 1)
+                            if len(parts) == 2:
+                                new_mode = parts[1].strip()
+                                logging.info('Extracted new mode for %s: %s', param_id, new_mode)
             except Exception as e:
-                logging.error('Failed to receive data: %s', str(e))
+                logging.error('Failed to receive/parse data: %s', str(e))
                 return
-            logging.debug('received response %d bytes ==>%s', len(_data), repr(_data))
+            if new_mode:
+                logging.info('Final new mode for %s: %s', param_id, new_mode)
+            else:
+                logging.info('No new mode found for %s in response', param_id)
 
         except Exception as e:
             logging.error("Error processing %s selection: %s", data, str(e))

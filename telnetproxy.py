@@ -215,6 +215,7 @@ class TelnetService:
         Returns:
             int: The number of bytes sent.
         """
+        logging.debug('TelnetService.send called: self=%s id=%s data=%r', self.__class__.__name__, id(self), data)
         return self._telnet.send(data)
 
     def socket(self) -> socket.socket | None:
@@ -537,18 +538,20 @@ class TelnetProxy(ChanelReceiver, MqttBase):
                         # would need a more robust logic here
                         _sent = 0
                         logging.debug('telnet sending response to caller %d', _caller)
-                        if _caller==1:
-                            _sent= self._service1.send(_data)
-                        elif _caller==2:
-                            _sent= self._service2.send(_data)
-                        elif _data.startswith(b'pm'):
+                        if _data.startswith(b'pm'):
                             if self._service1.socket() is not None:
                                 logging.debug('telnet sending pm response to service1')
                                 _sent = self._service1.send(_data)
                             else:
                                 logging.warning('Received a pm response but no service1 socket registered yet')
                         else:
-                            logging.warning('Beware received a response with not registered caller %d', _caller)
+                            if _caller == 1:
+                                _sent = self._service1.send(_data)
+                            elif _caller == 2:
+                                logging.debug('telnet sending response to service2')
+                                _sent = self._service2.send(_data)
+                            else:
+                                logging.warning('Beware received a response with not registered caller %d', _caller)
                         if _sent != len(_data):
                             logging.error('telnet send error: not all data sent %d/%d', _sent, len(_data))
                         logging.debug('telnet sent back response to client')
@@ -564,6 +567,7 @@ class TelnetProxy(ChanelReceiver, MqttBase):
                     if _login_done:
                         logging.info('login done, should get_boiler_config')
                         self.get_boiler_config()
+                    _caller = 0
 
     def restart_service1(self) -> bool:
         """
