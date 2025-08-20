@@ -368,11 +368,15 @@ class MqttActuator(ChanelReceiver, MqttBase):
             # Publish config for this select
             select.write_config()
 
-        # Store the first select's MQTT client to use in the service method
-        if self._selects:
-            self._main_client = next(iter(self._selects.values())).mqtt_client
-        else:
-            logging.error("No selects were created")
+        # Store the first valid select's MQTT client to use in the service method
+        self._main_client = None
+        for select in self._selects.values():
+            client = getattr(select, 'mqtt_client', None)
+            if isinstance(client, Client):
+                self._main_client = client
+                break
+        if self._main_client is None:
+            logging.error("No valid MQTT client found in selects.")
 
     def service(self) -> None:
         """
@@ -407,6 +411,7 @@ class MqttActuator(ChanelReceiver, MqttBase):
             logging.info("Starting MQTT loop - waiting for messages...")
             # Use the base class's MQTT client loop_forever which handles reconnections
             # and doesn't block like sleep() does
+            logging.debug("self._main_client is: %r", self._main_client)
             if not self._main_client:
                 raise RuntimeError("No MQTT client available")
             self._main_client.loop_forever()
