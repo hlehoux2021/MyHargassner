@@ -119,13 +119,28 @@ class MqttInformer(MqttBase):
 
     def _create_all_sensors(self):
         # create basis mandatory sensors
-        # sensors before normal mode
+        def attach_paho_logger(sensor):
+            client = getattr(sensor, 'mqtt_client', None)
+            if client is not None:
+                def on_log(client, userdata, level, buf):
+                    logging.debug(f"PAHO: {buf}")
+                client.on_log = on_log
+                # Optionally, integrate with Python logging
+                try:
+                    client.enable_logger()
+                except Exception:
+                    pass
+
         self._web_app = MySensor("HargaWebApp","HargaWebApp",
                                  self._dict, self.config, self._device_info, self.mqtt_settings)
+        attach_paho_logger(self._web_app)
         self._token = MySensor("Login Token", "TOKEN", self._dict, self.config, self._device_info, self.mqtt_settings)
+        attach_paho_logger(self._token)
         self._key = MySensor("Login Key", "KEY", self._dict, self.config, self._device_info, self.mqtt_settings)
+        attach_paho_logger(self._key)
         # sensors coming in normal mode
         self._kt = self._create_sensor("KT","KT")
+        attach_paho_logger(self._kt)
         # sensors wanted from the pm buffer
         for _part in self.config.wanted:
             if _part not in self.config.desc:
@@ -133,6 +148,7 @@ class MqttInformer(MqttBase):
                 continue
             _sensor= self._create_sensor(self.config.desc[_part]['name'],_part)
             _sensor.set_state("")
+            attach_paho_logger(_sensor)
             self._sensors[_part]= _sensor
 
 
