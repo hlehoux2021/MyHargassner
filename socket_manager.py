@@ -31,7 +31,7 @@ class InterfaceError(HargSocketError):
     """Exception raised when interface configuration is invalid."""
     pass
 
-DEFAULT_TIMEOUT = 5.0  # Default socket timeout in seconds
+DEFAULT_TIMEOUT = 20.0  # Default socket timeout in seconds
 
 class SocketManager:
     """
@@ -321,12 +321,12 @@ class SocketManager:
             logging.error('SocketManager: Cannot receive, socket not created')
             raise SocketReceiveError("Socket not created")
         try:
-            logging.debug('SocketManager: Waiting to receive data (buffer size %d)', buffer_size)
+            #logging.debug('SocketManager: Waiting to receive data (buffer size %d)', buffer_size)
             result = self._socket.recvfrom(buffer_size)
             logging.debug('SocketManager: Received %d bytes from %s:%d', len(result[0]), result[1][0], result[1][1])
             return result
         except socket.timeout as e:
-            logging.debug('SocketManager: Receive operation timed out')
+            #logging.debug('SocketManager: Receive operation timed out')
             raise SocketTimeoutError("Receive operation timed out") from e
         except socket.error as e:
             logging.error('SocketManager: Failed to receive data: %s', str(e))
