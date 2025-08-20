@@ -38,6 +38,19 @@ class MqttBase():
                 username="jeedom",
                 password="eBg3UokK76KOWEDDUTWGEXUHxntZpV9XUDGQ8C5Xub0v4o4pE0fS2ofPxDa52A2i")
 
+    @staticmethod
+    def attach_paho_logger(sensor):
+        client = getattr(sensor, 'mqtt_client', None)
+        if client is not None:
+            def on_log(client, userdata, level, buf):
+                logging.debug(f"PAHO: {buf}")
+            client.on_log = on_log
+            # Optionally, integrate with Python logging
+            try:
+                client.enable_logger()
+            except Exception:
+                pass
+
     def name(self) -> str:
         """
         Get the class name of the instance.
@@ -363,6 +376,7 @@ class MqttActuator(ChanelReceiver, MqttBase):
 
             # Create the Select instance with the callback, passing param_name as user_data
             select = Select(select_settings, self.callback, user_data=param_name)
+            self.attach_paho_logger(select)
             self._selects[param_name] = select
 
             # Publish config for this select
