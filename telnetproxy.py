@@ -296,20 +296,24 @@ class TelnetProxy(ChanelReceiver, MqttBase):
         """
         # remember the source port from which gateway is telneting
         self.gwt_port = self._service1.accept()
+        _sock = self._service1.socket()
         # Re-add service1 socket to active sockets in the loop
         if hasattr(self, '_active_sockets'):
-            self._active_sockets.add(self._service1.socket())
-            logging.debug('Re-added service1 socket to active set')
+            if _sock is not None:
+                self._active_sockets.add(_sock)
+                logging.debug('Re-added service1 socket to active set')
 
     def accept2(self):
         """
         Accept a telnet connection on the second service and track the socket.
         """
         self._service2.accept()
+        _sock = self._service2.socket()
         # Re-add service2 socket to active sockets in the loop
         if hasattr(self, '_active_sockets'):
-            self._active_sockets.add(self._service2.socket())
-            logging.debug('Re-added service2 socket to active set')
+            if _sock is not None:
+                self._active_sockets.add(_sock)
+                logging.debug('Re-added service2 socket to active set')
 
     def discover(self):
         """
