@@ -217,13 +217,13 @@ class TelnetService:
         """
         return self._telnet.send(data)
 
-    def socket(self) -> socket.socket:
+    def socket(self) -> socket.socket | None:
         """
         Get the socket object for the accepted telnet connection.
         Returns:
             socket.socket: The socket object.
         """
-        return self._telnet
+        return self._telnet if self._telnet else None
 
     def recv(self) -> bytes:
         """
@@ -495,8 +495,9 @@ class TelnetProxy(ChanelReceiver, MqttBase):
                         if self._service2.socket() is not None:
                             try:
                                 sock = self._service2.socket()
-                                sock.close()
-                                self._active_sockets.discard(sock)
+                                if sock is not None:
+                                    sock.close()
+                                    self._active_sockets.discard(sock)
                             except Exception as close_err:
                                 logging.error("Error closing service2 socket: %s", str(close_err))
                         # Raise with service identification
