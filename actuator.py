@@ -4,6 +4,7 @@ This module defines MqttActuator, a class for controlling MQTT-enabled devices.
 
 
 import threading
+import socket
 
 from typing import Optional, Dict, List, Generic, TypeVar
 
@@ -336,11 +337,21 @@ class MqttActuator(ChanelReceiver, MqttBase):
                 found_ack = False
                 new_mode = None
                 try:
-                    while not found_ack:
-                        chunk = self._get_client().recv(BUFF_SIZE)
-                        if not chunk:
-                            logging.warning('No data received from boiler')
+                    max_tries = 20
+                    tries = 0
+                    while not found_ack and tries < max_tries:
+                        tries += 1
+                        try:
+                            chunk = self._get_client().recv(BUFF_SIZE)
+                        except socket.timeout:
+                            logging.warning('No data received from boiler (try %d/%d)', tries, max_tries)
+                            continue
+                        except socket.error as e:
+                            logging.error('Socket error during recv: %s', str(e))
                             break
+                        if not chunk:
+                            logging.warning('No data received from boiler (try %d/%d)', tries, max_tries)
+                            continue
                         logging.debug('Received chunk: %s', chunk)
                         buffer += chunk
                         # Split buffer into lines
@@ -356,6 +367,10 @@ class MqttActuator(ChanelReceiver, MqttBase):
                                 found_ack = True
                                 logging.debug('Received $ack, ending response loop')
                                 break
+                            if '$err' in line_str or '$permission denied' in line_str:
+                                logging.warning('Received error or permission denied: %s', line_str)
+                                found_ack = True
+                                break
                             # Look for the new mode line
                             # Example: zPa N: PR011 (Mode) = Auto
                             if line_str.startswith(f'zPa N: {param_id}'):
@@ -364,6 +379,9 @@ class MqttActuator(ChanelReceiver, MqttBase):
                                 if len(parts) == 2:
                                     new_mode = parts[1].strip()
                                     logging.info('Extracted new mode for %s: %s', param_id, new_mode)
+                    if not found_ack and tries >= max_tries:
+                        logging.warning('Exiting response loop after %d tries without $ack or error', max_tries)
+                    # Optionally, reset to blocking mode after
                 except Exception as e:
                     logging.error('Failed to receive/parse data: %s', str(e))
                     return
@@ -413,7 +431,7 @@ class MqttActuator(ChanelReceiver, MqttBase):
 
             # Create the Select instance with the callback, passing param_name as user_data
             select = Select(select_settings, self.callback, user_data=param_name)
-            self.attach_paho_logger(select)
+            #self.attach_paho_logger(select)
             self._selects[param_name] = select
 
             # Publish config for this select

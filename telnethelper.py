@@ -72,7 +72,7 @@ class TelnetClient:
                 return addr.address
         raise RuntimeError(f"No IPv4 address found for interface {iface}.")
 
-    def connect(self) -> None:
+    def connect(self, timeout_sec: float = 2.0) -> None:
         """
         Connect to the boiler using the address specified during initialization.
 
@@ -104,6 +104,7 @@ class TelnetClient:
                 self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
                 self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                self._sock.settimeout(timeout_sec)
                 self._sock.connect((addr_str, self._port))
                 self._connected = True
                 logging.info('telnet connected to %s on port %d', repr(addr_str), self._port)
