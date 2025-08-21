@@ -2,80 +2,26 @@
 This module defines MqttActuator, a class for controlling MQTT-enabled devices.
 """
 
-
+# Standard library imports
+import logging
 import threading
 import socket
 
 from typing import Optional, Dict, List, Generic, TypeVar
 
-import logging
-
+# Third party imports
 from paho.mqtt.client import Client, MQTTMessage
 from ha_mqtt_discoverable import Settings, DeviceInfo  # type: ignore
 from ha_mqtt_discoverable.sensors import Select, SelectInfo  # type: ignore
 
-import hargconfig
-from shared import ChanelReceiver, BUFF_SIZE
 from pubsub.pubsub import PubSub
+
+from shared import BUFF_SIZE
+from core import ChanelReceiver
+
+# Project imports
 from telnethelper import TelnetClient
-
-class MqttBase():
-    """
-    common base class for MqttInformer and MqttActuator
-    """
-    config: hargconfig.HargConfig
-    mqtt_settings: Settings.MQTT
-    _device_info: DeviceInfo
-
-    def __init__(self):
-        """
-        Initialize the MqttBase class.
-        Sets up the configuration and MQTT settings with default values.
-        Initializes device info as None.
-        """
-        self.config = hargconfig.HargConfig()
-        #TODO remove password from code.
-        self.mqtt_settings = Settings.MQTT(host="192.168.100.8",
-                username="jeedom",
-                password="eBg3UokK76KOWEDDUTWGEXUHxntZpV9XUDGQ8C5Xub0v4o4pE0fS2ofPxDa52A2i")
-
-    @staticmethod
-    def attach_paho_logger(sensor):
-        client = getattr(sensor, 'mqtt_client', None)
-        if client is not None:
-            def on_log(client, userdata, level, buf):
-                logging.debug(f"PAHO: {buf}")
-            client.on_log = on_log
-            # Optionally, integrate with Python logging
-            try:
-                client.enable_logger()
-            except Exception:
-                pass
-
-    def name(self) -> str:
-        """
-        Get the class name of the instance.
-
-        Returns:
-            str: The name of the class.
-        """
-        return self.__class__.__name__
-
-    def _create_device_info(self, _name: str) -> None:
-        """
-        Create device information for MQTT discovery.
-
-        Args:
-            _name (str): The name to use for the device.
-        """
-        lstr = list()
-        lstr.append(_name)
-        self._device_info = DeviceInfo(
-                            name=_name,
-                            manufacturer="Hargassner",
-                            sw_version="1.0",
-                            hw_version="1.0",
-                            identifiers=lstr)
+from mqtt_base import MqttBase
 
 
 class MqttActuator(ChanelReceiver, MqttBase):

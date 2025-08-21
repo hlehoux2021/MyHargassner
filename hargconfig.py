@@ -1,5 +1,5 @@
 """
-This module is the configuration of the project
+This module contains configuration for the Hargassner system.
 """
 
 class HargConfig():
@@ -8,16 +8,16 @@ class HargConfig():
     all this is reusing the job of Jahislove (https://github.com/Jahislove) 
     @ https://github.com/Jahislove/Hargassner/tree/master
     """
-    wanted: list[str] = None #list of values wanted
-    desc: dict = None # dictonary describing the values
-    map: dict = None # map between order in pm buffer and value
+    wanted: list[str] = [] #list of values wanted
+    desc: dict = {} # dictonary describing the values
+    map: dict = {} # map between order in pm buffer and value
     scan: int = 0 # scan interval in seconds for pm bufer
 
     def __init__(self):
         # setting a scan interval
         self.scan= 60
         # defining the list of value (from telnetproxy) we want to expose
-#        self.wanted= {
+#        self.wanted= [
 #			 'c0', 'c1','c2','c3','c4','c5','c6','c7','c8','c9',
 #			 'c10', 'c11','c12','c13','c14','c15','c16','c17','c18','c19',
 #			 'c20', 'c21','c22','c23','c24','c25','c26','c27','c28','c29',
@@ -28,11 +28,11 @@ class HargConfig():
 #			 'c70', 'c71','c72','c73','c74','c75','c76','c77','c78','c79',
 #			 'c80', 'c81','c82','c83','c84','c85','c86','c87','c88','c89',
 #			 'c90', 'c91','c92','c93','c94','c95','c96','c97','c98','c99'
-#        }
-        self.wanted= {
+#        ]
+        self.wanted= [
             'UPTIME', 'SYS', 'BOOT', 'KT', 'IGW', 'SWV', 'FWV', 'SNIO', 'SNBCE', 'RTC',
 	    'c0', 'c3', 'c5', 'c6', 'c7', 'c21', 'c27', 'c96', 'c134', 'c138'
-        }
+        ]
 
         # explaining the values
         self.desc= {

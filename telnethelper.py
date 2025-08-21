@@ -4,15 +4,16 @@ This module provides a robust interface for establishing and managing telnet con
 with proper error handling and connection management.
 """
 
-import socket
+# Standard library imports
 import logging
+import socket
 import platform
 import time
 import re
 from typing import Tuple
-
 import psutil
 
+# Project imports
 from shared import BUFF_SIZE
 from socket_manager import SocketManager
 

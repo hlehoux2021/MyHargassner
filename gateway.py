@@ -3,15 +3,19 @@ This module implements the gateway listener.
 It discovers the IGW when receiving UDP broadcast messages
 and forwards messages from the IGW to the boiler.
 """
+
+# Standard library imports
 import logging
 from queue import Queue
 from threading import Thread
 from typing import Annotated, Tuple
-import annotated_types
 
+# Third party imports
+import annotated_types
 from pubsub.pubsub import PubSub
 
-from shared import ListenerSender
+# Project imports
+from core import ListenerSender
 from socket_manager import (
     SocketSendError,
     SocketTimeoutError,

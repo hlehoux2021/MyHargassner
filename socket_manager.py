@@ -2,13 +2,14 @@
 Common socket management utilities and exceptions for the HARG project.
 """
 
-import socket
+# Standard library imports
 import logging
+import socket
 import platform
 from typing import Tuple, Union, Optional
 
 class HargSocketError(Exception):
-    """Base exception for HARG socket operations."""
+    """Base exception for socket operations."""
     pass
 
 class SocketTimeoutError(HargSocketError):
@@ -213,7 +214,7 @@ class SocketManager:
             if platform.system() == 'Darwin':
                 # On MacOS, we decide based on broadcast parameter
                 if broadcast:
-                    logging.debug('SocketManager: Binding to all interfaces (0.0.0.0) on port %d (original port %d with delta %d)',
+                    logging.debug('SocketManager: Binding to all on port %d (original port %d with delta %d)',
                           adjusted_port, port, delta)
                     self._socket.bind(('', adjusted_port))
                 else:
@@ -221,8 +222,8 @@ class SocketManager:
                           self.src_iface, adjusted_port, port, delta)
                     self._socket.bind((self.src_iface, adjusted_port))
             else:
-                # assuming we're on Linux, we always bind to any because we have set SO_BINDTODEVICE on an interface name
-                logging.debug('SocketManager: Binding to all interfaces (0.0.0.0) on port %d (original port %d with delta %d)',
+                # assuming we're on Linux, we bind to any because we have set SO_BINDTODEVICE
+                logging.debug('SocketManager: Binding to all on port %d (original port %d with delta %d)',
                           adjusted_port, port, delta)
                 self._socket.bind(('', adjusted_port))
             logging.debug('SocketManager: bind_with_delta successful')
@@ -260,8 +261,7 @@ class SocketManager:
             raise InterfaceError(f"Invalid source IP for MacOS: {self.src_iface}")
         try:
             # Platform-specific address handling
-            
-                # Calculate final port (e.g. 50000 + (-100) = 49900)
+            # Calculate final port (e.g. 50000 + (-100) = 49900)
             if self.is_same_machine():
                 adjusted_port = port + delta # the caller tells what delta to use if same machine
                 logging.debug('SocketManager: Same machine detected, adjusting port from %d to %d (delta: %d)',
@@ -356,7 +356,6 @@ class SocketManager:
         """
         if addr1 == addr2:
             return True
-        
         # Check if either is localhost
         localhost = {'127.0.0.1', 'localhost', '::1'}
         return addr1 in localhost and addr2 in localhost

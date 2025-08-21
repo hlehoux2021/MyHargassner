@@ -1,24 +1,26 @@
 """
 This module implements the TelnetProxy
 """
+
+# Standard library imports
+import logging
 import socket
 import select
 import time
-import threading
-
 import platform
-import logging
-from threading import Thread
-from typing import Annotated
-from typing import Tuple
+from threading import Thread, Lock
+from typing import Annotated,Tuple
 
 import annotated_types
 from pubsub.pubsub import PubSub
 
+
+# Project imports
 from telnethelper import TelnetClient
-from shared import ChanelReceiver,BUFF_SIZE
+from shared import BUFF_SIZE
+from core import ChanelReceiver
 from analyser import Analyser
-from actuator import ThreadedMqttActuator, MqttBase
+from mqtt_actuator import ThreadedMqttActuator, MqttBase
 from socket_manager import SocketManager
 
 # $login token
@@ -248,9 +250,9 @@ class TelnetProxy(ChanelReceiver, MqttBase):
     _service2: TelnetService # to service other requests
     _active_sockets: set[socket.socket] # Track which sockets are still active
     _analyser: Analyser
-    _service_lock: threading.Lock
+    _service_lock: Lock
 
-    def __init__(self, communicator: PubSub, src_iface, dst_iface, port, lock: threading.Lock):
+    def __init__(self, communicator: PubSub, src_iface, dst_iface, port, lock: Lock):
         """
         Initialize the TelnetProxy with communication channel, interfaces, and port.
         """
@@ -342,7 +344,8 @@ class TelnetProxy(ChanelReceiver, MqttBase):
         """
         Connect to the boiler using the discovered address and interface.
         """
-        logging.debug('TelnetProxy connecting to boiler bl_addr=%s  dst_iface=%s', repr(self.bl_addr), repr(self.dst_iface))
+        logging.debug('TelnetProxy connecting to boiler bl_addr=%s  dst_iface=%s',
+                      repr(self.bl_addr), repr(self.dst_iface))
         self._client= TelnetClient(self.bl_addr, self.dst_iface)
         self._client.connect()
 
@@ -665,7 +668,7 @@ class ThreadedTelnetProxy(Thread):
     _dst_iface: bytes
     _port: int
     _ma: ThreadedMqttActuator | None = None
-    _service_lock: threading.Lock
+    _service_lock: Lock
 
     def __init__(self, communicator: PubSub, src_iface: bytes, dst_iface: bytes, port: int):
         """
@@ -676,7 +679,7 @@ class ThreadedTelnetProxy(Thread):
         self._dst_iface = dst_iface
         self._port = port
         self._ma = None
-        self._service_lock = threading.Lock()
+        self._service_lock = Lock()
 
         # Initialize the TelnetProxy instance
         super().__init__(name='TelnetProxy')

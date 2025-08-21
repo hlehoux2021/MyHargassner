@@ -2,13 +2,16 @@
 This module implements the boiler proxy
 """
 
+# Standard library imports
 import logging
-
 from threading import Thread
 from typing import Tuple
+
+# Third party imports
 from pubsub.pubsub import PubSub
 
-from shared import ListenerSender
+# Project imports
+from core import ListenerSender
 from socket_manager import (
     SocketSendError,
     SocketTimeoutError,
@@ -64,7 +67,6 @@ class BoilerListenerSender(ListenerSender):
         try:
             # Decode gateway address for sending
             gw_addr = self.gw_addr.decode('utf-8')
-            
             # Use platform-aware sending with delta
             self.send_manager.send_with_delta(
                 data=data,
@@ -73,7 +75,6 @@ class BoilerListenerSender(ListenerSender):
                 dest=gw_addr
             )
             logging.debug('Successfully sent %d bytes to gateway', len(data))
-            
         except (SocketSendError, SocketTimeoutError, InterfaceError) as e:
             logging.error('Failed to send data to gateway: %s', str(e))
             raise
@@ -104,7 +105,6 @@ class BoilerListenerSender(ListenerSender):
         """
         try:
             logging.debug('Binding listener (gw_port=%d, delta=%d)', self.gw_port, self.delta)
-            
             # Let socket manager handle platform-specific binding
             self.listen_manager.bind_with_delta(
                 port=self.gw_port,
@@ -112,10 +112,8 @@ class BoilerListenerSender(ListenerSender):
                 delta=-self.delta,
                 broadcast=False  # No broadcast for boiler listener
             )
-            
             self.bound = True
             logging.info('BoilerListener bound successfully (gw_port=%d, delta=%d)', self.gw_port, self.delta)
-            
         except (SocketBindError, InterfaceError) as e:
             logging.error('Failed to bind listener: %s', str(e))
             raise

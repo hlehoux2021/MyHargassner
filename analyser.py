@@ -1,12 +1,16 @@
 """
-    This module implements anaylsis of Gateway requests and Boiler Responses
+    This module implements analysis of Gateway requests and Boiler Responses
 """
+
+# Standard library imports
 import logging
 import time
 from typing import Tuple
 
+# Third party imports
 from pubsub.pubsub import PubSub
 
+# Project imports
 import hargconfig
 
 class Analyser():
@@ -31,7 +35,6 @@ class Analyser():
         """
         publish a result to the queue where it will be used
         """
-#        logging.debug("put %s --> %s", key, subpart)
         self._com.publish(self._channel, f"{key}££{subpart}")
 
     def is_pm_response(self, _data: bytes) -> bool:
@@ -267,14 +270,7 @@ class Analyser():
         logging.debug('analyse_pm %d bytes ==>%s',len(pm), repr(pm))
         _str_parts = pm.decode('ascii').split(' ')
         for _part in _str_parts:
-#            logging.debug('analyse_pm %d :%s',i,_part)
             if ((i in self._values) and (_part != self._values[i])) or (i not in self._values):
-                if i in self._values:
-                    #logging.debug('analyse_pm changed %d :%s was %s', i, _part, self._values[i])
-                    pass
-                else:
-                    #logging.debug('analyse_pm     new %d :%s', i, _part)
-                    pass 
                 self._values[i]= _part
                 if i in self.config.map:
                     logging.info('pm %s --> %s', self.config.map[i],_part)

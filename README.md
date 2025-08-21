@@ -106,9 +106,7 @@ pip install paho-mqtt ha-mqtt-discoverable pydantic annotated_types psutil
 ### Installation
 1. Clone the repositories
    ```
-   git clone https://github.com/hlehoux2021/harg.git
-   cd harg
-   https://github.com/hlehoux2021/pubsub.git
+   git clone --recurse-submodules https://github.com/hlehoux2021/MyHargassner.git
    ```
 
 2. Configure the network interfaces in `main.py`:

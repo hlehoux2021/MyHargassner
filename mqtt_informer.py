@@ -2,19 +2,20 @@
 Module for MQTT client to handle to boiler
 """
 
-
+# Standard library imports
 import logging
 from queue import Empty
 from typing import Union
 
+# Third party imports
 from ha_mqtt_discoverable import Settings, DeviceInfo # type: ignore
 from ha_mqtt_discoverable.sensors import Sensor, SensorInfo # type: ignore
-import hargconfig
-from actuator import MqttBase
 
 from pubsub.pubsub import PubSub, ChanelQueue, ChanelPriorityQueue
 
-
+# Project imports
+import hargconfig
+from mqtt_base import MqttBase
 
 class MySensor(Sensor):
     """
@@ -42,17 +43,16 @@ class MySensor(Sensor):
             _state = ""
         if _id in _config.wanted:
             _info = SensorInfo(name=_name,
-                             state=_state,
                              unique_id=_id+"/"+_dict["BL_ADDR"],
                              unit_of_measurement=_config.desc[_id]['unit'],
                              device=_device_info)
         else:
             _info = SensorInfo(name=_name,
-                             state=_state,
                              unique_id=_id+"/"+_dict["BL_ADDR"],
                              device=_device_info)
         _settings = Settings(mqtt=_mqtt, entity=_info)
         super().__init__(_settings)
+        self.set_state(_state)
         if _id in _config.desc:
             self.set_attributes({'description': _config.desc[_id]['desc']})
 
@@ -102,17 +102,16 @@ class MqttInformer(MqttBase):
             _state= ""
         if _id in self.config.wanted:
             _info= SensorInfo(name= _name,
-                              state= _state,
                               unique_id= _id+"/"+self._dict["BL_ADDR"],
                               unit_of_measurement= self.config.desc[_id]['unit'],
                               device=self._device_info)
         else:
             _info= SensorInfo(name= _name,
-                              state= _state,
                               unique_id= _id+"/"+self._dict["BL_ADDR"],
                               device=self._device_info)
         _settings= Settings(mqtt=self.mqtt_settings, entity= _info)
         _sensor= Sensor(_settings)
+        _sensor.set_state(_state)
         if _id in self.config.desc:
             _sensor.set_attributes({'description': self.config.desc[_id]['desc']})
         return _sensor
@@ -132,7 +131,7 @@ class MqttInformer(MqttBase):
         # sensors wanted from the pm buffer
         for _part in self.config.wanted:
             if _part not in self.config.desc:
-                logging.warning(f"Missing description for {_part} in config")
+                logging.warning("Missing description for %s in config", _part)
                 continue
             _sensor= self._create_sensor(self.config.desc[_part]['name'],_part)
             _sensor.set_state("")
@@ -207,7 +206,13 @@ class MqttInformer(MqttBase):
                         self._init_sensors()
             except Empty:
                 logging.debug("handleReceiveQueue: no message received")
-            logging.debug('MqttInformer stage is now %s', _stage)
-        # whenever we exit the loop, we unsubscribe from the channel
-        self._com.unsubscribe(self._channel, self._msq)
-        self._msq = None
+                logging.debug('MqttInformer stage is now %s', _stage)
+            except Exception as e:
+                logging.critical("MqttInformer: error %s", e)
+                _stage = ''
+                self._dict = {}
+                self._sensors = {}
+                # whenever we exit the loop, we unsubscribe from the channel
+                self._com.unsubscribe(self._channel, self._msq)
+                self._msq = None
+                break

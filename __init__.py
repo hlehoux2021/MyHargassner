@@ -1,0 +1,3 @@
+"""
+MyHargassner package initialization.
+"""

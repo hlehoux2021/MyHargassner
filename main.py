@@ -14,16 +14,20 @@ and mqqt
 # 100.84: 100.13	51975->23	$login key AAAABBBBCCCCDDDDEEEEFFFF0000AAAAAA\r\n
 # 100.13: 100.84	23->51975	zclient login (9999)\r\n$ack\r\n
 
+# Standard library imports
 import logging
+import threading
 import argparse
 import time
-import threading
+
+# Third party imports
+from pubsub.pubsub import PubSub
+
+# Project imports
 from telnetproxy import ThreadedTelnetProxy
 from boiler import ThreadedBoilerListenerSender
 from gateway import ThreadedGatewayListenerSender
-from mqtt import MqttInformer
-
-from pubsub.pubsub import PubSub
+from mqtt_informer import MqttInformer
 
 #----------------------------------------------------------#
 LOG_PATH = "./" #chemin où enregistrer les logs
@@ -62,8 +66,8 @@ if command_line_args.GW_IFACE:
 if command_line_args.BL_IFACE:
     BL_IFACE = bytes(command_line_args.BL_IFACE,'ascii')
 
-#if command_line_args.port is not None:
-#    UDP_PORT = int(command_line_args.port)
+if command_line_args.port:
+    UDP_PORT = int(command_line_args.port)
 
 
 # Set LOG_LEVEL based on command-line arguments, using boolean flags and elif for exclusivity
