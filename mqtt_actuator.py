@@ -325,6 +325,7 @@ class MqttActuator(ChanelReceiver, MqttBase):
                                 if len(parts) == 2:
                                     new_mode = parts[1].strip()
                                     logging.info('Extracted new mode for %s: %s', param_id, new_mode)
+
                     if not found_ack and tries >= max_tries:
                         logging.warning('Exiting response loop after %d tries without $ack or error', max_tries)
                     # Optionally, reset to blocking mode after
@@ -333,6 +334,12 @@ class MqttActuator(ChanelReceiver, MqttBase):
                     return
                 if new_mode:
                     logging.info('Final new mode for %s: %s', param_id, new_mode)
+                    #update the MQTT Item that is modified
+                    select = self._selects.get(param_id)
+                    if select is not None:
+                        select.select_option(new_mode)
+                    else:
+                        logging.warning(f"No Select found for param_id: {param_id}")
                 else:
                     logging.info('No new mode found for %s in response', param_id)
             except Exception as e:
