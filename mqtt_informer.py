@@ -103,7 +103,7 @@ class MqttInformer(MqttBase):
             _state= self._dict[_id]
         else:
             _state= ""
-        if _id in self.config.wanted:
+        if _id in self.config.wanted and _id in self.config.desc:
             _info= SensorInfo(name= _name,
                               unique_id= _id+"/"+self._dict["BL_ADDR"],
                               unit_of_measurement= self.config.desc[_id]['unit'],
@@ -114,10 +114,8 @@ class MqttInformer(MqttBase):
                               device=self._device_info)
         _settings= Settings(mqtt=self.mqtt_settings, entity= _info)
         _sensor= Sensor(_settings)
-        if _id in self.config.wanted:
-            _sensor.set_attributes({'description': self.config.desc[_id]['desc']})
         _sensor.set_state(_state)
-        if _id in self.config.desc:
+        if _id in self.config.wanted and _id in self.config.desc:
             _sensor.set_attributes({'description': self.config.desc[_id]['desc']})
         return _sensor
 
