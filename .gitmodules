@@ -1,0 +1,3 @@
+[submodule "pubsub"]
+	path = pubsub
+	url = https://github.com/hlehoux2021/pubsub.git
