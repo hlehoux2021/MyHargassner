@@ -30,14 +30,17 @@ class HargConfig():
 #			 'c90', 'c91','c92','c93','c94','c95','c96','c97','c98','c99'
 #        ]
         self.wanted= [
-            'UPTIME', 'SYS', 'BOOT', 'KT', 'IGW', 'SWV', 'FWV', 'SNIO', 'SNBCE', 'RTC',
-	    'c0', 'c3', 'c5', 'c6', 'c7', 'c21', 'c27', 'c96', 'c134', 'c138'
+            'MSG', 'TOKEN', 'KEY', 'UPTIME', 'SYS', 'BOOT', 'KT', 'IGW', 'SWV', 'FWV', 'SNIO', 'SNBCE', 'RTC',
+	    'c0', 'c3', 'c5', 'c6', 'c7', 'c21', 'c27', 'c96', 'c99', 'c115','c134', 'c138'
         ]
 
         # explaining the values
         self.desc= {
 
+'MSG':{'name':'Message',			'unit':'',		'desc':'message string'},
 'KT':{'name':'KT',			'unit':'',		'desc':'kt string'},
+'TOKEN':{'name':'Login token',			'unit':'',		'desc':'token string'},
+'KEY':{'name':'Login key',			'unit':'',		'desc':'key string'},
 'UPTIME':{'name':'UPTIME',			'unit':'',		'desc':'uptime'},
 'SYS':{'name':'SYS',				'unit':'',		'desc':'Code system'},
 'BOOT':{'name':'BOOT',				'unit':'',		'desc':'Boot version'},
@@ -46,9 +49,9 @@ class HargConfig():
 'FWV':{'name':'FWV',				'unit':'',		'desc':'Version firmware I/O'},
 'SNIO':{'name':'SNIO',				'unit':'',		'desc':'N° de série I/O'},
 'SNBCE':{'name':'SNBCE',			'unit':'',		'desc':'N° de série Pupitre'},
-'RTC':{'name':'RTC',	    		'unit':'',		'desc':'real time counter'},
-'c0':{'name':'ZK',				    'unit':'',		'desc':'etat chaudiere'},
-'c1':{'name':'O2',				    'unit':'%',	    'desc':'O2 est'},
+'RTC':{'name':'RTC',	    		        'unit':'',		'desc':'real time counter'},
+'c0':{'name':'ZK',				'unit':'',		'desc':'etat chaudiere'},
+'c1':{'name':'O2',				'unit':'%',	    'desc':'O2 est'},
 'c2':{'name':'O2soll',			    'unit':'%',	    'desc':'O2 doit'},
 'c3':{'name':'TK',				    'unit':'°C',	'desc':'temperature chaudiere est '},
 'c4':{'name':'TKsoll',			    'unit':'°C',	'desc':'temperature chaudiere doit'},

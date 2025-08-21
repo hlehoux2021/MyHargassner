@@ -72,11 +72,11 @@ class MqttInformer(MqttBase):
 
     _dict: dict
     _sensors: dict
-    _token: Sensor
-    _web_app: Sensor
-    _key: Sensor
-    _kt: Sensor
-
+    _token: Sensor #login token.
+    _web_app: Sensor # HargaWebApp message.
+    _key: Sensor # login key.
+    _kt: Sensor # Model of Boiler.
+    _msg: Sensor # base sensor to display messages.
     def __init__(self,communicator: PubSub):
         super().__init__()
         self._com = communicator
@@ -88,6 +88,9 @@ class MqttInformer(MqttBase):
         if 'HargaWebApp' in self._dict:
             logging.debug('HargaWebApp in dict --> set')
             self._web_app.set_state(self._dict['HargaWebApp'])
+        if 'MSG' in self._dict:
+            logging.debug('MSG in dict --> set')
+            self._msg.set_state(self._dict['MSG'])
         if 'TOKEN' in self._dict:
             logging.debug('TOKEN in dict --> set')
             self._token.set_state(self._dict['TOKEN'])
@@ -118,9 +121,14 @@ class MqttInformer(MqttBase):
 
     def _create_all_sensors(self):
         # create basis mandatory sensors
+        self._msg = MySensor("Message","MSG",
+                                 self._dict, self.config, self._device_info, self.mqtt_settings)
+        self._msg.set_state("Started MyHargassner")
         self._web_app = MySensor("HargaWebApp","HargaWebApp",
                                  self._dict, self.config, self._device_info, self.mqtt_settings)
+        # we attach a paho logger to get paho-mqtt debug messages
         self.attach_paho_logger(self._web_app)
+
         self._token = MySensor("Login Token", "TOKEN", self._dict, self.config, self._device_info, self.mqtt_settings)
         self.attach_paho_logger(self._token)
         self._key = MySensor("Login Key", "KEY", self._dict, self.config, self._device_info, self.mqtt_settings)
