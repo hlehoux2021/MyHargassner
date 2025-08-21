@@ -95,7 +95,7 @@ logging.info('Started')
 
 #from queue import Queue,Empty
 
-pub = PubSub()
+pub = PubSub(max_queue_in_a_channel=9999)
 
 class PubSubListener(threading.Thread):
     """ Class defining a listener used in a thread """
