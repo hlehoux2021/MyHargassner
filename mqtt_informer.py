@@ -114,6 +114,8 @@ class MqttInformer(MqttBase):
                               device=self._device_info)
         _settings= Settings(mqtt=self.mqtt_settings, entity= _info)
         _sensor= Sensor(_settings)
+        if _id in self.config.wanted:
+            _sensor.set_attributes({'description': self.config.desc[_id]['desc']})
         _sensor.set_state(_state)
         if _id in self.config.desc:
             _sensor.set_attributes({'description': self.config.desc[_id]['desc']})

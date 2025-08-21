@@ -31,7 +31,7 @@ class HargConfig():
 #        ]
         self.wanted= [
             'MSG', 'TOKEN', 'KEY', 'UPTIME', 'SYS', 'BOOT', 'KT', 'IGW', 'SWV', 'FWV', 'SNIO', 'SNBCE', 'RTC',
-	    'c0', 'c3', 'c5', 'c6', 'c7', 'c21', 'c27', 'c96', 'c99', 'c115','c134', 'c138'
+	    'c0', 'c3', 'c5', 'c6', 'c7', 'c21', 'c27', 'c95', 'c96', 'c99', 'c115','c134', 'c138', 'c180'
         ]
 
         # explaining the values
@@ -145,8 +145,8 @@ class HargConfig():
 'c92':{'name':'BoiZustand_1',		'unit':'',		'desc':'Ballon ECS 0:off , 1:charge, 2:recyclage 	'},
 'c93':{'name':'BoiZustand_2',		'unit':'',		'desc':'?'},
 'c94':{'name':'BoiZustand_3',		'unit':'',		'desc':'?'},
-'c95':{'name':'PuffZustand',		'unit':'',		'desc':'etat BT 3:charge 2:decharge	'},
-'c96':{'name':'Puffer_soll',		'unit':'°C',	'desc':'Temp BT doit	'},
+'c95':{'name':'PuffZustand',		'unit':'',		'desc':'etat Tampon 3:charge 2:decharge	'},
+'c96':{'name':'Puffer_soll',		'unit':'°C',	'desc':'Temp Tampon doit	'},
 'c97':{'name':'Mode Fw',			'unit':'',		'desc':'erreur en cours :'},
 'c98':{'name':'Einschubschn.BSZ',	'unit':'h',		'desc':'heures vis entree chaudiere '},
 'c99':{'name':'Verbrauchszähler',	'unit':'Kg',	'desc':'kg	consommation pellet'},
