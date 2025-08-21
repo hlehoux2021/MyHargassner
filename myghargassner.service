@@ -1,0 +1,13 @@
+[Unit]
+Description=Hargassner Gateway and MQTT Service
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/myghargassner
+User=root
+WorkingDirectory=/etc/myghargassner
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
