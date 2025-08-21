@@ -1,11 +1,26 @@
-# HARG (Hargassner Gateway)
+# MyHargassner (Hargassner Gateway to MQTT)
 
 ## Summary
-HARG is a Python-based gateway project designed to interface with Hargassner pellet boilers. It acts as a bridge between the boiler's network communication and MQTT, enabling integration with home automation systems like Home Assistant. The project reuses and builds upon the work of [Jahislove](https://github.com/Jahislove/Hargassner/tree/master) and uses the PubSub library from [Thierry Maillard](https://github.com/Thierry46/pubsub).
+MyHargassner is a Python-based  project designed to interface with Hargassner pellet boilers. It acts as a bridge between the boiler's network communication and MQTT, enabling integration with home automation systems like Jeedom or Home Assistant. The project reuses and builds upon the work of [Jahislove](https://github.com/Jahislove/Hargassner/tree/master) and uses the PubSub library from [Thierry Maillard](https://github.com/Thierry46/pubsub).
+
+## Disclaimer
+This is a hobby project, provided free and as-is. There is no professional support included
+I work on this project when i have time, mainly during summer holidays
+I'm a beginner python programmer, be kind with my errors
+
+## known limitations and bugs
+- many, many !
+- todo: implement a configuration file when installed as a system service
+- bug: sometimes a "struct.unpack() excpetion is raised in paho-mqtt
+- limit: when you use the project, the information in the IGW, and on the Hargassner App is not updated with what you do
+- todo: today only Hargassner software version V14.0n3 is supported
+- todo: implement more controls of the boiler (today only Boiler mode, and Zone 1 & 2 Mode)
+- todo: enhance management of "error" or "permission denied" responses from the boiler
 
 ## Setup
 
 ### Prerequisites
+- An Hargassner pellet boiler (typically a NanoPK), *and* the internet gateway (IGW) from the vendor
 - Raspberry Pi with Raspberry Pi OS
 - Two network interfaces:
   - Primary interface (`eth0`) connected to your router (same network as the Hargassner IGW internet gateway)
@@ -15,6 +30,12 @@ HARG is a Python-based gateway project designed to interface with Hargassner pel
 - DHCP server for the boiler network (instructions below)
 
 ### Network Setup on Raspberry Pi
+The project relies on being deployed on a Raspberry PI between the IGW and the NanoPK. 
+I will establish connections with both and act as a relay between them, while getting necessary information.
+The IGW and the NanoPK *must* be on seperate network interfaces connected to your Raspberry
+
+Typically, your PI will be on the home network connected (through eth0) to your router, like the IGW.
+The pellet boiler will be connected directly to your Raspberry (through a second ethernet card on eth1)
 
 1. **Install DHCP Server**
    ```bash
@@ -83,39 +104,107 @@ HARG is a Python-based gateway project designed to interface with Hargassner pel
 Note: The secondary interface (eth1) will only be active when the Ethernet cable is physically connected. You may need to reboot both the Raspberry Pi and the Nano.PK to establish the connection.
 
 ### Required Python Packages
-- Main packages:
-  - `paho-mqtt`: MQTT client library
-  - `ha-mqtt-discoverable`: Home Assistant MQTT discovery integration
-  - `pydantic`: Data validation using Python type annotations
-  - `annotated_types`: Support for annotated type hints
-  - `psutil`
-- Dependencies automatically installed with the above:
-  - `typing`
-  - `logging`
-  - `threading`
-  - `socket`
-  - `queue`
-  - `argparse`
-  - `platform`
 
-To install the required packages:
+Main dependencies (see `setup.py`):
+- `paho-mqtt`
+- `ha-mqtt-discoverable`
+- `psutil`
+- `pydantic`
+- `annotated_types`
+
+Install with:
 ```bash
-pip install paho-mqtt ha-mqtt-discoverable pydantic annotated_types psutil
+pip install paho-mqtt ha-mqtt-discoverable psutil pydantic annotated_types
 ```
 
 ### Installation
-1. Clone the repositories
-   ```
+1. Clone the repository:
+   ```bash
    git clone --recurse-submodules https://github.com/hlehoux2021/MyHargassner.git
+   cd MyHargassner
    ```
 
-2. Configure the network interfaces in `main.py`:
-   ```python
-   GW_IFACE = b'eth0'  # network interface connected to the gateway
-   BL_IFACE = b'eth1'  # network interface connected to the boiler
-   UDP_PORT = 35601    # destination port to which gateway is broadcasting
+2. Install dependencies:
+   ```bash
+   pip install .
+   # or, if you prefer:
+   # pip install -r requirements.txt
    ```
-3. Update MQTT settings in `hargconfig.py` with your broker details
+
+3. Configure network and MQTT settings:
+   - Edit `main.py` for network interface names.
+   - Edit `hargconfig.py` for MQTT broker and wanted sensor parameters.
+
+### File Structure
+
+```
+MyHargassner/
+├── analyser.py
+├── boiler.py
+├── clients/
+│   └── ...
+├── core.py
+├── gateway.py
+├── hargconfig.py
+├── install_system_service.sh
+├── main.py
+├── mqtt_actuator.py
+├── mqtt_base.py
+├── mqtt_informer.py
+├── myghargassner.service
+├── pubsub/
+│   ├── pubsub.py
+│   └── ...
+├── shared.py
+├── socket_manager.py
+├── telnethelper.py
+├── telnetproxy.py
+├── uninstall_system_service.sh
+└── ...
+```
+
+### Run the programm
+   ```bash
+   sudo -E env -S PATH=$PATH python3 main.py --debug
+   ```
+The following command line arguments are accepted:
+-g --GW_IFACE  Source interface
+-b --BL_IFACE  Destination interface
+-p --port      Source port
+-d --debug     Enable debug logging
+-i --info'     info logging level
+-w --warning   warning logging level
+-e --error     error logging level
+-c --critical  critical logging level
+
+### Setting up as a System Service
+
+You can install and run the gateway as a systemd service using the provided bash script. This will copy the project to `/etc/myghargassner`, install the Python package system-wide, and set up the service to start on boot.
+
+1. Edit `myghargassner.service` if you need to customize the service (default runs as root and uses `/usr/local/bin/myghargassner`).
+2. Run the install script as root:
+   ```bash
+   sudo bash install_system_service.sh
+   ```
+3. The script will:
+   - Copy all project files to `/etc/myghargassner`
+   - Install the Python package system-wide
+   - Copy the systemd service file to `/etc/systemd/system/`
+   - Reload systemd, enable, and start the service
+
+4. To check the service status:
+   ```bash
+   systemctl status myghargassner
+   ```
+5. To stop or restart:
+   ```bash
+   sudo systemctl stop myghargassner
+   sudo systemctl restart myghargassner
+   ```
+
+To uninstall, use the provided `uninstall_system_service.sh` script.
+
+---
 
 ## Architecture
 
@@ -191,4 +280,5 @@ The `hargconfig.py` file contains extensive mapping of boiler parameters includi
 - Error codes
 
 You can customize which parameters to monitor by modifying the `wanted` list in `HargConfig` class.
+Please refer to https://github.com/Jahislove/Hargassner/tree/master for details on the parameters sent by the Hargassner pellet boiler
 
