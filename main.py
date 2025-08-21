@@ -149,4 +149,5 @@ gls= ThreadedGatewayListenerSender(pub, GW_IFACE, BL_IFACE, UDP_PORT,delta=100)
 
 tln.start()
 bls.start()
-gls.start()#mi.start()
+gls.start()
+mi.start()
