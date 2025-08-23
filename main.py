@@ -17,79 +17,35 @@ and mqqt
 # Standard library imports
 import logging
 import threading
-import argparse
+import os
+import sys
 import time
 
 # Third party imports
 from pubsub.pubsub import PubSub
 
 # Project imports
+from appconfig import AppConfig
 from telnetproxy import ThreadedTelnetProxy
 from boiler import ThreadedBoilerListenerSender
 from gateway import ThreadedGatewayListenerSender
 from mqtt_informer import MqttInformer
 
 #----------------------------------------------------------#
-LOG_PATH = "./" #chemin où enregistrer les logs
-LOG_LEVEL= logging.INFO
 
-SOCKET_TIMEOUT= 0.2
-BUFF_SIZE= 1024
+app_config = AppConfig()
 
-GW_IFACE = b'eth0' # network interface connected to the gateway
-BL_IFACE = b'eth1' # network interface connected to the boiler
-UDP_PORT = 35601 # destination port to which gateway is broadcasting
-
-#----------------------------------------------------------#
-
-def parse_command_line():
-    """This method parses the command line arguments"""
-    parser = argparse.ArgumentParser(description='Command line parser')
-    parser.add_argument('-g', '--GW_IFACE', type=str, help='Source interface')
-    parser.add_argument('-b', '--BL_IFACE', type=str, help='Destination interface')
-    parser.add_argument('-p', '--port', type=int, help='Source port')
-    parser.add_argument('-d', '--debug', action='store_true', help='Enable debug logging')
-    parser.add_argument('-i', '--info', action='store_true', help='info logging level')
-    parser.add_argument('-w', '--warning', action='store_true', help='warning logging level')
-    parser.add_argument('-e', '--error', action='store_true', help='error logging level')
-    parser.add_argument('-c', '--critical', action='store_true', help='critical logging level')
-
-    args = parser.parse_args()
-    return args
-
-# Utilisation du parseur de ligne de commande
-command_line_args = parse_command_line()
-
-if command_line_args.GW_IFACE:
-    GW_IFACE = bytes(command_line_args.GW_IFACE,'ascii')
-
-if command_line_args.BL_IFACE:
-    BL_IFACE = bytes(command_line_args.BL_IFACE,'ascii')
-
-if command_line_args.port:
-    UDP_PORT = int(command_line_args.port)
+# Check for required password
+if not app_config.mqtt_password():
+    print("ERROR: MQTT password must be set in the configuration file or via command-line argument.")
+    sys.exit(1)
 
 
-# Set LOG_LEVEL based on command-line arguments, using boolean flags and elif for exclusivity
-if command_line_args.debug:
-    LOG_LEVEL = logging.DEBUG
-elif command_line_args.info:
-    LOG_LEVEL = logging.INFO
-elif command_line_args.warning:
-    LOG_LEVEL = logging.WARNING
-elif command_line_args.error:
-    LOG_LEVEL = logging.ERROR
-elif command_line_args.critical:
-    LOG_LEVEL = logging.CRITICAL
+# Set up logging using AppConfig
+app_config.setup_logging()
 
 
-#----------------------------------------------------------#
-logging.basicConfig(filename='trace.log', level=LOG_LEVEL,
-                    format='%(asctime)s - %(levelname)s - %(threadName)s - %(message)s',
-                    filemode='a',
-                    force=True)
-
-logging.info('Started')
+logging.info('Started MyHargassner')
 
 #----------------------------------------------------------#
 
@@ -136,16 +92,16 @@ pln.start()
 mi = MqttInformer(pub)
 
 # create a telnet proxy. this will forward info to the mq queue
-tln= ThreadedTelnetProxy(pub, GW_IFACE, BL_IFACE, port=23,)
+tln = ThreadedTelnetProxy(pub, app_config.gw_iface(), app_config.bl_iface(), port=23)
 
 # create a BoilerListener
 # it will discover the boiler and forward its addr:port to Telnet Proxy through the tln queue
-bls= ThreadedBoilerListenerSender(pub, BL_IFACE, GW_IFACE,delta=100)
+bls = ThreadedBoilerListenerSender(pub, app_config.bl_iface(), app_config.gw_iface(), delta=100)
 
 # create a gateway listener
 # it will forward info to MqttInformer through the mq queue
 # it will discover the IGW and forward its addr:port to Boiler Listener through the bls queue
-gls= ThreadedGatewayListenerSender(pub, GW_IFACE, BL_IFACE, UDP_PORT,delta=100)
+gls = ThreadedGatewayListenerSender(pub, app_config.gw_iface(), app_config.bl_iface(), app_config.udp_port(), delta=100)
 
 tln.start()
 bls.start()

@@ -437,7 +437,6 @@ class MqttActuator(ChanelReceiver, MqttBase):
             if not self._main_client:
                 raise RuntimeError("No MQTT client available")
             self._main_client.loop_forever()
-
         except KeyboardInterrupt:
             logging.info("Shutting down MQTT Actuator...")
             if self._main_client:
@@ -446,12 +445,13 @@ class MqttActuator(ChanelReceiver, MqttBase):
             for select in self._selects.values():
                 select.mqtt_client.disconnect()
         except Exception as e:
-            logging.error("Error in MQTT loop: %s", str(e))
+            logging.critical("Error in MQTT loop: %s", str(e))
             if self._main_client:
                 self._main_client.disconnect()
             # Disconnect all select clients
             for select in self._selects.values():
                 select.mqtt_client.disconnect()
+            logging.critical("MQTT Actuator encountered a critical error and terminated.")
             raise
 
 T = TypeVar("T", bound=MqttActuator)
