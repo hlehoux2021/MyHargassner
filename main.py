@@ -81,25 +81,31 @@ class PubSubListener(threading.Thread):
             is_running = message['data'] != "End"
             counter += 1
 
-pln= PubSubListener('test', 'PubSubListener', pub)
-pln.start()
 
-# MqttInfomer will receive info on the mq queue
-mi = MqttInformer(app_config, pub)
+def main():
+    # move all your top-level code here (except for imports and function/class defs)
 
-# create a telnet proxy. this will forward info to the mq queue
-tln = ThreadedTelnetProxy(app_config, pub, port=23)
+    pln= PubSubListener('test', 'PubSubListener', pub)
+    pln.start()
 
-# create a BoilerListener
-# it will discover the boiler and forward its addr:port to Telnet Proxy through the tln queue
-bls = ThreadedBoilerListenerSender(app_config, pub, delta=100)
+    # MqttInfomer will receive info on the mq queue
+    mi = MqttInformer(app_config, pub)
 
-# create a gateway listener
-# it will forward info to MqttInformer through the mq queue
-# it will discover the IGW and forward its addr:port to Boiler Listener through the bls queue
-gls = ThreadedGatewayListenerSender(app_config, pub, delta=100)
+    # create a telnet proxy.
+    tln = ThreadedTelnetProxy(app_config, pub, port=23)
 
-tln.start()
-bls.start()
-gls.start()
-mi.start()
+    # create a BoilerListener
+    # it will discover the boiler and forward its addr:port to Telnet Proxy through the tln queue
+    bls = ThreadedBoilerListenerSender(app_config, pub, delta=100)
+
+    # create a gateway listener
+    # it will discover the IGW
+    gls = ThreadedGatewayListenerSender(app_config, pub, delta=100)
+
+    tln.start()
+    bls.start()
+    gls.start()
+    mi.start()
+
+if __name__ == '__main__':
+    main()
