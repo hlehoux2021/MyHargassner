@@ -4,7 +4,7 @@
 
 set -e
 
-SERVICE_NAME="myghargassner"
+SERVICE_NAME="myshargassner"
 INSTALL_DIR="/etc/$SERVICE_NAME"
 SERVICE_FILE="/etc/systemd/system/$SERVICE_NAME.service"
 
@@ -23,12 +23,12 @@ if [ -d "$INSTALL_DIR" ]; then
 fi
 
 # Uninstall the Python package
-pip uninstall -y myghargassner || true
+pip uninstall -y myshargassner || true
 
 # Reload systemd
 systemctl daemon-reload
 
 # Optionally, remove logs or other files (uncomment if needed)
-# rm -rf /var/log/myghargassner
+# rm -rf /var/log/myshargassner
 
 echo "Service $SERVICE_NAME uninstalled."
