@@ -152,27 +152,27 @@ The following command line arguments are accepted:
 
 ### Setting up as a System Service
 
-You can install and run the gateway as a systemd service using the provided bash script. This will copy the project to `/etc/myghargassner`, install the Python package system-wide, and set up the service to start on boot.
+You can install and run the gateway as a systemd service using the provided bash script. This will copy the project to `/etc/myhargassner`, install the Python package system-wide, and set up the service to start on boot.
 
-1. Edit `myghargassner.service` if you need to customize the service (default runs as root and uses `/usr/local/bin/myghargassner`).
+1. Edit `myhargassner.service` if you need to customize the service (default runs as root and uses `/usr/local/bin/myhargassner`).
 2. Run the install script as root:
    ```bash
    sudo bash install_system_service.sh
    ```
 3. The script will:
-   - Copy all project files to `/etc/myghargassner`
+   - Copy all project files to `/etc/myhargassner`
    - Install the Python package system-wide
    - Copy the systemd service file to `/etc/systemd/system/`
    - Reload systemd, enable, and start the service
 
 4. To check the service status:
    ```bash
-   systemctl status myghargassner
+   systemctl status myhargassner
    ```
 5. To stop or restart:
    ```bash
-   sudo systemctl stop myghargassner
-   sudo systemctl restart myghargassner
+   sudo systemctl stop myhargassner
+   sudo systemctl restart myhargassner
    ```
 
 To uninstall, use the provided `uninstall_system_service.sh` script.
@@ -201,7 +201,7 @@ MyHargassner/
 ├── mqtt_actuator.py
 ├── mqtt_base.py
 ├── mqtt_informer.py
-├── myghargassner.service
+├── myhargassner.service
 ├── myhargassner.ini         # Main configuration file (edit this for your setup)
 ├── parse.py
 ├── pubsub/
