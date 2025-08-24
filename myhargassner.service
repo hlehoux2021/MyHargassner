@@ -4,9 +4,9 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=/usr/local/bin/myghargassner
+ExecStart=/usr/local/bin/myhargassner
 User=root
-WorkingDirectory=/etc/myghargassner
+WorkingDirectory=/etc/myhargassner
 Restart=on-failure
 
 [Install]

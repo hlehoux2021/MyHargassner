@@ -1,13 +1,13 @@
-# This script will copy your project to /etc/myghargassner and install the systemd service
+# This script will copy your project to /etc/myhargassner and install the systemd service
 # Usage: sudo bash install_system_service.sh
 
 set -e
 
-SERVICE_NAME="myghargassner"
+SERVICE_NAME="myhargassner"
 INSTALL_DIR="/etc/$SERVICE_NAME"
 SERVICE_FILE="$SERVICE_NAME.service"
 
-# Copy project files to /etc/myghargassner
+# Copy project files to /etc/myhargassner
 mkdir -p "$INSTALL_DIR"
 cp -r * "$INSTALL_DIR/"
 
