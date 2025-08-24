@@ -3,6 +3,7 @@ This module implements the TelnetProxy
 """
 
 # Standard library imports
+from __future__ import annotations # to enable socket.socket without linter warning
 import logging
 import socket
 import select
@@ -10,14 +11,13 @@ import time
 import platform
 from threading import Thread, Lock
 from typing import Annotated,Tuple
-
 import annotated_types
 from pubsub.pubsub import PubSub
 
 
 # Project imports
 from telnethelper import TelnetClient
-from shared import BUFF_SIZE
+from appconfig import AppConfig
 from core import ChanelReceiver
 from analyser import Analyser
 from mqtt_actuator import ThreadedMqttActuator, MqttBase
@@ -172,17 +172,17 @@ class TelnetService:
     """
     _listen: socket.socket # socket to listen for telnet connections
     _telnet: socket.socket # socket to handle accepted telnet connections
-
-    def __init__(self, src_iface: bytes):
+    _buffer_size: int
+    def __init__(self, src_iface: bytes, buffer_size:int):
         """
         Initialize the TelnetService with the given source interface.
         """
         self._listen = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         if platform.system() == 'Linux' and not SocketManager.is_valid_ip(src_iface.decode('utf-8')):
-            self._listen.setsockopt(socket.SOL_SOCKET, socket.SO_BINDTODEVICE, src_iface)
+            self._listen.setsockopt(socket.SOL_SOCKET, socket.SO_BINDTODEVICE, src_iface) #pylint: disable=E1101
         self._listen.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
         self._listen.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-
+        self._buffer_size = buffer_size
     def bind(self, port: int):
         """
         Bind the telnet socket to the specified port.
@@ -235,7 +235,7 @@ class TelnetService:
         Returns:
             bytes: The received data.
         """
-        return self._telnet.recv(BUFF_SIZE)
+        return self._telnet.recv(self._buffer_size)
 
 
 class TelnetProxy(ChanelReceiver, MqttBase):
@@ -252,18 +252,18 @@ class TelnetProxy(ChanelReceiver, MqttBase):
     _analyser: Analyser
     _service_lock: Lock
 
-    def __init__(self, communicator: PubSub, src_iface, dst_iface, port, lock: Lock):
+    def __init__(self, appconfig: AppConfig, communicator: PubSub, port, lock: Lock):
         """
         Initialize the TelnetProxy with communication channel, interfaces, and port.
         """
         ChanelReceiver.__init__(self, communicator)
-        MqttBase.__init__(self)
-        self.src_iface = src_iface
-        self.dst_iface = dst_iface
+        MqttBase.__init__(self, appconfig)
+        self.src_iface = self._appconfig.gw_iface()
+        self.dst_iface = self._appconfig.bl_iface()
         self.port = port
         self._analyser = Analyser(communicator)
-        self._service1 = TelnetService(self.src_iface)
-        self._service2 = TelnetService(self.src_iface)
+        self._service1 = TelnetService(self.src_iface, self._appconfig.buff_size())
+        self._service2 = TelnetService(self.src_iface, self._appconfig.buff_size())
         self._service_lock = lock
         self._active_sockets = set()
 
@@ -346,7 +346,7 @@ class TelnetProxy(ChanelReceiver, MqttBase):
         """
         logging.debug('TelnetProxy connecting to boiler bl_addr=%s  dst_iface=%s',
                       repr(self.bl_addr), repr(self.dst_iface))
-        self._client= TelnetClient(self.bl_addr, self.dst_iface)
+        self._client= TelnetClient(self.bl_addr, self.dst_iface, buffer_size=self._appconfig.buff_size())
         self._client.connect()
 
     def get_boiler_config(self) -> None:
@@ -371,7 +371,7 @@ class TelnetProxy(ChanelReceiver, MqttBase):
                 self._client.send(cmd)
                 resp_chunks = []
                 while True:
-                    resp = self._client.recv(BUFF_SIZE)
+                    resp = self._client.recv()
                     if resp:
                         resp_chunks.append(resp)
                         if resp.endswith(b'\r\n'):
@@ -396,8 +396,8 @@ class TelnetProxy(ChanelReceiver, MqttBase):
         _data: bytes
         _addr: tuple
         read_sockets: list[socket.socket] = []
-        write_sockets: list[socket.socket]
-        error_sockets: list[socket.socket]
+        write_sockets: list[socket.socket] = []  # pylint: disable=unused-variable
+        error_sockets: list[socket.socket] = []  # pylint: disable=unused-variable
         _state: str = '' # state of the request/response dialog
         _buffer: bytes = b'' # buffer to store the data received until we have a complete response
         _mode: str = ''
@@ -476,7 +476,7 @@ class TelnetProxy(ChanelReceiver, MqttBase):
                         if self._service1.socket() is not None:
                             try:
                                 self._service1.socket().close()
-                            except:
+                            except Exception:
                                 pass
                         # Raise with service identification
                         raise socket.error(f"service1: {str(err)}")
@@ -519,7 +519,7 @@ class TelnetProxy(ChanelReceiver, MqttBase):
                 if _sock ==self._client.socket():
                     # so we received a reply
                     try:
-                        _data = self._client.recv(BUFF_SIZE)
+                        _data = self._client.recv()
                     except Exception as err:
                         logging.critical("Exception on client telnet socket: %s", type(err))
                         if self._client is not None:
@@ -584,7 +584,7 @@ class TelnetProxy(ChanelReceiver, MqttBase):
         """
         logging.info("Restarting service1...")
         try:
-            self._service1 = TelnetService(self.src_iface)
+            self._service1 = TelnetService(self.src_iface, self._appconfig.buff_size())
             self.bind1()
             self.listen1()
             self.accept1()
@@ -601,7 +601,7 @@ class TelnetProxy(ChanelReceiver, MqttBase):
         """
         logging.info("Restarting service2...")
         try:
-            self._service2 = TelnetService(self.src_iface)
+            self._service2 = TelnetService(self.src_iface, self._appconfig.buff_size())
             self.bind2()
             self.listen2()
             self.accept2()
@@ -669,21 +669,23 @@ class ThreadedTelnetProxy(Thread):
     _port: int
     _ma: ThreadedMqttActuator | None = None
     _service_lock: Lock
+    _appconfig: AppConfig
 
-    def __init__(self, communicator: PubSub, src_iface: bytes, dst_iface: bytes, port: int):
+    def __init__(self, appconfig: AppConfig, communicator: PubSub, port: int):
         """
         Initialize the ThreadedTelnetProxy with communication channel, interfaces, and port.
         """
+        self._appconfig = appconfig
         self._com = communicator
-        self._src_iface = src_iface
-        self._dst_iface = dst_iface
+        self._src_iface = self._appconfig.gw_iface()
+        self._dst_iface = self._appconfig.bl_iface()
         self._port = port
         self._ma = None
         self._service_lock = Lock()
 
         # Initialize the TelnetProxy instance
         super().__init__(name='TelnetProxy')
-        self.tp= TelnetProxy(communicator, src_iface, dst_iface, port, self._service_lock)
+        self.tp= TelnetProxy(self._appconfig, self._com, port, self._service_lock)
         # Add any additional initialization logic here
 
     def run(self) -> None:
@@ -700,8 +702,11 @@ class ThreadedTelnetProxy(Thread):
         if not self._ma:
             logging.debug("BL_ADDR present but no actuator found")
             logging.debug('we create and launch a ThreadedMqttActuator in a separate thread')
-            self.tp._create_device_info(self.tp.bl_addr.decode('ascii'))
-            self._ma = ThreadedMqttActuator(self._com, self.tp._device_info,self._src_iface,self._service_lock)
+            self.tp.init_device_info(self.tp.bl_addr.decode('ascii'))
+            self._ma = ThreadedMqttActuator(self._appconfig, self._com,
+                                            self.tp.device_info(),
+                                            self._src_iface,
+                                            self._service_lock)
             self._ma.start()
 
         # then we can bind/listen/accept and service()

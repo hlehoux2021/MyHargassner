@@ -14,7 +14,6 @@ from typing import Tuple
 import psutil
 
 # Project imports
-from shared import BUFF_SIZE
 from socket_manager import SocketManager
 
 class TelnetClient:
@@ -31,8 +30,9 @@ class TelnetClient:
         _port (int): The port number for the connection
     """
     _connected: bool = False
+    _buffer_size: int
 
-    def __init__(self, addr: bytes, dst_iface: bytes, port: int = 0):
+    def __init__(self, addr: bytes, dst_iface: bytes, *, buffer_size:int, port: int = 0):
         """
         Initialize a new TelnetClient instance.
 
@@ -44,6 +44,7 @@ class TelnetClient:
         self._addr = addr
         self._connected = False
         self._sock: socket.socket | None = None
+        self._buffer_size = buffer_size
 
         if port:
             self._port = port
@@ -161,7 +162,7 @@ class TelnetClient:
         """
         return self._sock
 
-    def recv(self, size: int) -> bytes:
+    def recv(self) -> bytes:
         """
         Receive data from the telnet connection.
 
@@ -178,7 +179,7 @@ class TelnetClient:
         if not self._connected or not self._sock:
             raise RuntimeError("Not connected")
         try:
-            return self._sock.recv(size)
+            return self._sock.recv(self._buffer_size)
         except socket.error as e:
             logging.error('Error receiving data: %s', e)
             self.close()
@@ -198,7 +199,7 @@ class TelnetClient:
         if not self._connected or not self._sock:
             raise RuntimeError("Not connected")
         try:
-            return self._sock.recvfrom(BUFF_SIZE)
+            return self._sock.recvfrom(self._buffer_size)
         except socket.error as e:
             logging.error('Error receiving data: %s', e)
             self.close()

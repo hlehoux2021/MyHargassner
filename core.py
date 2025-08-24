@@ -8,15 +8,15 @@ from queue import Empty
 import socket
 import platform
 from typing import Annotated, Union, Optional, Callable, Tuple
+from abc import ABC, abstractmethod
 
 # Third party imports
 import annotated_types
-from abc import ABC, abstractmethod
 
 from pubsub.pubsub import PubSub, ChanelQueue, ChanelPriorityQueue
 
 # Project imports
-from shared import BUFF_SIZE
+from appconfig import AppConfig
 from socket_manager import SocketManager, HargSocketError, SocketBindError, InterfaceError, SocketTimeoutError
 
 #class HargInfo():
@@ -146,6 +146,7 @@ class ListenerSender(ChanelReceiver, ABC):
     dst_ip: str
     bound: bool = False
     resender_bound: bool = False
+    _appconfig: AppConfig
 
     @staticmethod
     def _is_ip_address(ip: str) -> bool:
@@ -156,7 +157,7 @@ class ListenerSender(ChanelReceiver, ABC):
         except (AttributeError, TypeError, ValueError):
             return False
 
-    def __init__(self, communicator: PubSub, src_iface: bytes, dst_iface: bytes) -> None:
+    def __init__(self, appconfig: AppConfig, communicator: PubSub, src_iface: bytes, dst_iface: bytes) -> None:
         """
         Initialize the ListenerSender with source and destination interfaces.
 
@@ -169,6 +170,7 @@ class ListenerSender(ChanelReceiver, ABC):
             HargSocketError: If socket initialization fails
             InterfaceError: If interface specification is invalid for the platform
         """
+        self._appconfig = appconfig
         super().__init__(communicator)
         self.src_iface = src_iface  # network interface where to listen
         self.dst_iface = dst_iface  # network interface where to resend
@@ -177,11 +179,11 @@ class ListenerSender(ChanelReceiver, ABC):
 
         try:
             # Initialize listener socket
-            self.listen_manager = SocketManager(src_iface, dst_iface, is_broadcast=True)
+            self.listen_manager = SocketManager(self._appconfig, src_iface, dst_iface, is_broadcast=True)
             self.listen = self.listen_manager.create_socket()
 
             # Initialize sender socket
-            self.send_manager = SocketManager(dst_iface, src_iface, is_broadcast=True)
+            self.send_manager = SocketManager(self._appconfig, dst_iface, src_iface, is_broadcast=True)
             self.resend = self.send_manager.create_socket()
 
             logging.debug('Sockets initialized on system: %s', platform.system())
@@ -202,7 +204,7 @@ class ListenerSender(ChanelReceiver, ABC):
             logging.error('Failed to initialize sockets: %s', str(e))
             raise
 
-    def handle_first(self, data: bytes, addr: Tuple[str, int]) -> None:
+    def handle_first(self, data: bytes, addr: Tuple[str, int]) -> None: # pylint: disable=unused-argument
         """
         This method handles the discovery of caller's ip address and port.
         """
@@ -280,7 +282,7 @@ class ListenerSender(ChanelReceiver, ABC):
 
             try:
                 # Use socket manager to receive data with built-in timeout
-                data, addr = self.listen_manager.receive(BUFF_SIZE)
+                data, addr = self.listen_manager.receive()
                 if data:  # Only process if we actually got data
                     logging.debug('Received buffer of %d bytes from %s:%d', len(data), addr[0], addr[1])
                     logging.debug('Data: %s', data)

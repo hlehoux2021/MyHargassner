@@ -16,11 +16,10 @@ from ha_mqtt_discoverable.sensors import Select, SelectInfo  # type: ignore
 
 from pubsub.pubsub import PubSub
 
-from shared import BUFF_SIZE
-from core import ChanelReceiver
-
 # Project imports
+from appconfig import AppConfig
 from telnethelper import TelnetClient
+from core import ChanelReceiver
 from mqtt_base import MqttBase
 
 
@@ -38,7 +37,7 @@ class MqttActuator(ChanelReceiver, MqttBase):
     src_iface: bytes
     _service_lock: threading.Lock
 
-    def __init__(self, communicator: PubSub, device_info: DeviceInfo, src_iface: bytes, lock: threading.Lock) -> None:
+    def __init__(self, appconfig: AppConfig, communicator: PubSub, device_info: DeviceInfo, src_iface: bytes, lock: threading.Lock) -> None: # pylint: disable=line-too-long
         """
         Initialize the MqttActuator with communication and device settings.
 
@@ -53,11 +52,11 @@ class MqttActuator(ChanelReceiver, MqttBase):
         logging.debug("MqttActuator instantiated")
         logging.debug("MqttActuator.__init__ called")
         ChanelReceiver.__init__(self, communicator)  # Initialize ChanelReceiver
-        MqttBase.__init__(self)  # Initialize MqttBase
+        MqttBase.__init__(self, appconfig)  # Initialize MqttBase
         self.src_iface = src_iface
         self._device_info = device_info
         self._service_lock = lock
-        self._client = TelnetClient(self.src_iface, b'', 4000)
+        self._client = TelnetClient(self.src_iface, b'', buffer_size=self._appconfig.buff_size(), port=4000)
 
     def _parse_parameter_response(self, data: bytes) -> dict[str, list[str]]:
         """Parse parameter responses from the boiler (PR001, PR011, etc)
@@ -232,7 +231,7 @@ class MqttActuator(ChanelReceiver, MqttBase):
             raise RuntimeError("TelnetClient is not initialized")
         return self._client
 
-    def callback(self, client: Client, data: str, message: MQTTMessage) -> None:
+    def callback(self, client: Client, data: str, message: MQTTMessage) -> None:  # pylint: disable=unused-argument
         """
         Handle MQTT select state change messages.
 
@@ -288,7 +287,7 @@ class MqttActuator(ChanelReceiver, MqttBase):
                     while not found_ack and tries < max_tries:
                         tries += 1
                         try:
-                            chunk = self._get_client().recv(BUFF_SIZE)
+                            chunk = self._get_client().recv()
                         except socket.timeout:
                             logging.warning('No data received from boiler (try %d/%d)', tries, max_tries)
                             continue
@@ -339,7 +338,7 @@ class MqttActuator(ChanelReceiver, MqttBase):
                     if select is not None:
                         select.select_option(new_mode)
                     else:
-                        logging.warning(f"No Select found for param_id: {param_id}")
+                        logging.warning("No Select found for param_id: %s", param_id)
                 else:
                     logging.info('No new mode found for %s in response', param_id)
             except Exception as e:
@@ -514,7 +513,7 @@ class ThreadedMqttActuator(Threaded[MqttActuator]):
         >>> threaded_actuator = ThreadedMqttActuator(device_info)
         >>> threaded_actuator.start()
     """
-    def __init__(self, communicator: PubSub, device_info: DeviceInfo, src_iface: bytes, lock: threading.Lock) -> None:
+    def __init__(self, appconfig: AppConfig, communicator: PubSub, device_info: DeviceInfo, src_iface: bytes, lock: threading.Lock) -> None: # pylint: disable=line-too-long
         """
         Initialize a threaded MQTT actuator for the device.
 
@@ -528,5 +527,5 @@ class ThreadedMqttActuator(Threaded[MqttActuator]):
         """
         logging.debug("ThreadedMqttActuator instantiated")
         logging.debug("ThreadedMqttActuator.__init__ called")
-        entity = MqttActuator(communicator, device_info, src_iface, lock)
+        entity = MqttActuator(appconfig, communicator, device_info, src_iface, lock)
         super().__init__(entity)

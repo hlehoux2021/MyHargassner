@@ -11,6 +11,7 @@ from typing import Tuple
 from pubsub.pubsub import PubSub
 
 # Project imports
+from appconfig import AppConfig
 from core import ListenerSender
 from socket_manager import (
     SocketSendError,
@@ -24,8 +25,9 @@ class BoilerListenerSender(ListenerSender):
     This class implements the boiler proxy
     """
 
-    def __init__(self, communicator: PubSub, src_iface: bytes,dst_iface: bytes, delta: int = 0):
-        super().__init__(communicator, src_iface, dst_iface)
+    def __init__(self, appconfig: AppConfig, communicator: PubSub, delta: int = 0):
+        # initiate a ListenerSender from bl_iface to gw_iface
+        super().__init__(appconfig, communicator, appconfig.bl_iface(), appconfig.gw_iface())
         # Add any additional initialization logic here
         self.delta = delta
 
@@ -138,9 +140,9 @@ class ThreadedBoilerListenerSender(Thread):
     """
     bls: BoilerListenerSender
 
-    def __init__(self, communicator: PubSub, src_iface: bytes,dst_iface: bytes, delta: int = 0):
+    def __init__(self, appconfig: AppConfig, communicator: PubSub, delta: int = 0):
         super().__init__(name='BoilerListener')
-        self.bls= BoilerListenerSender(communicator, src_iface, dst_iface, delta)
+        self.bls= BoilerListenerSender(appconfig, communicator, delta)
 
     def run(self):
         logging.info('BoilerListenerSender started')

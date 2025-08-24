@@ -1,3 +1,7 @@
+"""
+Setup description for MyHargassner as a system service
+"""
+
 from setuptools import setup, find_packages
 
 setup(

@@ -15,6 +15,7 @@ import annotated_types
 from pubsub.pubsub import PubSub
 
 # Project imports
+from appconfig import AppConfig
 from core import ListenerSender
 from socket_manager import (
     SocketSendError,
@@ -29,11 +30,12 @@ class GatewayListenerSender(ListenerSender):
     """
     udp_port: Annotated[int, annotated_types.Gt(0)]
 
-    def __init__(self, communicator: PubSub, src_iface: bytes,dst_iface: bytes, udp_port: int, delta:int = 0):
-        super().__init__(communicator, src_iface, dst_iface)
+    def __init__(self, appconfig: AppConfig, communicator: PubSub, delta: int = 0):
+        # initiate a ListenerSender from gw_iface to bl_iface
+        super().__init__(appconfig, communicator, appconfig.gw_iface(), appconfig.bl_iface())
         # Add any additional initialization logic here
 
-        self.udp_port = udp_port    # destination port to which gateway is broadcasting
+        self.udp_port = self._appconfig.udp_port()  # destination port to which gateway is broadcasting
         self.delta = delta
 
     def publish_discovery(self, addr: Tuple[str, int]) -> None:
@@ -150,9 +152,9 @@ class ThreadedGatewayListenerSender(Thread):
     """This class implements a Thread to run the gateway."""
     gls: GatewayListenerSender
 
-    def __init__(self, communicator: PubSub, src_iface: bytes,dst_iface: bytes, udp_port: int, delta=0):
+    def __init__(self, appconfig: AppConfig, communicator: PubSub, delta=0):
         super().__init__(name='GatewayListener')
-        self.gls= GatewayListenerSender(communicator, src_iface, dst_iface, udp_port, delta)
+        self.gls= GatewayListenerSender(appconfig, communicator, delta)
 
     def run(self):
         logging.info('GatewayListenerSender started')

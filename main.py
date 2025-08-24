@@ -17,7 +17,6 @@ and mqqt
 # Standard library imports
 import logging
 import threading
-import os
 import sys
 import time
 
@@ -40,11 +39,8 @@ if not app_config.mqtt_password():
     print("ERROR: MQTT password must be set in the configuration file or via command-line argument.")
     sys.exit(1)
 
-
 # Set up logging using AppConfig
 app_config.setup_logging()
-
-
 logging.info('Started MyHargassner')
 
 #----------------------------------------------------------#
@@ -89,19 +85,19 @@ pln= PubSubListener('test', 'PubSubListener', pub)
 pln.start()
 
 # MqttInfomer will receive info on the mq queue
-mi = MqttInformer(pub)
+mi = MqttInformer(app_config, pub)
 
 # create a telnet proxy. this will forward info to the mq queue
-tln = ThreadedTelnetProxy(pub, app_config.gw_iface(), app_config.bl_iface(), port=23)
+tln = ThreadedTelnetProxy(app_config, pub, port=23)
 
 # create a BoilerListener
 # it will discover the boiler and forward its addr:port to Telnet Proxy through the tln queue
-bls = ThreadedBoilerListenerSender(pub, app_config.bl_iface(), app_config.gw_iface(), delta=100)
+bls = ThreadedBoilerListenerSender(app_config, pub, delta=100)
 
 # create a gateway listener
 # it will forward info to MqttInformer through the mq queue
 # it will discover the IGW and forward its addr:port to Boiler Listener through the bls queue
-gls = ThreadedGatewayListenerSender(pub, app_config.gw_iface(), app_config.bl_iface(), app_config.udp_port(), delta=100)
+gls = ThreadedGatewayListenerSender(app_config, pub, delta=100)
 
 tln.start()
 bls.start()

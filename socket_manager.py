@@ -8,6 +8,9 @@ import socket
 import platform
 from typing import Tuple, Union, Optional
 
+# Project imports
+from appconfig import AppConfig
+
 class HargSocketError(Exception):
     """Base exception for socket operations."""
     pass
@@ -47,7 +50,12 @@ class SocketManager:
     - Detection of same-machine scenarios for port adjustment
     """
 
-    def __init__(self, src_iface: Union[str, bytes], dst_iface: Union[str, bytes], is_broadcast: bool = False) -> None:
+    appconfig: AppConfig
+
+    def __init__(self, appconfig: AppConfig,
+                 src_iface: Union[str, bytes],
+                 dst_iface: Union[str, bytes],
+                 is_broadcast: bool = False) -> None: #pylint: disable=line-too-long
         """
         Initialize the socket manager.
 
@@ -60,6 +68,7 @@ class SocketManager:
             InterfaceError: If src_iface specification is invalid for the platform
             ValueError: If src_iface is not bytes or str
         """
+        self.appconfig = appconfig
         if isinstance(src_iface, bytes):
             self.src_iface = src_iface.decode('utf-8')
         elif isinstance(src_iface, str):
@@ -303,7 +312,7 @@ class SocketManager:
         except socket.error as e:
             raise SocketSendError(f"Failed to send data: {str(e)}") from e
 
-    def receive(self, buffer_size: int = 1024) -> Tuple[bytes, Tuple[str, int]]:
+    def receive(self) -> Tuple[bytes, Tuple[str, int]]:
         """
         Receive data with timeout handling.
 
@@ -322,7 +331,9 @@ class SocketManager:
             raise SocketReceiveError("Socket not created")
         try:
             #logging.debug('SocketManager: Waiting to receive data (buffer size %d)', buffer_size)
-            result = self._socket.recvfrom(buffer_size)
+            result = self._socket.recvfrom(
+                self.appconfig.buff_size()
+            )
             logging.debug('SocketManager: Received %d bytes from %s:%d', len(result[0]), result[1][0], result[1][1])
             return result
         except socket.timeout as e:

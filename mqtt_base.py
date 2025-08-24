@@ -9,8 +9,8 @@ import logging
 from ha_mqtt_discoverable import Settings, DeviceInfo  # type: ignore
 
 # Project imports
+from appconfig import AppConfig
 import hargconfig
-import shared
 
 class MqttBase():
     """
@@ -19,19 +19,21 @@ class MqttBase():
     config: hargconfig.HargConfig
     mqtt_settings: Settings.MQTT
     _device_info: DeviceInfo
+    _appconfig: AppConfig
 
-    def __init__(self):
+    def __init__(self, appconfig: AppConfig):
         """
         Initialize the MqttBase class.
         Sets up the configuration and MQTT settings with default values.
         Initializes device info as None.
         """
         self.config = hargconfig.HargConfig()
-        #TODO remove password from code.
+        self._appconfig = appconfig
+
         self.mqtt_settings = Settings.MQTT(
-            host=shared.MQTT_HOST,
-            username=shared.MQTT_USERNAME,
-            password=shared.MQTT_PASSWORD)
+            host=self._appconfig.mqtt_host(),
+            username=self._appconfig.mqtt_username(),
+            password=self._appconfig.mqtt_password())
 
     @staticmethod
     def attach_paho_logger(sensor):
@@ -40,13 +42,13 @@ class MqttBase():
         """
         client = getattr(sensor, 'mqtt_client', None)
         if client is not None:
-            def on_log(client, userdata, level, buf):
-                logging.debug(f"PAHO: {buf}")
+            def on_log(client, userdata, level, buf): # pylint: disable=unused-argument
+                logging.debug("PAHO: %s",buf)
             client.on_log = on_log
             # Optionally, integrate with Python logging
             try:
                 client.enable_logger()
-            except Exception:
+            except Exception: # pylint: disable=broad-except
                 pass
 
     def name(self) -> str:
@@ -58,7 +60,7 @@ class MqttBase():
         """
         return self.__class__.__name__
 
-    def _create_device_info(self, _name: str) -> None:
+    def init_device_info(self, _name: str) -> None:
         """
         Create device information for MQTT discovery.
 
@@ -73,3 +75,11 @@ class MqttBase():
                             sw_version="1.0",
                             hw_version="1.0",
                             identifiers=lstr)
+    def device_info(self) -> DeviceInfo:
+        """
+        Get the device information.
+
+        Returns:
+            DeviceInfo: The device information object.
+        """
+        return self._device_info
