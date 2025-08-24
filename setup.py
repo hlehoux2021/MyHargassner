@@ -19,7 +19,7 @@ setup(
     ],
     entry_points={
         'console_scripts': [
-            'myhargassner = main:main',
+            'myhargassner = myhargassner.main:main',
         ],
     },
     include_package_data=True,
