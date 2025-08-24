@@ -56,7 +56,7 @@ class AppConfig:
 
         # Load config file
         self._config = configparser.ConfigParser()
-        config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'myhargassner.ini')
+        config_path = os.path.join(os.getcwd(), 'myhargassner.ini')
         print("config_path=", config_path)
         self._config.read(config_path)
         print("password=", self._config.get('mqtt', 'password', fallback='NOT SET'))
