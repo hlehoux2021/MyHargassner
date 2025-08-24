@@ -56,9 +56,10 @@ class AppConfig:
 
         # Load config file
         self._config = configparser.ConfigParser()
-        config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.ini')
+        config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'myhargassner.ini')
+        print("config_path=", config_path)
         self._config.read(config_path)
-
+        print("password=", self._config.get('mqtt', 'password', fallback='NOT SET'))
         # Merge defaults, then config file, then CLI args
         for section, options in self.defaults.items():
             if section not in self._config:
