@@ -13,11 +13,11 @@ from abc import ABC, abstractmethod
 # Third party imports
 import annotated_types
 
-from pubsub.pubsub import PubSub, ChanelQueue, ChanelPriorityQueue
+from myhargassner.pubsub.pubsub import PubSub, ChanelQueue, ChanelPriorityQueue
 
 # Project imports
-from appconfig import AppConfig
-from socket_manager import SocketManager, HargSocketError, SocketBindError, InterfaceError, SocketTimeoutError
+from myhargassner.appconfig import AppConfig
+from myhargassner.socket_manager import SocketManager, HargSocketError, SocketBindError, InterfaceError, SocketTimeoutError
 
 #class HargInfo():
 #    """ a data class to store the HargInfo"""

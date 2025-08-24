@@ -9,8 +9,8 @@ import logging
 from ha_mqtt_discoverable import Settings, DeviceInfo  # type: ignore
 
 # Project imports
-from appconfig import AppConfig
-import hargconfig
+from myhargassner.appconfig import AppConfig
+import myhargassner.hargconfig as hargconfig
 
 class MqttBase():
     """

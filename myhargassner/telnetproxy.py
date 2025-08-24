@@ -12,16 +12,18 @@ import platform
 from threading import Thread, Lock
 from typing import Annotated,Tuple
 import annotated_types
-from pubsub.pubsub import PubSub
+
+
+from myhargassner.pubsub.pubsub import PubSub
 
 
 # Project imports
-from telnethelper import TelnetClient
-from appconfig import AppConfig
-from core import ChanelReceiver
-from analyser import Analyser
-from mqtt_actuator import ThreadedMqttActuator, MqttBase
-from socket_manager import SocketManager
+from myhargassner.telnethelper import TelnetClient
+from myhargassner.appconfig import AppConfig
+from myhargassner.core import ChanelReceiver
+from myhargassner.analyser import Analyser
+from myhargassner.mqtt_actuator import ThreadedMqttActuator, MqttBase
+from myhargassner.socket_manager import SocketManager
 
 # $login token
 #   $00A000A0

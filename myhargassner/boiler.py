@@ -8,12 +8,12 @@ from threading import Thread
 from typing import Tuple
 
 # Third party imports
-from pubsub.pubsub import PubSub
+from myhargassner.pubsub.pubsub import PubSub
 
 # Project imports
-from appconfig import AppConfig
-from core import ListenerSender
-from socket_manager import (
+from myhargassner.appconfig import AppConfig
+from myhargassner.core import ListenerSender
+from myhargassner.socket_manager import (
     SocketSendError,
     SocketTimeoutError,
     SocketBindError,

@@ -8,10 +8,10 @@ import time
 from typing import Tuple
 
 # Third party imports
-from pubsub.pubsub import PubSub
+from myhargassner.pubsub.pubsub import PubSub
 
 # Project imports
-import hargconfig
+import myhargassner.hargconfig as hargconfig
 
 class Analyser():
     """

@@ -14,7 +14,7 @@ from typing import Tuple
 import psutil
 
 # Project imports
-from socket_manager import SocketManager
+from myhargassner.socket_manager import SocketManager
 
 class TelnetClient:
     """
@@ -92,7 +92,7 @@ class TelnetClient:
             if not re.match(r"^\d+\.\d+\.\d+\.\d+$", addr_str):
                 addr_str = self._get_ip_from_iface(addr)
         except Exception as e:
-            logging.error(f"Failed to resolve interface to IP: {e}")
+            logging.error(f"Failed to resolve interface to IP: {e}") # pylint: disable=logging-fstring-interpolation
             raise RuntimeError("Invalid address/interface:") from e
 
         logging.debug('TelnetClient connecting to %s on port %d', repr(addr_str), self._port)

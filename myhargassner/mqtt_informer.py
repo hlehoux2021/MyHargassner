@@ -12,12 +12,12 @@ from typing import Union
 from ha_mqtt_discoverable import Settings, DeviceInfo # type: ignore
 from ha_mqtt_discoverable.sensors import Sensor, SensorInfo # type: ignore
 
-from pubsub.pubsub import PubSub, ChanelQueue, ChanelPriorityQueue
+from myhargassner.pubsub.pubsub import PubSub, ChanelQueue, ChanelPriorityQueue
 
 # Project imports
-from appconfig import AppConfig
-import hargconfig
-from mqtt_base import MqttBase
+from myhargassner.appconfig import AppConfig
+import myhargassner.hargconfig as hargconfig
+from myhargassner.mqtt_base import MqttBase
 
 class MySensor(Sensor):
     """
@@ -208,7 +208,7 @@ class MqttInformer(MqttBase):
                         # we have all the info to init device_info
                         logging.info('Boiler device_info is complete')
                         # Define the device. At least one of `identifiers` or `connections` must be supplied
-                        self._create_device_info(self._dict["BL_ADDR"])
+                        self.init_device_info(self._dict["BL_ADDR"])
                         logging.debug("Device Info initialized")
                         self._create_all_sensors()
                         _stage = 'device_info_ok'

@@ -9,7 +9,7 @@ import platform
 from typing import Tuple, Union, Optional
 
 # Project imports
-from appconfig import AppConfig
+from myhargassner.appconfig import AppConfig
 
 class HargSocketError(Exception):
     """Base exception for socket operations."""

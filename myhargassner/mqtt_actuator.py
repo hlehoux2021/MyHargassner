@@ -14,13 +14,13 @@ from paho.mqtt.client import Client, MQTTMessage
 from ha_mqtt_discoverable import Settings, DeviceInfo  # type: ignore
 from ha_mqtt_discoverable.sensors import Select, SelectInfo  # type: ignore
 
-from pubsub.pubsub import PubSub
+from myhargassner.pubsub.pubsub import PubSub
 
 # Project imports
-from appconfig import AppConfig
-from telnethelper import TelnetClient
-from core import ChanelReceiver
-from mqtt_base import MqttBase
+from myhargassner.appconfig import AppConfig
+from myhargassner.telnethelper import TelnetClient
+from myhargassner.core import ChanelReceiver
+from myhargassner.mqtt_base import MqttBase
 
 
 class MqttActuator(ChanelReceiver, MqttBase):

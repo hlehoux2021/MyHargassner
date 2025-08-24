@@ -21,14 +21,14 @@ import sys
 import time
 
 # Third party imports
-from pubsub.pubsub import PubSub
+from myhargassner.pubsub.pubsub import PubSub
 
 # Project imports
-from appconfig import AppConfig
-from telnetproxy import ThreadedTelnetProxy
-from boiler import ThreadedBoilerListenerSender
-from gateway import ThreadedGatewayListenerSender
-from mqtt_informer import MqttInformer
+from myhargassner.appconfig import AppConfig
+from myhargassner.telnetproxy import ThreadedTelnetProxy
+from myhargassner.boiler import ThreadedBoilerListenerSender
+from myhargassner.gateway import ThreadedGatewayListenerSender
+from myhargassner.mqtt_informer import MqttInformer
 
 #----------------------------------------------------------#
 
@@ -83,6 +83,7 @@ class PubSubListener(threading.Thread):
 
 
 def main():
+    """Main entry point for the application."""
     # move all your top-level code here (except for imports and function/class defs)
 
     pln= PubSubListener('test', 'PubSubListener', pub)
