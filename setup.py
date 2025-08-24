@@ -5,7 +5,7 @@ Setup description for MyHargassner as a system service
 from setuptools import setup, find_packages
 
 setup(
-    name="myghargassner",
+    name="myhargassner",
     version="1.0.0",
     description="Hargassner boiler gateway and MQTT integration",
     author="hlehoux2021",
@@ -19,7 +19,7 @@ setup(
     ],
     entry_points={
         'console_scripts': [
-            'myghargassner = main:main',
+            'myhargassner = main:main',
         ],
     },
     include_package_data=True,
