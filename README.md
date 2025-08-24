@@ -131,37 +131,10 @@ pip install paho-mqtt ha-mqtt-discoverable psutil pydantic annotated_types
    # pip install -r requirements.txt
    ```
 
-3. Configure network and MQTT settings:
-   - Edit `main.py` for network interface names.
-   - Edit `hargconfig.py` for MQTT broker and wanted sensor parameters.
 
-### File Structure
-
-```
-MyHargassner/
-├── analyser.py
-├── boiler.py
-├── clients/
-│   └── ...
-├── core.py
-├── gateway.py
-├── hargconfig.py
-├── install_system_service.sh
-├── main.py
-├── mqtt_actuator.py
-├── mqtt_base.py
-├── mqtt_informer.py
-├── myghargassner.service
-├── pubsub/
-│   ├── pubsub.py
-│   └── ...
-├── shared.py
-├── socket_manager.py
-├── telnethelper.py
-├── telnetproxy.py
-├── uninstall_system_service.sh
-└── ...
-```
+3. Configure your system:
+   - Edit `myhargassner.ini` for all network, MQTT, and logging settings. This file is the main configuration file for the application.
+   - Optionally, edit `hargconfig.py` if you want to customize which boiler parameters are monitored (see the `wanted` list in `HargConfig`).
 
 ### Run the programm
    ```bash
@@ -206,33 +179,53 @@ To uninstall, use the provided `uninstall_system_service.sh` script.
 
 ---
 
-## Architecture
 
-The project uses a multi-threaded architecture with several key components:
+### File Structure
 
-### Core Components
-1. **Gateway Listener/Sender** (`ThreadedGatewayListenerSender`)
-   - Listens for IGW internet gateway UDP broadcasts and forwards them to the pellet boiler
-   - Forwards information to MQTT Informer
-   - Discovers IGW and publishes its address/port to "bootstrap" channel to be used by other components
+```
+MyHargassner/
+├── analyser.py
+├── appconfig.py
+├── boiler.py
+├── clients/
+│   ├── boiler-client-ai.py
+│   ├── boiler-simple.py
+│   ├── gateway-client-ai.py
+│   ├── gateway-simple.py
+│   └── shared_simulator.py
+├── core.py
+├── gateway.py
+├── hargconfig.py
+├── install_system_service.sh
+├── main.py
+├── mqtt_actuator.py
+├── mqtt_base.py
+├── mqtt_informer.py
+├── myghargassner.service
+├── myhargassner.ini         # Main configuration file (edit this for your setup)
+├── parse.py
+├── pubsub/
+│   ├── __init__.py
+│   ├── pubsub.py
+│   └── tests/
+│       ├── test_PubSub.py
+│       ├── test_PubSub_load.py
+│       └── test_pubsub_priority.py
+├── pylintrc
+├── README.md
+├── setup.py
+├── shared.py
+├── socket_manager.py
+├── telnethelper.py
+├── telnetproxy.py
+├── uninstall_system_service.sh
+└── ...
+```
 
-2. **Boiler Listener/Sender** (`ThreadedBoilerListenerSender`)
-   - waits for the IGW network address and port to be published (by the gateway listener)
-   - Listens for boiler UDP responses and forwards them back to the IGW
-   - Discovers boiler and publishes its address/port to "bootstrap" channel to be used by other components
-
-3. **Telnet Proxy** (`ThreadedTelnetProxy`)
-   - waits for the boiler address and port to be discovered (by the boiler listener) 
-   - Handles Telnet requests from IGW and forwards them to the pellet boiler
-   - Handles Telnet responses from the pellet boiler and forwards them to IGW 
-   - Handles Telnet requests from internal components, forwards them to boiler and provide replies to internal component
-   - requests the pellet boiler configuration (Modes for the boiler or from different zones) from the boiler 
-        sends a "$par" telnet request to the pellet boiler
-        publishes the pellet boiler response to the "info" channel"
-   - Creates an MqttActuator component as soon as the pellet boiler is discovered
-   - requests Analyser() class to analyse telnet requests and responses
-
-4. **Analyser**
+**Note:**
+- The `myhargassner.ini` file is the main configuration file. Copy and edit this file to match your environment.
+- The `clients/` and `pubsub/tests/` folders contain example scripts and tests.
+- Some files may be omitted above for brevity; see the repository for the full structure.
    - Analyses telnet requests from IGW and responses from pellet boiler (through the Analyser class) and pushes key information to the "info" channel
    - Analyses specific "pm ..." telnet buffer sent every second by pellet boiler,  maps it to valuable data and publishes it to the "info" channel
 
@@ -254,22 +247,39 @@ The project uses a multi-threaded architecture with several key components:
 
 ## Configuration
 
-### Main Settings (`main.py`)
-- `LOG_PATH`: Path for log files
-- `LOG_LEVEL`: Logging level (DEBUG, INFO, etc.)
-- `SOCKET_TIMEOUT`: Socket timeout value
-- `BUFF_SIZE`: Buffer size for network operations
-- Network interface settings:
-  - `GW_IFACE`: Gateway interface
-  - `BL_IFACE`: Boiler interface
-  - `UDP_PORT`: UDP port
 
-### MQTT Configuration (`hargconfig.py`)
-- MQTT broker settings:
-  - Host
-  - Port
-  - Username/Password
-  - Other MQTT-specific configurations
+### Main Settings (`myhargassner.ini`)
+All main settings are configured in the `myhargassner.ini` file. Example:
+
+```ini
+[network]
+gw_iface = eth0
+bl_iface = eth1
+udp_port = 35601
+socket_timeout = 5
+buff_size = 4096
+
+[logging]
+log_path = /var/log/myhargassner.log
+log_level = INFO
+```
+
+See the comments in `myhargassner.ini` for more details on each option.
+
+
+### MQTT Configuration (`myhargassner.ini`)
+MQTT broker settings are also configured in the `myhargassner.ini` file:
+
+```ini
+[mqtt]
+host = localhost
+port = 1883
+username = youruser
+password = yourpassword
+topic_prefix = myhargassner
+```
+
+You can override any of these values using command-line arguments if needed.
 
 ### Boiler Parameters
 The `hargconfig.py` file contains extensive mapping of boiler parameters including:
