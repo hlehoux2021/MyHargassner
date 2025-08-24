@@ -11,9 +11,18 @@ SERVICE_FILE="$SERVICE_NAME.service"
 mkdir -p "$INSTALL_DIR"
 cp -r * "$INSTALL_DIR/"
 
-# Install Python package system-wide
+
+# Install Python package system-wide (Debian/Ubuntu: allow with --break-system-packages)
 cd "$INSTALL_DIR"
-pip install .
+echo "Installing Python package system-wide. If you see an 'externally-managed-environment' error, using --break-system-packages."
+if pip --version | grep -q 'python 3'; then
+	pip install . --break-system-packages || {
+		echo "pip install failed. Trying with pip3...";
+		pip3 install . --break-system-packages;
+	}
+else
+	pip3 install . --break-system-packages
+fi
 
 # Copy systemd service file
 cp "$SERVICE_FILE" /etc/systemd/system/
