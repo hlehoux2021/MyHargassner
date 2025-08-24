@@ -138,7 +138,7 @@ pip install paho-mqtt ha-mqtt-discoverable psutil pydantic annotated_types
 
 ### Run the programm
    ```bash
-   sudo -E env -S PATH=$PATH python3 main.py --debug
+   sudo -E env -S PATH=$PATH python3 -m myhargassner.main
    ```
 The following command line arguments are accepted:
 -g --GW_IFACE  Source interface
