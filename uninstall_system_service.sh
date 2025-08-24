@@ -23,7 +23,7 @@ if [ -d "$INSTALL_DIR" ]; then
 fi
 
 # Uninstall the Python package
-pip uninstall -y myshargassner || true
+pip uninstall -y myshargassner --break-system-packages|| true
 
 # Reload systemd
 systemctl daemon-reload
