@@ -556,6 +556,9 @@ class MqttActuator(ChanelReceiver, MqttBase):
                     logging.warning('Received error or permission denied: %s', line_str)
                     found_ack = True
                     break
+                if line_str.startswith('zERR'):
+                    logging.error('Received zERR response: %s', line_str)
+                    break
                 # Look for the new value/mode line: zPa N: <param_id> (<name>) = <value>
                 if line_str.startswith(f'zPa N: {param_id}'):
                     parts = line_str.split('=', 1)
