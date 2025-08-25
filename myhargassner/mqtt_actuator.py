@@ -122,12 +122,14 @@ class MqttActuator(ChanelReceiver, MqttBase):
                         logging.debug("Select parameter: key=%s, num_items=%d, current_index=%d", 
                                     key, num_items, raw_current_index)
                         
-                        # Get all available values first
+                        # Get all available values first (excluding the trailing "0" that's part of the protocol)
                         all_values = []
                         for i in range(num_items):
                             try:
                                 item = items[9 + i]
-                                all_values.append(item)
+                                # Don't add the trailing "0" that's part of the protocol format
+                                if i < num_items - 1:  # Skip the last item which is always "0" in the protocol
+                                    all_values.append(item)
                             except IndexError:
                                 logging.warning("Not enough items for value %d in response", i)
                                 break
@@ -140,7 +142,7 @@ class MqttActuator(ChanelReceiver, MqttBase):
                             current_value = all_values[raw_current_index]
                             logging.debug("Current value from index %d: %s", raw_current_index, current_value)
                         
-                        # Remove any empty strings from options list
+                        # Remove empty strings from options list
                         values = [v for v in all_values if v]
                         logging.debug("Filtered values for %s: %s", key, values)
                         
