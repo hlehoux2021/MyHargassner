@@ -381,11 +381,19 @@ class MqttActuator(ChanelReceiver, MqttBase):
             return
 
         self._selects = {}  # Store all Select instances
+        self._numbers = {}  # Store all Number instances
 
         for param_name, param_info in self._boiler_config.items():
-            if param_info.get('type') != 'select':
-                continue  # Only create Select entities for 'select' type
-            self.create_select(param_name, param_info)
+            # Store parameter ID mapping for both select and number types
+            if param_info.get('type') == 'select':
+                self.create_select(param_name, param_info)
+                # For select parameters, the parameter name is already the ID
+                self._parameter_ids[param_name] = param_name
+            elif param_info.get('type') == 'number':
+                self.create_number(param_name, param_info)
+                # For number parameters, convert the numeric key to string
+                if 'key' in param_info:
+                    self._parameter_ids[param_name] = str(param_info['key'])
 
         # Store the first valid select's MQTT client to use in the service method
         self._main_client = None
