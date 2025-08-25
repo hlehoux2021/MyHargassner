@@ -452,6 +452,7 @@ class TelnetProxy(ChanelReceiver, MqttBase):
                     # Only process service1 if lock is not held (by actuator sending commands to service2)
                     if self._service_lock.locked():
                         logging.debug('Service1 socket is paused/locked, skipping processing')
+                        time.sleep(1)
                         continue
                     # so we received a request
                     try:

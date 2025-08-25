@@ -474,7 +474,7 @@ class MqttActuator(ChanelReceiver, MqttBase):
         found_ack = False
         max_tries = 20
         tries = 0
-        ack_token = '$ack' if value_type == 'select' else '$a'
+        ack_token = '$ack' # if value_type == 'select' else '$a'
         result_float: float | None = None
         result_str: str | None = None
         while not found_ack and tries < max_tries:
@@ -483,10 +483,26 @@ class MqttActuator(ChanelReceiver, MqttBase):
                 chunk = self._get_client().recv()
             except socket.timeout:
                 logging.warning('No data received from boiler (try %d/%d)', tries, max_tries)
+                # Try to reconnect if connection was closed
+                try:
+                    self._get_client().connect()
+                    # Resend the command after reconnecting
+                    self._get_client().send(command.encode('latin1'))
+                except Exception as reconnect_error:
+                    logging.error('Failed to reconnect: %s', str(reconnect_error))
+                    break
                 continue
             except socket.error as e:
                 logging.error('Socket error during recv: %s', str(e))
-                break
+                # Try to reconnect on socket errors
+                try:
+                    self._get_client().connect()
+                    # Resend the command after reconnecting
+                    self._get_client().send(command.encode('latin1'))
+                except Exception as reconnect_error:
+                    logging.error('Failed to reconnect: %s', str(reconnect_error))
+                    break
+                continue
             if not chunk:
                 logging.warning('No data received from boiler (try %d/%d)', tries, max_tries)
                 continue
