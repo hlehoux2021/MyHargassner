@@ -116,6 +116,7 @@ class MqttActuator(ChanelReceiver, MqttBase):
                 if items[0].startswith('$PR'):
                     try:
                         num_items = int(items[1])
+                        current_index = int(items[2]) if len(items) > 2 else 0  # Get current value index
                         key = items[8]
                         values = []
                         for i in range(num_items):
@@ -125,7 +126,8 @@ class MqttActuator(ChanelReceiver, MqttBase):
                         result[key] = {
                             'type': 'select',
                             'options': values,
-                            'command_id': items[0][1:]  # Store the PRxxx ID
+                            'command_id': items[0][1:],  # Store the PRxxx ID
+                            'current': values[current_index] if 0 <= current_index < len(values) else None
                         }
                     except Exception as e:
                         logging.error(f"Failed to parse select parameter: {response} ({e})")
@@ -276,14 +278,28 @@ class MqttActuator(ChanelReceiver, MqttBase):
                 logging.info("Sending command: %s", command)
                 new_mode = self._send_command_and_parse_response(command, param_id, value_type='select')
                 if new_mode:
-                    logging.info('Final new mode for %s: %s', param_id, new_mode)
+                    logging.info('Received new mode for %s: %s', param_id, new_mode)
                     select = self._selects.get(param_id)
                     if select is not None:
-                        select.select_option(str(new_mode))
+                        # Verify the received mode is in the list of options
+                        new_mode_str = str(new_mode).strip()
+                        if new_mode_str in param_info['options']:
+                            logging.debug('Setting select state to: %s', new_mode_str)
+                            select.select_option(new_mode_str)
+                        else:
+                            logging.warning('Received invalid mode %s not in options: %s', 
+                                         new_mode_str, param_info['options'])
+                            # Fall back to the requested value since we know it's valid
+                            select.select_option(payload)
                     else:
                         logging.warning("No Select found for parameter ID: %s", param_id)
                 else:
-                    logging.info('No new mode found for %s in response', param_id)
+                    logging.info('No new mode found for %s in response, keeping requested value: %s', 
+                               param_id, payload)
+                    # If we don't get a response, keep the requested value
+                    select = self._selects.get(param_id)
+                    if select is not None:
+                        select.select_option(payload)
             except Exception as e:
                 logging.error("Error processing %s selection: %s", data, str(e))
             logging.debug("MqttActuator.callback_select finished, lock released")
@@ -309,6 +325,23 @@ class MqttActuator(ChanelReceiver, MqttBase):
         select = Select(select_settings, self.callback_select, user_data=param_id)
         self._selects[param_id] = select
         select.write_config()
+        # Set initial value if available
+        if param_info.get('current'):
+            try:
+                current_value = param_info['current']
+                logging.debug("Setting current value for %s to %s via MQTT", param_name, current_value)
+                # This will automatically publish to the correct MQTT state topic
+                select.select_option(current_value)
+            except Exception as e:
+                logging.warning("Failed to set current value for select %s: %s", param_name, e)
+        elif param_info.get('options'):
+            try:
+                # Fallback to first option if no current value
+                initial_value = param_info['options'][0]
+                logging.debug("Setting default value for %s to %s via MQTT", param_name, initial_value)
+                select.select_option(initial_value)
+            except Exception as e:
+                logging.warning("Failed to set default value for select %s: %s", param_name, e)
 
     def callback_number(self, client: Client, data: str, message: MQTTMessage) -> None: #pylint disable=unused-argument
         """
