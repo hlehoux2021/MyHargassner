@@ -74,6 +74,15 @@ class TelnetClient:
                 return addr.address
         raise RuntimeError(f"No IPv4 address found for interface {iface}.")
 
+    def connected(self) -> bool:
+        """
+        Check if the telnet connection is active.
+
+        Returns:
+            bool: True if connected, False otherwise.
+        """
+        return self._connected
+
     def connect(self, timeout_sec: float = 2.0) -> None:
         """
         Connect to the boiler using the address specified during initialization.

@@ -165,6 +165,16 @@ from myhargassner.socket_manager import SocketManager
 #PR043;6;0;1;0;0;0;0;Ballon 2 D\xe9marrer chrgt;Non;Oui;0;\n
 #PR044;6;0;1;0;0;0;0;Ballon 3 D\xe9marrer chrgt;Non;Oui;0;\n
 #PR045;6;0;1;0;0;0;0;Ballon B D\xe9marrer chrgt;Non;Oui;0;\n
+#
+# General parameters
+# $par get 4
+# $4;3;19.500;14.000;26.000;0.500;C;20.000;0;0;0;Zone 1 Temp. ambiante jour;
+# $par set "4;3;20"
+# zPa A: 4 (Temp. ambiante jour) = 19.5
+# zSet Para changed
+# zPa N: 4 (Temp. ambiante jour) = 20.0
+# zParamter 4 per APP verstellt
+# $a
 
 
 
@@ -357,12 +367,16 @@ class TelnetProxy(ChanelReceiver, MqttBase):
 
         """
         message: str = 'BoilerConfig:'
+        # todo make this as an HargConfig parameter.
         commands= [
-            b'$par get PR001\r\n',
-            b'$par get PR011\r\n',
-            b'$par get PR012\r\n'
+            b'$par get PR001\r\n', # Mode Boiler
+            b'$par get PR011\r\n', # Mode Zone 1
+            b'$par get PR012\r\n', # Mode Zone 2
+            b'$par get PR040\r\n', # démarrage Tampon.
+            b'$par get 4\r\n', # parameter 4 : Temp. ambiante jour
+            b'$par get 5\r\n' # parameter 5 : Temp. ambiante de réduit
         ]
-        if not self._client._connected:
+        if not self._client.connected():
             logging.error('Client not connected')
             return
         logging.debug('telnet getting boiler config from %s', repr(self.bl_addr))

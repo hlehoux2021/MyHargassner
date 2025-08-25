@@ -1,5 +1,6 @@
 """
-This module defines MqttActuator, a class for controlling MQTT-enabled devices.
+MqttActuator is a class for controlling devices via MQTT.
+It extends MqttBase to provide functionality for sending commands to devices.
 """
 
 # Standard library imports
@@ -7,12 +8,12 @@ import logging
 import threading
 import socket
 
-from typing import Optional, Dict, List, Generic, TypeVar
+from typing import Optional, Dict, Generic, TypeVar, Union
 
 # Third party imports
 from paho.mqtt.client import Client, MQTTMessage
 from ha_mqtt_discoverable import Settings, DeviceInfo  # type: ignore
-from ha_mqtt_discoverable.sensors import Select, SelectInfo  # type: ignore
+from ha_mqtt_discoverable.sensors import Select, SelectInfo, Number, NumberInfo # type: ignore
 
 from myhargassner.pubsub.pubsub import PubSub
 
@@ -29,9 +30,11 @@ class MqttActuator(ChanelReceiver, MqttBase):
     It extends MqttBase to provide functionality for sending commands to devices.
     """
 
-    _selects: Dict[str, Select] = {}
+    _selects: Dict[str, Select] = {}  # Stores Select entities by parameter name
+    _numbers: Dict[str, Number] = {}  # Stores Number entities by parameter name
+
     _main_client: Optional[Client] = None
-    _boiler_config: Optional[Dict[str, List[str]]] = None
+    _boiler_config: Optional[Dict[str, dict]] = None
     _parameter_ids: Dict[str, str] = {}
     _client: Optional[TelnetClient] = None
     src_iface: bytes
@@ -58,105 +61,102 @@ class MqttActuator(ChanelReceiver, MqttBase):
         self._service_lock = lock
         self._client = TelnetClient(self.src_iface, b'', buffer_size=self._appconfig.buff_size(), port=4000)
 
-    def _parse_parameter_response(self, data: bytes) -> dict[str, list[str]]:
-        """Parse parameter responses from the boiler (PR001, PR011, etc)
+    def _parse_parameter_response(self, data: bytes) -> dict[str, dict]:
+        """Parse parameter responses from the boiler, including numeric and select types.
 
         Args:
             data: Raw response from the boiler, can contain multiple parameters
-                 separated by \r\n
+                 separated by $ (each response starts with $)
 
         Returns:
-            dict[str, list[str]]: A dictionary with parameter names as keys and lists of values
-            Example: {
-                'Mode': ['Manu', 'Arr', 'Ballon', 'Auto', 'Arr combustion'],
-                'Zone 1 Mode': ['Arr', 'Auto', 'Réduire', 'Confort', '1x Confort', 'Refroid.']
-            }
+            dict[str, dict]:
+                For select: { 'Mode': { 'type': 'select', 'options': [...] } }
+                For number: { 'Zone 1 Temp. ambiante jour': { 'type': 'number', ... } }
         """
-        result: dict[str, list[str]] = {}
-
-        # expected format:
-        # $PR001;6;1;4;1;0;0;0;Mode;Manu;Arr;Ballon;Auto;Arr combustion;\r\n
-        # $PR011;6;0;5;1;0;0;0;Zone 1 Mode;Arr;Auto;Réduire;Confort;1x Confort;Refroid.;\r\n
-        # $--\r\n
-
+        result: dict[str, dict] = {}
         try:
-            # Split into individual responses - using latin1 for special characters like é
-            responses = data.decode('latin1').split('\r\n')
-            # Process each response
+            text = data.decode('latin1')
+            # Explanation:
+            # text.split('$') splits the input string text at every $ character.
+            # This produces a list of substrings, but the $ is removed from each part.
+            # The list comprehension iterates over each substring r from the split.
+            # if r.strip() filters out any empty or whitespace-only substrings.
+            # f"${r}" adds the $ back to the start of each substring, reconstructing each response to start with $.
+            responses = [f"${r}" for r in text.split('$') if r.strip()]
             for response in responses:
-                # Skip empty responses or end marker
+                # Remove trailing semicolons and whitespace
+                response = response.strip().rstrip(';')
                 if not response or response == '$--':
                     continue
-
-                # Split the response into items
-                items = response.strip().split(';')
-
-                # Validate format starts with $PR
-                if not items[0].startswith('$PR'):
-                    logging.warning('Unexpected format: expected $PR..., got %s', items[0])
+                items = response.split(';')
+                # Numeric parameter: $4;3;19.500;14.000;26.000;0.500;C;20.000;0;0;0;Zone 1 Temp. ambiante jour
+                if items[0].startswith('$') and items[0][1:].isdigit():
+                    try:
+                        key = items[0][1:]
+                        current = float(items[2])
+                        min_val = float(items[3])
+                        max_val = float(items[4])
+                        increment = float(items[5])
+                        unit = items[6]
+                        default = float(items[7])
+                        name = items[11] if len(items) > 11 else f"Param {key}"
+                        result[name] = {
+                            'type': 'number',
+                            'key': int(key),
+                            'current': current,
+                            'min': min_val,
+                            'max': max_val,
+                            'increment': increment,
+                            'unit': unit,
+                            'default': default
+                        }
+                    except Exception as e:
+                        logging.error(f"Failed to parse numeric parameter: {response} ({e})")
                     continue
-
-                parameter_id = items[0][1:]  # Remove the $ prefix
-                logging.info('Parsing parameter %s', parameter_id)
-
-                # Get number of items to search
-                try:
-                    num_items = int(items[1])
-                except (ValueError, IndexError):
-                    logging.error('Invalid number of items format for %s', parameter_id)
+                # Select parameter: $PRxxx;...
+                if items[0].startswith('$PR'):
+                    try:
+                        num_items = int(items[1])
+                        key = items[8]
+                        values = []
+                        for i in range(num_items):
+                            item = items[9 + i]
+                            if item and item != '0':
+                                values.append(item)
+                        result[key] = {
+                            'type': 'select',
+                            'options': values
+                        }
+                    except Exception as e:
+                        logging.error(f"Failed to parse select parameter: {response} ({e})")
                     continue
-
-                # Get the key (Mode or Zone 1 Mode in the examples)
-                try:
-                    key = items[8]
-                    # Store the mapping between parameter name and its PR code
-                    self._parameter_ids[key] = parameter_id
-                    logging.debug("Mapped parameter '%s' to %s", key, parameter_id)
-                except IndexError:
-                    logging.error('No key found at position 8 for %s', parameter_id)
-                    continue
-
-                # Get the values (items after the key, excluding zeros and empty values)
-                values: list[str] = []
-                try:
-                    for i in range(num_items):
-                        item = items[9 + i]
-                        # Skip empty values and zeros
-                        if item and item != '0':
-                            values.append(item)
-                except IndexError:
-                    logging.error('Not enough items in the response for %s', parameter_id)
-                    continue
-                result[key] = values
-                logging.info('Successfully parsed %s parameter', parameter_id)
-
+                logging.warning(f"Unknown parameter format: {response}")
         except Exception as e:
             logging.error('Error parsing parameter responses: %s', str(e))
-
         return result
 
-    def _display_parameters_config(self, config: dict[str, list[str]]) -> None:
-        """Display all parameters configuration in a readable format
-
-        Args:
-            config: Dictionary containing the parsed parameter responses
-            Example: {
-                'Mode': ['Manu', 'Arr', 'Ballon', 'Auto', 'Arr combustion'],
-                'Zone 1 Mode': ['Arr', 'Auto', 'Réduire', 'Confort', '1x Confort', 'Refroid.']
-            }
-        """
+    def _display_parameters_config(self, config: dict[str, dict]) -> None:
+        """Display all parameters configuration in a readable format (select and number types)."""
         if not config:
             logging.info("No parameters configuration available")
             return
         logging.info("Boiler Parameters Configuration:")
         logging.info("-" * 40)
-        for key, values in config.items():
+        for key, value in config.items():
             logging.info("Parameter: %s", key)
-            logging.info("Available values:")
-            for idx, value in enumerate(values, 1):
-                logging.info("  %d. %s", idx, value)
+            if value.get('type') == 'select':
+                logging.info("Available values:")
+                for idx, v in enumerate(value.get('options', []), 1):
+                    logging.info("  %d. %s", idx, v)
+            elif value.get('type') == 'number':
+                logging.info("  key: %s", value.get('key'))
+                logging.info("  current: %s", value.get('current'))
+                logging.info("  min: %s", value.get('min'))
+                logging.info("  max: %s", value.get('max'))
+                logging.info("  increment: %s", value.get('increment'))
+                logging.info("  unit: %s", value.get('unit'))
+                logging.info("  default: %s", value.get('default'))
             logging.info("-" * 40)
-
         logging.info("Total parameters found: %d", len(config))
 
     def decode_boiler_config(self, msg: str) -> None:
@@ -231,24 +231,9 @@ class MqttActuator(ChanelReceiver, MqttBase):
             raise RuntimeError("TelnetClient is not initialized")
         return self._client
 
-    def callback(self, client: Client, data: str, message: MQTTMessage) -> None:  # pylint: disable=unused-argument
+    def callback_select(self, client: Client, data: str, message: MQTTMessage) -> None:  # pylint: disable=unused-argument
         """
         Handle MQTT select state change messages.
-
-        This callback processes state changes from Home Assistant and sends
-        corresponding commands to the boiler.
-
-        Args:
-            client (Client): The MQTT client that received the message
-            data (str): The parameter name that changed (user_data from Select entity)
-            message (MQTTMessage): The MQTT message containing the new state
-
-        Note:
-            The command sent to the boiler has the format:
-            $par set "PRxxx;6;index" where:
-            - PRxxx is the parameter ID
-            - 6 is a fixed value
-            - index is the 0-based position of the selected option
         """
         logging.debug("MqttActuator.callback called with data: %s", data)
         with self._service_lock:
@@ -258,85 +243,27 @@ class MqttActuator(ChanelReceiver, MqttBase):
                 if not self._boiler_config or data not in self._boiler_config:
                     logging.error("Received callback for unknown parameter: %s", data)
                     return
-
-                valid_options = self._boiler_config[data]
-                if payload not in valid_options:
-                    logging.error("Invalid option '%s' for %s. Valid options: %s", payload, data, valid_options)
+                param_info = self._boiler_config[data]
+                if param_info.get('type') != 'select':
+                    logging.error("Callback received for non-select parameter: %s", data)
                     return
-
-                # Find the position of the selected option in the list (0-based index is what we want)
-                option_index = valid_options.index(payload)
-                # Get the parameter ID for this parameter name
+                options = param_info.get('options', [])
+                if payload not in options:
+                    logging.error("Invalid option '%s' for %s. Valid options: %s", payload, data, options)
+                    return
+                option_index = options.index(payload)
                 if data not in self._parameter_ids:
                     logging.error("No parameter ID found for %s", data)
                     return
-
-                # Construct the command in the format $par set "PRxxx;6;index"
                 param_id = self._parameter_ids[data]
                 command = f'$par set "{param_id};6;{option_index}"\r\n'
                 logging.info("Sending command: %s", command)
-                # Send the command to the boiler
-                self._get_client().send(command.encode('latin1'))
-                # Loop to receive and parse until $ack is found
-                buffer = b''
-                found_ack = False
-                new_mode = None
-                try:
-                    max_tries = 20
-                    tries = 0
-                    while not found_ack and tries < max_tries:
-                        tries += 1
-                        try:
-                            chunk = self._get_client().recv()
-                        except socket.timeout:
-                            logging.warning('No data received from boiler (try %d/%d)', tries, max_tries)
-                            continue
-                        except socket.error as e:
-                            logging.error('Socket error during recv: %s', str(e))
-                            break
-                        if not chunk:
-                            logging.warning('No data received from boiler (try %d/%d)', tries, max_tries)
-                            continue
-                        logging.debug('Received chunk: %s', chunk)
-                        buffer += chunk
-                        # Split buffer into lines
-                        while b'\r\n' in buffer:
-                            line, buffer = buffer.split(b'\r\n', 1)
-                            line_str = line.decode('latin1', errors='replace').strip()
-                            if not line_str:
-                                continue
-                            if line_str.startswith('pm'):
-                                logging.debug('Discarded pm buffer: %s', line_str)
-                                continue
-                            if line_str == '$ack':
-                                found_ack = True
-                                logging.debug('Received $ack, ending response loop')
-                                break
-                            if '$err' in line_str or '$permission denied' in line_str:
-                                logging.warning('Received error or permission denied: %s', line_str)
-                                found_ack = True
-                                break
-                            # Look for the new mode line
-                            # Example: zPa N: PR011 (Mode) = Auto
-                            if line_str.startswith(f'zPa N: {param_id}'):
-                                # Extract after '='
-                                parts = line_str.split('=', 1)
-                                if len(parts) == 2:
-                                    new_mode = parts[1].strip()
-                                    logging.info('Extracted new mode for %s: %s', param_id, new_mode)
-
-                    if not found_ack and tries >= max_tries:
-                        logging.warning('Exiting response loop after %d tries without $ack or error', max_tries)
-                    # Optionally, reset to blocking mode after
-                except Exception as e:
-                    logging.error('Failed to receive/parse data: %s', str(e))
-                    return
+                new_mode = self._send_command_and_parse_response(command, param_id, value_type='select')
                 if new_mode:
                     logging.info('Final new mode for %s: %s', param_id, new_mode)
-                    #update the MQTT Item that is modified
                     select = self._selects.get(param_id)
                     if select is not None:
-                        select.select_option(new_mode)
+                        select.select_option(str(new_mode))
                     else:
                         logging.warning("No Select found for param_id: %s", param_id)
                 else:
@@ -344,6 +271,93 @@ class MqttActuator(ChanelReceiver, MqttBase):
             except Exception as e:
                 logging.error("Error processing %s selection: %s", data, str(e))
             logging.debug("MqttActuator.callback finished, lock released")
+
+    def create_select(self, param_name: str, param_info: dict) -> None:
+        """
+        Create and register a Home Assistant MQTT Select entity for a select-type parameter.
+        """
+        unique_id = f"boiler_{param_name.lower().replace(' ', '_')}"
+        select_info = SelectInfo(
+            name=param_name,
+            unique_id=unique_id,
+            device=self._device_info,
+            options=param_info['options'],
+            optimistic=True
+        )
+        select_settings = Settings(mqtt=self.mqtt_settings, entity=select_info)
+        select = Select(select_settings, self.callback_select, user_data=param_name)
+        self._selects[param_name] = select
+        select.write_config()
+
+    def callback_number(self, client: Client, data: str, message: MQTTMessage) -> None: #pylint disable=unused-argument
+        """
+        Handle MQTT number state change messages.
+        """
+        logging.debug("MqttActuator.callback_number called with data: %s", data)
+        with self._service_lock:
+            try:
+                payload = message.payload.decode()
+                logging.debug("Received payload: %s", payload)
+                if not self._boiler_config or data not in self._boiler_config:
+                    logging.error("Received callback for unknown parameter: %s", data)
+                    return
+                param_info = self._boiler_config[data]
+                if param_info.get('type') != 'number':
+                    logging.error("Callback received for non-number parameter: %s", data)
+                    return
+                try:
+                    value = float(payload)
+                except Exception as e:
+                    logging.error("Invalid payload for number entity: %s (%s)", payload, e)
+                    return
+                if data not in self._parameter_ids:
+                    logging.error("No parameter ID found for %s", data)
+                    return
+                param_id = self._parameter_ids[data]
+                command = f'$par set "{param_id};3;{value}"\r\n'
+                logging.info("Sending command: %s", command)
+                new_value = self._send_command_and_parse_response(command, param_id, value_type='number')
+                if new_value is not None:
+                    logging.info('Final new value for %s: %s', param_id, new_value)
+                    number = self._numbers.get(data)
+                    if number is not None:
+                        try:
+                            number.set_value(float(new_value))
+                        except Exception as e:
+                            logging.warning('Failed to update number entity: %s', e)
+                else:
+                    logging.info('No new value extracted for %s', param_id)
+            except Exception as e:
+                logging.error("Error in callback_number for %s: %s", data, str(e))
+
+    def create_number(self, param_name: str, param_info: dict) -> None:
+        """
+        Create and register a Home Assistant MQTT Number entity for a number-type parameter.
+        """
+        unique_id = f"boiler_{param_name.lower().replace(' ', '_')}"
+        number_info = NumberInfo(
+            name=param_name,
+            unique_id=unique_id,
+            device=self._device_info,
+            min=param_info['min'],
+            max=param_info['max'],
+            step=param_info['increment'],
+            unit_of_measurement=param_info['unit'],
+            mode="slider",
+            optimistic=True
+        )
+        number_settings = Settings(mqtt=self.mqtt_settings, entity=number_info)
+        number = Number(number_settings, self.callback_number, user_data=param_name)
+        if not hasattr(self, '_numbers'):
+            self._numbers = {}
+        self._numbers[param_name] = number
+        number.write_config()
+        # Optionally set initial value
+        try:
+            number.set_value(param_info['current'])
+        except Exception:
+            pass
+
 
     def create_subscribers(self) -> None:
         """
@@ -368,26 +382,10 @@ class MqttActuator(ChanelReceiver, MqttBase):
 
         self._selects = {}  # Store all Select instances
 
-        for param_name, options in self._boiler_config.items():
-            # Create a unique ID from the parameter name (replace spaces with underscores and lowercase)
-            unique_id = f"boiler_{param_name.lower().replace(' ', '_')}"
-
-            select_info = SelectInfo(
-                name=param_name,
-                unique_id=unique_id,
-                device=self._device_info,
-                options=options,
-                optimistic=True
-            )
-            select_settings = Settings(mqtt=self.mqtt_settings, entity=select_info)
-
-            # Create the Select instance with the callback, passing param_name as user_data
-            select = Select(select_settings, self.callback, user_data=param_name)
-            #self.attach_paho_logger(select)
-            self._selects[param_name] = select
-
-            # Publish config for this select
-            select.write_config()
+        for param_name, param_info in self._boiler_config.items():
+            if param_info.get('type') != 'select':
+                continue  # Only create Select entities for 'select' type
+            self.create_select(param_name, param_info)
 
         # Store the first valid select's MQTT client to use in the service method
         self._main_client = None
@@ -452,6 +450,75 @@ class MqttActuator(ChanelReceiver, MqttBase):
                 select.mqtt_client.disconnect()
             logging.critical("MQTT Actuator encountered a critical error and terminated.")
             raise
+
+    def _send_command_and_parse_response(self, command: str, param_id: str, *, value_type: str) -> Union[float, str, None]:
+        """
+        Send a command to the boiler and parse the response for select or number.
+        Args:
+            command (str): The command to send
+            param_id (str): The parameter ID
+            value_type (str): 'select' or 'number'
+        Returns:
+            The new value/mode if found, else None
+        """
+        self._get_client().send(command.encode('latin1'))
+        buffer = b''
+        found_ack = False
+        max_tries = 20
+        tries = 0
+        ack_token = '$ack' if value_type == 'select' else '$a'
+        result_float: float | None = None
+        result_str: str | None = None
+        while not found_ack and tries < max_tries:
+            tries += 1
+            try:
+                chunk = self._get_client().recv()
+            except socket.timeout:
+                logging.warning('No data received from boiler (try %d/%d)', tries, max_tries)
+                continue
+            except socket.error as e:
+                logging.error('Socket error during recv: %s', str(e))
+                break
+            if not chunk:
+                logging.warning('No data received from boiler (try %d/%d)', tries, max_tries)
+                continue
+            logging.debug('Received chunk: %s', chunk)
+            buffer += chunk
+            # Split buffer into lines
+            while b'\r\n' in buffer:
+                line, buffer = buffer.split(b'\r\n', 1)
+                line_str = line.decode('latin1', errors='replace').strip()
+                if not line_str:
+                    continue
+                if line_str.startswith('pm'):
+                    logging.debug('Discarded pm buffer: %s', line_str)
+                    continue
+                if line_str == ack_token:
+                    found_ack = True
+                    logging.debug('Received %s, ending response loop', ack_token)
+                    break
+                if '$err' in line_str or '$permission denied' in line_str:
+                    logging.warning('Received error or permission denied: %s', line_str)
+                    found_ack = True
+                    break
+                # Look for the new value/mode line: zPa N: <param_id> (<name>) = <value>
+                if line_str.startswith(f'zPa N: {param_id}'):
+                    parts = line_str.split('=', 1)
+                    if len(parts) == 2:
+                        try:
+                            if value_type == 'number':
+                                result_float = float(parts[1].strip())
+                            else:
+                                result_str = parts[1].strip()
+                            logging.info('Extracted new value for %s: %s', param_id, parts[1].strip())
+                        except Exception:
+                            pass
+        if not found_ack and tries >= max_tries:
+            logging.warning('Exiting response loop after %d tries without %s or error', max_tries, ack_token)
+        if value_type == 'number':
+            return result_float
+        else:
+            return result_str
 
 T = TypeVar("T", bound=MqttActuator)
 
