@@ -88,7 +88,20 @@ class MqttActuator(ChanelReceiver, MqttBase):
                 if not response or response == '$--':
                     continue
                 items = response.split(';')
-                # Numeric parameter: $4;3;19.500;14.000;26.000;0.500;C;20.000;0;0;0;Zone 1 Temp. ambiante jour
+                # Numeric parameter format:
+                # $id;type;current;min;max;step;unit;default;0;0;0;name
+                # Example: $4;3;19.500;14.000;26.000;0.500;C;20.000;0;0;0;Zone 1 Temp. ambiante jour
+                # Format explanation:
+                # - id: Numeric parameter ID (e.g., 4)
+                # - type: Parameter type (3 for numeric)
+                # - current: Current value (e.g., 19.500)
+                # - min: Minimum allowed value (e.g., 14.000)
+                # - max: Maximum allowed value (e.g., 26.000)
+                # - step: Increment step (e.g., 0.500)
+                # - unit: Unit of measurement (e.g., C for Celsius)
+                # - default: Default value (e.g., 20.000)
+                # - 0;0;0: Reserved configuration values
+                # - name: Parameter name (e.g., "Zone 1 Temp. ambiante jour")
                 if items[0].startswith('$') and items[0][1:].isdigit():
                     try:
                         key = items[0][1:]
@@ -112,47 +125,62 @@ class MqttActuator(ChanelReceiver, MqttBase):
                     except Exception as e:
                         logging.error(f"Failed to parse numeric parameter: {response} ({e})")
                     continue
-                # Select parameter: $PRxxx;...
+                # Select parameter format (PR = Parameter Response):
+                # $PRxxx;6;current;max;default;0;0;0;name;value1;value2;...;0;
+                # Example: $PR011;6;0;5;1;0;0;0;Zone 1 Mode;Arr;Auto;Réduire;Confort;1x Confort;Refroid.;0;
+                # Format explanation:
+                # - PRxxx: Parameter ID (e.g., PR011)
+                # - 6: Parameter type for select
+                # - current: Current selected index (0-based)
+                # - max: Maximum index (number of options minus 1)
+                # - default: Default option index
+                # - 0;0;0: Reserved configuration values
+                # - name: Parameter name (e.g., "Zone 1 Mode")
+                # - value1,value2,...: Available options (e.g., "Arr", "Auto", etc.)
+                # - trailing 0: Protocol terminator
                 if items[0].startswith('$PR'):
                     try:
                         logging.debug("Parsing select parameter: %s", response)
-                        num_items = int(items[1])
+                        max_index = int(items[3])  # The max index value (number of options - 1)
+                        num_items = max_index + 1  # Total number of options
                         raw_current_index = int(items[2]) if len(items) > 2 else 0
+                        default_index = int(items[4]) if len(items) > 4 else 0  # Default option index
                         key = items[8]
-                        logging.debug("Select parameter: key=%s, num_items=%d, current_index=%d", 
-                                    key, num_items, raw_current_index)
-                        
-                        # Get all available values first (excluding the trailing "0" that's part of the protocol)
+                        logging.debug("Select parameter: key=%s,max_index=%d, num_items=%d, current_index=%d, default_index=%d",
+                                    key, max_index, num_items, raw_current_index, default_index)
+                        # Get all available values (num_items is max_index + 1)
                         all_values = []
                         for i in range(num_items):
                             try:
                                 item = items[9 + i]
-                                # Don't add the trailing "0" that's part of the protocol format
-                                if i < num_items - 1:  # Skip the last item which is always "0" in the protocol
-                                    all_values.append(item)
+                                all_values.append(item)
                             except IndexError:
                                 logging.warning("Not enough items for value %d in response", i)
                                 break
-                        
                         logging.debug("All values for %s: %s", key, all_values)
-                        
                         # Get current value directly from index
                         current_value = None
                         if 0 <= raw_current_index < len(all_values):
                             current_value = all_values[raw_current_index]
                             logging.debug("Current value from index %d: %s", raw_current_index, current_value)
-                        
-                        # Remove empty strings from options list
+                        # Remove any remaining empty strings from options list
                         values = [v for v in all_values if v]
                         logging.debug("Filtered values for %s: %s", key, values)
-                        
+                        # Get default value from index
+                        default_value = None
+                        if 0 <= default_index < len(all_values):
+                            default_value = all_values[default_index]
+                            logging.debug("Default value from index %d: %s", default_index, default_value)
+
                         result[key] = {
                             'type': 'select',
                             'options': values,
                             'command_id': items[0][1:],  # Store the PRxxx ID
                             'current': current_value,
+                            'default': default_value,  # Add default value
                             'raw_values': all_values,  # Store all values for debugging
-                            'raw_index': raw_current_index
+                            'raw_index': raw_current_index,
+                            'default_index': default_index  # Store default index for reference
                         }
                         logging.debug("Final parameter config for %s: %s", key, result[key])
                     except Exception as e:
@@ -173,7 +201,6 @@ class MqttActuator(ChanelReceiver, MqttBase):
         for key, value in config.items():
             logging.info("Parameter: %s", key)
             logging.info("Type: %s", value.get('type', 'unknown'))
-            
             if value.get('type') == 'select':
                 logging.info("Command ID: %s", value.get('command_id'))
                 logging.info("Available values:")
@@ -186,12 +213,10 @@ class MqttActuator(ChanelReceiver, MqttBase):
                 logging.info("Range: %s to %s", value.get('min'), value.get('max'))
                 logging.info("Increment: %s", value.get('increment'))
                 logging.info("Unit: %s", value.get('unit'))
-            
             # Display all raw values for debugging
             logging.debug("Raw configuration:")
             for k, v in value.items():
                 logging.debug("  %s: %s", k, v)
-            
             logging.info("-" * 40)
         logging.info("Total parameters found: %d", len(config))
 
@@ -277,18 +302,15 @@ class MqttActuator(ChanelReceiver, MqttBase):
                 param_id = data  # data is already the param_id
                 payload = message.payload.decode()
                 logging.debug("Received payload: %s for parameter ID: %s", payload, param_id)
-                
                 # Find parameter info from boiler config
                 if not self._boiler_config:
                     logging.error("No boiler configuration available")
                     return
-                
                 param_info = None
-                for name, info in self._boiler_config.items():
+                for info in self._boiler_config.values():
                     if info.get('command_id') == param_id:
                         param_info = info
                         break
-                
                 if not param_info:
                     logging.error("Received callback for unknown parameter ID: %s", param_id)
                     return
@@ -313,14 +335,14 @@ class MqttActuator(ChanelReceiver, MqttBase):
                             logging.debug('Setting select state to: %s', new_mode_str)
                             select.select_option(new_mode_str)
                         else:
-                            logging.warning('Received invalid mode %s not in options: %s', 
+                            logging.warning('Received invalid mode %s not in options: %s',
                                          new_mode_str, param_info['options'])
                             # Fall back to the requested value since we know it's valid
                             select.select_option(payload)
                     else:
                         logging.warning("No Select found for parameter ID: %s", param_id)
                 else:
-                    logging.info('No new mode found for %s in response, keeping requested value: %s', 
+                    logging.info('No new mode found for %s in response, keeping requested value: %s',
                                param_id, payload)
                     # If we don't get a response, keep the requested value
                     select = self._selects.get(param_id)
@@ -360,14 +382,22 @@ class MqttActuator(ChanelReceiver, MqttBase):
                 select.select_option(current_value)
             except Exception as e:
                 logging.warning("Failed to set current value for select %s: %s", param_name, e)
-        elif param_info.get('options'):
+        elif param_info.get('default'):
             try:
-                # Fallback to first option if no current value
-                initial_value = param_info['options'][0]
-                logging.debug("Setting default value for %s to %s via MQTT", param_name, initial_value)
-                select.select_option(initial_value)
+                # Use the configured default value if no current value
+                default_value = param_info['default']
+                logging.debug("Setting configured default value for %s to %s via MQTT", param_name, default_value)
+                select.select_option(default_value)
             except Exception as e:
                 logging.warning("Failed to set default value for select %s: %s", param_name, e)
+                # Fallback to first option if default value fails
+                if param_info.get('options'):
+                    try:
+                        initial_value = param_info['options'][0]
+                        logging.debug("Falling back to first option for %s: %s via MQTT", param_name, initial_value)
+                        select.select_option(initial_value)
+                    except Exception as e2:
+                        logging.warning("Failed to set fallback value for select %s: %s", param_name, e2)
 
     def callback_number(self, client: Client, data: str, message: MQTTMessage) -> None: #pylint disable=unused-argument
         """
@@ -379,17 +409,14 @@ class MqttActuator(ChanelReceiver, MqttBase):
                 param_id = data  # data is already the param_id
                 payload = message.payload.decode()
                 logging.debug("Received payload: %s for parameter ID: %s", payload, param_id)
-                
                 if not self._boiler_config:
                     logging.error("No boiler configuration available")
                     return
-                
                 param_info = None
-                for name, info in self._boiler_config.items():
+                for info in self._boiler_config.values():
                     if str(info.get('key', '')) == param_id:
                         param_info = info
                         break
-                
                 if not param_info:
                     logging.error("Received callback for unknown parameter ID: %s", param_id)
                     return
