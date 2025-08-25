@@ -273,7 +273,7 @@ class Analyser():
             if ((i in self._values) and (_part != self._values[i])) or (i not in self._values):
                 self._values[i]= _part
                 if i in self.config.map:
-                    logging.info('pm %s --> %s', self.config.map[i],_part)
+                    logging.debug('pm %s --> %s', self.config.map[i],_part)
                     self.push(self.config.map[i], _part)
             i=i+1
 

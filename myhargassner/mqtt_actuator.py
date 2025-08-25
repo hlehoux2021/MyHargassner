@@ -116,18 +116,30 @@ class MqttActuator(ChanelReceiver, MqttBase):
                 if items[0].startswith('$PR'):
                     try:
                         num_items = int(items[1])
-                        current_index = int(items[2]) if len(items) > 2 else 0  # Get current value index
+                        raw_current_index = int(items[2]) if len(items) > 2 else 0  # Get current value index
                         key = items[8]
                         values = []
+                        raw_values = []  # Keep track of all values before filtering
+                        
+                        # First collect all values to map the raw index correctly
                         for i in range(num_items):
                             item = items[9 + i]
-                            if item and item != '0':
+                            raw_values.append(item)
+                            if item:  # Only filter out empty values
                                 values.append(item)
+                        
+                        # Map the raw index to filtered index if possible
+                        current_value = None
+                        if 0 <= raw_current_index < len(raw_values):
+                            raw_value = raw_values[raw_current_index]
+                            if raw_value:  # Only check if value is not empty
+                                current_value = raw_value
+                        
                         result[key] = {
                             'type': 'select',
                             'options': values,
                             'command_id': items[0][1:],  # Store the PRxxx ID
-                            'current': values[current_index] if 0 <= current_index < len(values) else None
+                            'current': current_value
                         }
                     except Exception as e:
                         logging.error(f"Failed to parse select parameter: {response} ({e})")
