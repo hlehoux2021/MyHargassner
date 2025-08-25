@@ -174,7 +174,7 @@ from myhargassner.socket_manager import SocketManager
 # zSet Para changed
 # zPa N: 4 (Temp. ambiante jour) = 20.0
 # zParamter 4 per APP verstellt
-# $a
+# $ack
 
 
 

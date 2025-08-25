@@ -35,7 +35,6 @@ class MqttActuator(ChanelReceiver, MqttBase):
 
     _main_client: Optional[Client] = None
     _boiler_config: Optional[Dict[str, dict]] = None
-    _parameter_ids: Dict[str, str] = {}
     _client: Optional[TelnetClient] = None
     src_iface: bytes
     _service_lock: threading.Lock
@@ -125,7 +124,8 @@ class MqttActuator(ChanelReceiver, MqttBase):
                                 values.append(item)
                         result[key] = {
                             'type': 'select',
-                            'options': values
+                            'options': values,
+                            'command_id': items[0][1:]  # Store the PRxxx ID
                         }
                     except Exception as e:
                         logging.error(f"Failed to parse select parameter: {response} ({e})")
@@ -144,18 +144,26 @@ class MqttActuator(ChanelReceiver, MqttBase):
         logging.info("-" * 40)
         for key, value in config.items():
             logging.info("Parameter: %s", key)
+            logging.info("Type: %s", value.get('type', 'unknown'))
+            
             if value.get('type') == 'select':
+                logging.info("Command ID: %s", value.get('command_id'))
                 logging.info("Available values:")
                 for idx, v in enumerate(value.get('options', []), 1):
                     logging.info("  %d. %s", idx, v)
             elif value.get('type') == 'number':
-                logging.info("  key: %s", value.get('key'))
-                logging.info("  current: %s", value.get('current'))
-                logging.info("  min: %s", value.get('min'))
-                logging.info("  max: %s", value.get('max'))
-                logging.info("  increment: %s", value.get('increment'))
-                logging.info("  unit: %s", value.get('unit'))
-                logging.info("  default: %s", value.get('default'))
+                logging.info("Parameter ID: %s", value.get('key'))
+                logging.info("Current value: %s", value.get('current'))
+                logging.info("Default value: %s", value.get('default'))
+                logging.info("Range: %s to %s", value.get('min'), value.get('max'))
+                logging.info("Increment: %s", value.get('increment'))
+                logging.info("Unit: %s", value.get('unit'))
+            
+            # Display all raw values for debugging
+            logging.debug("Raw configuration:")
+            for k, v in value.items():
+                logging.debug("  %s: %s", k, v)
+            
             logging.info("-" * 40)
         logging.info("Total parameters found: %d", len(config))
 
@@ -235,27 +243,35 @@ class MqttActuator(ChanelReceiver, MqttBase):
         """
         Handle MQTT select state change messages.
         """
-        logging.debug("MqttActuator.callback called with data: %s", data)
+        logging.debug("MqttActuator.callback_select called with data: %s", data)
         with self._service_lock:
             try:
+                param_id = data  # data is already the param_id
                 payload = message.payload.decode()
-                logging.debug("Received payload: %s", payload)
-                if not self._boiler_config or data not in self._boiler_config:
-                    logging.error("Received callback for unknown parameter: %s", data)
+                logging.debug("Received payload: %s for parameter ID: %s", payload, param_id)
+                
+                # Find parameter info from boiler config
+                if not self._boiler_config:
+                    logging.error("No boiler configuration available")
                     return
-                param_info = self._boiler_config[data]
+                
+                param_info = None
+                for name, info in self._boiler_config.items():
+                    if info.get('command_id') == param_id:
+                        param_info = info
+                        break
+                
+                if not param_info:
+                    logging.error("Received callback for unknown parameter ID: %s", param_id)
+                    return
                 if param_info.get('type') != 'select':
-                    logging.error("Callback received for non-select parameter: %s", data)
+                    logging.error("Callback received for non-select parameter ID: %s", param_id)
                     return
                 options = param_info.get('options', [])
                 if payload not in options:
-                    logging.error("Invalid option '%s' for %s. Valid options: %s", payload, data, options)
+                    logging.error("Invalid option '%s' for %s. Valid options: %s", payload, param_id, options)
                     return
                 option_index = options.index(payload)
-                if data not in self._parameter_ids:
-                    logging.error("No parameter ID found for %s", data)
-                    return
-                param_id = self._parameter_ids[data]
                 command = f'$par set "{param_id};6;{option_index}"\r\n'
                 logging.info("Sending command: %s", command)
                 new_mode = self._send_command_and_parse_response(command, param_id, value_type='select')
@@ -265,12 +281,12 @@ class MqttActuator(ChanelReceiver, MqttBase):
                     if select is not None:
                         select.select_option(str(new_mode))
                     else:
-                        logging.warning("No Select found for param_id: %s", param_id)
+                        logging.warning("No Select found for parameter ID: %s", param_id)
                 else:
                     logging.info('No new mode found for %s in response', param_id)
             except Exception as e:
                 logging.error("Error processing %s selection: %s", data, str(e))
-            logging.debug("MqttActuator.callback finished, lock released")
+            logging.debug("MqttActuator.callback_select finished, lock released")
 
     def create_select(self, param_name: str, param_info: dict) -> None:
         """
@@ -285,8 +301,13 @@ class MqttActuator(ChanelReceiver, MqttBase):
             optimistic=True
         )
         select_settings = Settings(mqtt=self.mqtt_settings, entity=select_info)
-        select = Select(select_settings, self.callback_select, user_data=param_name)
-        self._selects[param_name] = select
+        # Get the command ID to use for the select
+        param_id = param_info.get('command_id')
+        if not param_id:
+            logging.error(f"No command_id found for select parameter {param_name}")
+            return
+        select = Select(select_settings, self.callback_select, user_data=param_id)
+        self._selects[param_id] = select
         select.write_config()
 
     def callback_number(self, client: Client, data: str, message: MQTTMessage) -> None: #pylint disable=unused-argument
@@ -296,39 +317,50 @@ class MqttActuator(ChanelReceiver, MqttBase):
         logging.debug("MqttActuator.callback_number called with data: %s", data)
         with self._service_lock:
             try:
+                param_id = data  # data is already the param_id
                 payload = message.payload.decode()
-                logging.debug("Received payload: %s", payload)
-                if not self._boiler_config or data not in self._boiler_config:
-                    logging.error("Received callback for unknown parameter: %s", data)
+                logging.debug("Received payload: %s for parameter ID: %s", payload, param_id)
+                
+                if not self._boiler_config:
+                    logging.error("No boiler configuration available")
                     return
-                param_info = self._boiler_config[data]
+                
+                param_info = None
+                for name, info in self._boiler_config.items():
+                    if str(info.get('key', '')) == param_id:
+                        param_info = info
+                        break
+                
+                if not param_info:
+                    logging.error("Received callback for unknown parameter ID: %s", param_id)
+                    return
                 if param_info.get('type') != 'number':
-                    logging.error("Callback received for non-number parameter: %s", data)
+                    logging.error("Callback received for non-number parameter ID: %s", param_id)
                     return
                 try:
                     value = float(payload)
                 except Exception as e:
                     logging.error("Invalid payload for number entity: %s (%s)", payload, e)
                     return
-                if data not in self._parameter_ids:
-                    logging.error("No parameter ID found for %s", data)
-                    return
-                param_id = self._parameter_ids[data]
                 command = f'$par set "{param_id};3;{value}"\r\n'
                 logging.info("Sending command: %s", command)
                 new_value = self._send_command_and_parse_response(command, param_id, value_type='number')
                 if new_value is not None:
-                    logging.info('Final new value for %s: %s', param_id, new_value)
-                    number = self._numbers.get(data)
+                    logging.info('Final new value for param %s (id: %s): %s', data, param_id, new_value)
+                    number = self._numbers.get(param_id)
                     if number is not None:
                         try:
                             number.set_value(float(new_value))
                         except Exception as e:
                             logging.warning('Failed to update number entity: %s', e)
+                    else:
+                        logging.warning("No Number found for parameter ID: %s", param_id)
                 else:
-                    logging.info('No new value extracted for %s', param_id)
+                    logging.info('No new value extracted for param %s (id: %s)', data, param_id)
             except Exception as e:
                 logging.error("Error in callback_number for %s: %s", data, str(e))
+            logging.debug("MqttActuator.callback_number" \
+            " finished, lock released")
 
     def create_number(self, param_name: str, param_info: dict) -> None:
         """
@@ -347,10 +379,15 @@ class MqttActuator(ChanelReceiver, MqttBase):
             optimistic=True
         )
         number_settings = Settings(mqtt=self.mqtt_settings, entity=number_info)
-        number = Number(number_settings, self.callback_number, user_data=param_name)
+        # Get the numeric ID
+        param_id = str(param_info.get('key', ''))
+        if not param_id:
+            logging.error(f"No key found for number parameter {param_name}")
+            return
+        number = Number(number_settings, self.callback_number, user_data=param_id)
         if not hasattr(self, '_numbers'):
             self._numbers = {}
-        self._numbers[param_name] = number
+        self._numbers[param_id] = number
         number.write_config()
         # Optionally set initial value
         try:
@@ -384,16 +421,10 @@ class MqttActuator(ChanelReceiver, MqttBase):
         self._numbers = {}  # Store all Number instances
 
         for param_name, param_info in self._boiler_config.items():
-            # Store parameter ID mapping for both select and number types
             if param_info.get('type') == 'select':
                 self.create_select(param_name, param_info)
-                # For select parameters, the parameter name is already the ID
-                self._parameter_ids[param_name] = param_name
             elif param_info.get('type') == 'number':
                 self.create_number(param_name, param_info)
-                # For number parameters, convert the numeric key to string
-                if 'key' in param_info:
-                    self._parameter_ids[param_name] = str(param_info['key'])
 
         # Store the first valid select's MQTT client to use in the service method
         self._main_client = None
