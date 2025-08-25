@@ -115,32 +115,44 @@ class MqttActuator(ChanelReceiver, MqttBase):
                 # Select parameter: $PRxxx;...
                 if items[0].startswith('$PR'):
                     try:
+                        logging.debug("Parsing select parameter: %s", response)
                         num_items = int(items[1])
-                        raw_current_index = int(items[2]) if len(items) > 2 else 0  # Get current value index
+                        raw_current_index = int(items[2]) if len(items) > 2 else 0
                         key = items[8]
-                        values = []
-                        raw_values = []  # Keep track of all values before filtering
+                        logging.debug("Select parameter: key=%s, num_items=%d, current_index=%d", 
+                                    key, num_items, raw_current_index)
                         
-                        # First collect all values to map the raw index correctly
+                        # Get all available values first
+                        all_values = []
                         for i in range(num_items):
-                            item = items[9 + i]
-                            raw_values.append(item)
-                            if item:  # Only filter out empty values
-                                values.append(item)
+                            try:
+                                item = items[9 + i]
+                                all_values.append(item)
+                            except IndexError:
+                                logging.warning("Not enough items for value %d in response", i)
+                                break
                         
-                        # Map the raw index to filtered index if possible
+                        logging.debug("All values for %s: %s", key, all_values)
+                        
+                        # Get current value directly from index
                         current_value = None
-                        if 0 <= raw_current_index < len(raw_values):
-                            raw_value = raw_values[raw_current_index]
-                            if raw_value:  # Only check if value is not empty
-                                current_value = raw_value
+                        if 0 <= raw_current_index < len(all_values):
+                            current_value = all_values[raw_current_index]
+                            logging.debug("Current value from index %d: %s", raw_current_index, current_value)
+                        
+                        # Remove any empty strings from options list
+                        values = [v for v in all_values if v]
+                        logging.debug("Filtered values for %s: %s", key, values)
                         
                         result[key] = {
                             'type': 'select',
                             'options': values,
                             'command_id': items[0][1:],  # Store the PRxxx ID
-                            'current': current_value
+                            'current': current_value,
+                            'raw_values': all_values,  # Store all values for debugging
+                            'raw_index': raw_current_index
                         }
+                        logging.debug("Final parameter config for %s: %s", key, result[key])
                     except Exception as e:
                         logging.error(f"Failed to parse select parameter: {response} ({e})")
                     continue
