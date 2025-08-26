@@ -126,8 +126,8 @@ class Analyser():
                 #logging.debug('empty _part')
                 pass
             else:
-                logging.error('Analyser.parse_requestunknown part %s --> unknown state',_part)
-                _state = 'unknown'
+                logging.warning('Analyser received unknown request %s - treating as passthrough', _part)
+                _state = 'passthrough'  # Instead of 'unknown', mark it as passthrough
         logging.debug('_state/_part: %s/%s', _state, _part)
         return _state
 
@@ -140,6 +140,8 @@ class Analyser():
         _login_done: bool = False
 
         logging.debug('Analyser.parse_response_buffer _state=%s', _state)
+        if _state == 'passthrough':
+            logging.warning('New response (passthrough) %s', repr(buffer))
         _str_parts= repr(buffer)[2:-1].split('\\r\\n')
         for _part in _str_parts:
             logging.debug('part %d:[%s]', len(_part), _part)

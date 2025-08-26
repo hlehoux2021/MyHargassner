@@ -311,14 +311,24 @@ class TelnetProxy(ChanelReceiver, MqttBase):
         """
         Accept a telnet connection on the first service and track the socket.
         """
-        # remember the source port from which gateway is telneting
+        # First remove any existing service1 socket from active set
+        if hasattr(self, '_active_sockets'):
+            old_sock = self._service1.socket()
+            if old_sock is not None:
+                self._active_sockets.discard(old_sock)
+                try:
+                    old_sock.close()
+                except Exception:
+                    pass
+        
+        # Accept new connection and remember the source port
         self.gwt_port = self._service1.accept()
         _sock = self._service1.socket()
-        # Re-add service1 socket to active sockets in the loop
-        if hasattr(self, '_active_sockets'):
-            if _sock is not None:
-                self._active_sockets.add(_sock)
-                logging.debug('Re-added service1 socket to active set')
+        
+        # Add new socket to active set
+        if hasattr(self, '_active_sockets') and _sock is not None:
+            self._active_sockets.add(_sock)
+            logging.debug('Added new service1 socket to active set')
 
     def accept2(self):
         """
@@ -472,11 +482,15 @@ class TelnetProxy(ChanelReceiver, MqttBase):
                         # ask the Analyser() to analyse the IGW request
                         _state = self._analyser.parse_request(_data)
                         logging.debug('_state-->%s', _state)
-                        # we should resend it
+                        
+                        # Forward request to boiler
                         logging.debug('service1 resending %d bytes to %s:%d',
                                     len(_data), repr(self.bl_addr), self.port)
-                        #todo manage partial send data
-                        self._client.send(_data)
+                        try:
+                            self._client.send(_data)
+                        except Exception as e:
+                            logging.error("Error sending request to boiler: %s", str(e))
+                            # Don't raise here - let the connection continue
                     except socket.error as err:
                         logging.error("Socket error in service1 recv: %s", str(err))
                         sock = self._service1.socket()
@@ -490,9 +504,11 @@ class TelnetProxy(ChanelReceiver, MqttBase):
                         raise socket.error(f"service1: {str(err)}")
                     except Exception as err:
                         logging.critical("Unexpected error in service1 recv: %s", type(err))
-                        if self._service1.socket() is not None:
+                        sock = self._service1.socket()
+                        if sock is not None:
                             try:
-                                self._service1.socket().close()
+                                sock.close()
+                                self._active_sockets.discard(sock)
                             except Exception:
                                 pass
                         # Raise with service identification

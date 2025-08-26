@@ -61,7 +61,7 @@ class HargConfig():
 'c8':{'name':'TPo',				    'unit':'°C',	'desc':'sonde BT haut'},
 'c9':{'name':'TPm',				    'unit':'°C',	'desc':'sonde BT milieu'},
 'c10':{'name':'TPu',				'unit':'°C',	'desc':'sonde BT bas'},
-'c11':{'name':'TFW',				'unit':'°C',	'desc':'?'},
+'c11':{'name':'TFW',				'unit':'°C',	'desc':'sonde de tampon haut'},
 'c12':{'name':'TRL',				'unit':'°C',	'desc':'température retour est'},
 'c13':{'name':'TRLsoll',     	 	'unit':'°C',	'desc':'température retour doit '},
 'c14':{'name':'RLP',				'unit':'%',	    'desc':'?'},
