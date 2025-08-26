@@ -596,7 +596,7 @@ class TelnetProxy(ChanelReceiver, MqttBase):
                                 logging.debug('telnet sending pm response to service1')
                                 _sent = self._service1.send(_data)
                             else:
-                                logging.warning('Received a pm response but no service1 socket registered yet')
+                                logging.debug('Received a pm response but no service1 socket registered yet')
                         else:
                             if _caller == 1:
                                 _sent = self._service1.send(_data)
