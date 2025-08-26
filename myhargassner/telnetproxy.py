@@ -334,13 +334,24 @@ class TelnetProxy(ChanelReceiver, MqttBase):
         """
         Accept a telnet connection on the second service and track the socket.
         """
+        # First remove any existing service2 socket from active set
+        if hasattr(self, '_active_sockets'):
+            old_sock = self._service2.socket()
+            if old_sock is not None:
+                self._active_sockets.discard(old_sock)
+                try:
+                    old_sock.close()
+                except Exception:
+                    pass
+        
+        # Accept new connection
         self._service2.accept()
         _sock = self._service2.socket()
-        # Re-add service2 socket to active sockets in the loop
-        if hasattr(self, '_active_sockets'):
-            if _sock is not None:
-                self._active_sockets.add(_sock)
-                logging.debug('Re-added service2 socket to active set')
+        
+        # Add new socket to active set
+        if hasattr(self, '_active_sockets') and _sock is not None:
+            self._active_sockets.add(_sock)
+            logging.debug('Added new service2 socket to active set')
 
     def discover(self):
         """
