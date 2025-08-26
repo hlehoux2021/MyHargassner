@@ -190,6 +190,14 @@ class MqttInformer(MqttBase):
                         if _str_parts[0] in self.config.wanted and _str_parts[0] in self._sensors:
                             logging.info('updating state of sensor:%s',_str_parts[0])
                             self._sensors[_str_parts[0]].set_state(_str_parts[1])
+                        # treat value that modify the DeviceInfo
+                        if _str_parts[0] == 'SWV':
+                            self._update_device_info(sw_version=_str_parts[1])
+                        if _str_parts[0] == 'FWV':
+                            self._update_device_info(hw_version=_str_parts[1])
+                        if _str_parts[0] == 'KT':
+                            self._update_device_info(model=_str_parts[1])
+                        
                     else:
                         logging.debug('ignored [%s/%s]', _str_parts[0], _str_parts[1])
                 else:

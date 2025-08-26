@@ -83,3 +83,23 @@ class MqttBase():
             DeviceInfo: The device information object.
         """
         return self._device_info
+
+    def _update_device_info(self, **kwargs) -> None:
+        """
+        Update device information while preserving identifiers.
+        
+        Args:
+            **kwargs: Device info fields to update (name, manufacturer, model, sw_version, hw_version)
+        """
+        # Keep the existing identifiers
+        identifiers = self._device_info.identifiers
+
+        # Create new device info with updated fields but same identifiers
+        self._device_info = DeviceInfo(
+            name=kwargs.get('name', self._device_info.name),
+            manufacturer=kwargs.get('manufacturer', self._device_info.manufacturer),
+            model=kwargs.get('model', getattr(self._device_info, 'model', None)),
+            sw_version=kwargs.get('sw_version', self._device_info.sw_version),
+            hw_version=kwargs.get('hw_version', self._device_info.hw_version),
+            identifiers=identifiers
+        )
