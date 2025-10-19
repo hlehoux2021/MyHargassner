@@ -218,6 +218,8 @@ You can install and run the gateway as a systemd service using the provided bash
 
 To uninstall, use the provided `uninstall_system_service.sh` script.
 
+To debug problems, remember you can use
+ journalctl -u myhargassner.service -n 50 --no-pager
 ---
 
 

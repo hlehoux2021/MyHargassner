@@ -9,7 +9,7 @@ setup(
     version="1.0.0",
     description="Hargassner boiler gateway and MQTT integration",
     author="hlehoux2021",
-    packages=find_packages(),
+    packages=find_packages(include=['myhargassner', 'myhargassner.*']),
     install_requires=[
         "paho-mqtt>=2.1.0,<3.0.0",
         "ha-mqtt-discoverable==0.20.1",  # Specific version required
