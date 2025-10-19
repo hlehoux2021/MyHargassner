@@ -26,7 +26,7 @@ class AppConfig:
                 'gw_iface': 'eth0',
                 'bl_iface': 'eth1',
                 'udp_port': '35601',
-                'socket_timeout': '5',
+                'socket_timeout': '20.0',  # Socket recv/send timeout (seconds)
                 'buff_size': '4096'
             },
             'mqtt': {
@@ -39,6 +39,13 @@ class AppConfig:
             'logging': {
                 'log_path': '/var/log/myhargassner.log',
                 'log_level': 'INFO'
+            },
+            'timeouts': {
+                # Shutdown responsiveness timeouts (all in seconds)
+                'loop_timeout': '1.0',        # Main loop timeout (select/MQTT loop) - determines shutdown responsiveness
+                'queue_timeout': '3.0',       # Message queue timeout for inter-component communication
+                'retry_delay': '5.0',         # Delay before retrying failed operations
+                'service_lock_delay': '1.0'   # Delay when service is locked/paused
             }
         }
 
@@ -121,6 +128,13 @@ class AppConfig:
         """
         return self._config['logging']
 
+    @property
+    def timeouts(self):
+        """
+        Return the 'timeouts' section of the configuration.
+        """
+        return self._config['timeouts']
+
     # Helpers for type conversion and defaults
 
     def gw_iface(self):
@@ -194,5 +208,38 @@ class AppConfig:
         Return the log level as an uppercase string (e.g., 'INFO').
         """
         return self.logging.get('log_level', 'INFO').upper()
+
+    # Timeout helpers
+
+    def loop_timeout(self):
+        """
+        Return the main loop timeout as a float (seconds).
+        Used by select() in TelnetProxy and MQTT client loop().
+        This value determines how responsive components are to shutdown requests.
+        Lower values = faster shutdown but more CPU usage.
+        """
+        return float(self.timeouts.get('loop_timeout', 1.0))
+
+    def queue_timeout(self):
+        """
+        Return the message queue timeout as a float (seconds).
+        Used for inter-component communication via PubSub message queues.
+        Applies to both discovery and normal operation phases.
+        """
+        return float(self.timeouts.get('queue_timeout', 3.0))
+
+    def retry_delay(self):
+        """
+        Return the delay before retrying failed operations as a float (seconds).
+        Used when connection attempts or restarts fail.
+        """
+        return float(self.timeouts.get('retry_delay', 5.0))
+
+    def service_lock_delay(self):
+        """
+        Return the delay when service is locked/paused as a float (seconds).
+        Used when TelnetProxy service1 is waiting for lock release.
+        """
+        return float(self.timeouts.get('service_lock_delay', 1.0))
 
     # Add more helpers as needed for your project

@@ -7,6 +7,7 @@ import logging
 from queue import Empty
 import socket
 import platform
+from threading import Thread
 from typing import Annotated, Union, Optional, Callable, Tuple
 from abc import ABC, abstractmethod
 
@@ -18,6 +19,48 @@ from myhargassner.pubsub.pubsub import PubSub, ChanelQueue, ChanelPriorityQueue
 # Project imports
 from myhargassner.appconfig import AppConfig
 from myhargassner.socket_manager import SocketManager, HargSocketError, SocketBindError, InterfaceError, SocketTimeoutError
+
+
+class ShutdownAware:
+    """
+    Mixin class providing shutdown management functionality.
+
+    This mixin provides a standard pattern for components that need to support
+    graceful shutdown. Components can check the _shutdown_requested flag in
+    their main loops and exit cleanly when shutdown is requested.
+
+    Usage:
+        class MyComponent(ShutdownAware, OtherBase):
+            def __init__(self, ...):
+                ShutdownAware.__init__(self)  # Explicit initialization
+                OtherBase.__init__(self, ...)
+
+            def run(self):
+                while not self._shutdown_requested:
+                    # do work
+                    pass
+
+    Note: This mixin uses explicit initialization pattern (no super() call).
+    Each class must explicitly call ShutdownAware.__init__(self) in its __init__.
+    """
+    _shutdown_requested: bool = False
+
+    def __init__(self):
+        """
+        Initialize shutdown state.
+        Uses explicit initialization pattern - no super() call.
+        """
+        self._shutdown_requested = False
+
+    def request_shutdown(self) -> None:
+        """
+        Request graceful shutdown of the component.
+        Sets a flag that should be checked in the component's main loop.
+        """
+        component_name = self.__class__.__name__
+        logging.info('%s: Shutdown requested', component_name)
+        self._shutdown_requested = True
+
 
 #class HargInfo():
 #    """ a data class to store the HargInfo"""
@@ -80,10 +123,12 @@ class ChanelReceiver(NetworkData, ABC):
     _channel= "bootstrap" # Channel to exchange bootstrap information about boiler and gateway, addr, port, etc
     _com: PubSub # every data receiver should have a PubSub communicator
     _msq: Union[ChanelQueue, ChanelPriorityQueue, None] = None # Message queue for receiving data
+    _appconfig: AppConfig  # Add AppConfig reference
 
-    def __init__(self, communicator: PubSub) -> None:  # Remove Optional since we require it
+    def __init__(self, communicator: PubSub, appconfig: AppConfig) -> None:
         super().__init__()
         self._com = communicator
+        self._appconfig = appconfig
 
     def handle(self, message_handler: Optional[Callable[[str], None]] = None) -> None:
         """
@@ -102,8 +147,8 @@ class ChanelReceiver(NetworkData, ABC):
             return
         try:
             logging.debug('handle: attempting to get next message')
-            # Use non-blocking listen with timeout
-            iterator = self._msq.listen(timeout=10.0)
+            # Use non-blocking listen with timeout for inter-component communication
+            iterator = self._msq.listen(timeout=self._appconfig.queue_timeout())
             try:
                 _message = next(iterator)
                 logging.debug('handle: received message from queue: %s', _message)
@@ -134,10 +179,11 @@ class ChanelReceiver(NetworkData, ABC):
             raise
         logging.debug('handle: end of method')
 
-class ListenerSender(ChanelReceiver, ABC):
+class ListenerSender(ShutdownAware, ChanelReceiver, ABC):
     """
     This class extends ChanelReceiver class with a socket to listen
     and a socket to resend data.
+    Includes ShutdownAware mixin for graceful shutdown support.
     """
     listen: socket.socket
     resend: socket.socket
@@ -170,8 +216,11 @@ class ListenerSender(ChanelReceiver, ABC):
             HargSocketError: If socket initialization fails
             InterfaceError: If interface specification is invalid for the platform
         """
+        # Explicit initialization of all base classes
+        ShutdownAware.__init__(self)
+        ChanelReceiver.__init__(self, communicator, appconfig)
+
         self._appconfig = appconfig
-        super().__init__(communicator)
         self.src_iface = src_iface  # network interface where to listen
         self.dst_iface = dst_iface  # network interface where to resend
         self.bound = False
@@ -262,6 +311,16 @@ class ListenerSender(ChanelReceiver, ABC):
         """
         pass
 
+    @abstractmethod
+    def bind(self) -> None:
+        """
+        Bind the listener socket to start receiving data.
+        Must be implemented in the child class.
+        """
+        pass
+
+    # request_shutdown() inherited from ShutdownAware mixin
+
     def loop(self) -> None:
         """
         This method is the main loop of the class.
@@ -272,7 +331,7 @@ class ListenerSender(ChanelReceiver, ABC):
         if not self.bound:
             logging.error("Cannot start loop - socket not bound yet")
             return
-        while True:
+        while not self._shutdown_requested:
             if self._msq:
                 logging.debug('ChannelQueue size: %d', self._msq.qsize())
             logging.debug('waiting data')
@@ -301,3 +360,42 @@ class ListenerSender(ChanelReceiver, ABC):
                 # This is an actual error from our socket manager
                 logging.error("Socket error in loop: %s", e)
                 break
+
+        # Clean exit
+        logging.info('%s: Exiting loop cleanly', self.name())
+
+
+class ThreadedListenerSender(Thread, ABC):
+    """
+    Base class for threaded listener/sender components.
+    Provides common functionality for running a ListenerSender in a separate thread.
+    Inherits from Thread to maintain consistency with the original design pattern.
+
+    Subclasses must implement run() to define their specific startup sequence
+    (e.g., with or without discovery phase).
+    """
+    _listener_sender: ListenerSender
+
+    def __init__(self, listener_sender: ListenerSender, thread_name: str):
+        """
+        Initialize the threaded listener sender.
+
+        Args:
+            listener_sender: The ListenerSender instance to run in the thread
+            thread_name: Name for the thread (e.g., 'GatewayListener', 'BoilerListener')
+        """
+        super().__init__(name=thread_name)
+        self._listener_sender = listener_sender
+
+    def request_shutdown(self) -> None:
+        """Request graceful shutdown of the listener thread."""
+        self._listener_sender.request_shutdown()
+
+    @abstractmethod
+    def run(self) -> None:
+        """
+        Run the listener/sender component.
+        This method is executed in a separate thread when start() is called.
+        Must be implemented by subclasses to define their specific startup sequence.
+        """
+        pass

@@ -20,7 +20,7 @@ from myhargassner.pubsub.pubsub import PubSub
 # Project imports
 from myhargassner.telnethelper import TelnetClient
 from myhargassner.appconfig import AppConfig
-from myhargassner.core import ChanelReceiver
+from myhargassner.core import ChanelReceiver, ShutdownAware
 from myhargassner.analyser import Analyser
 from myhargassner.mqtt_actuator import ThreadedMqttActuator, MqttBase
 from myhargassner.socket_manager import SocketManager
@@ -250,9 +250,10 @@ class TelnetService:
         return self._telnet.recv(self._buffer_size)
 
 
-class TelnetProxy(ChanelReceiver, MqttBase):
+class TelnetProxy(ShutdownAware, ChanelReceiver, MqttBase):
     """
     This class implements the TelnetProxy.
+    Includes ShutdownAware mixin for graceful shutdown support.
     """
     src_iface: bytes
     dst_iface: bytes
@@ -263,12 +264,16 @@ class TelnetProxy(ChanelReceiver, MqttBase):
     _active_sockets: set[socket.socket] # Track which sockets are still active
     _analyser: Analyser
     _service_lock: Lock
+    _session_end_requested: bool = False  # Flag for $igw clear detection
+    _discovery_complete: bool = False  # Flag to track discovery completion
+    # Note: _shutdown_requested is inherited from ShutdownAware mixin
 
     def __init__(self, appconfig: AppConfig, communicator: PubSub, port, lock: Lock):
         """
         Initialize the TelnetProxy with communication channel, interfaces, and port.
         """
-        ChanelReceiver.__init__(self, communicator)
+        ShutdownAware.__init__(self)  # Initializes _shutdown_requested
+        ChanelReceiver.__init__(self, communicator, appconfig)
         MqttBase.__init__(self, appconfig)
         self.src_iface = self._appconfig.gw_iface()
         self.dst_iface = self._appconfig.bl_iface()
@@ -278,6 +283,8 @@ class TelnetProxy(ChanelReceiver, MqttBase):
         self._service2 = TelnetService(self.src_iface, self._appconfig.buff_size())
         self._service_lock = lock
         self._active_sockets = set()
+        self._session_end_requested = False
+        self._discovery_complete = False
 
     def bind1(self):
         """
@@ -320,11 +327,11 @@ class TelnetProxy(ChanelReceiver, MqttBase):
                     old_sock.close()
                 except Exception:
                     pass
-        
+
         # Accept new connection and remember the source port
         self.gwt_port = self._service1.accept()
         _sock = self._service1.socket()
-        
+
         # Add new socket to active set
         if hasattr(self, '_active_sockets') and _sock is not None:
             self._active_sockets.add(_sock)
@@ -343,15 +350,28 @@ class TelnetProxy(ChanelReceiver, MqttBase):
                     old_sock.close()
                 except Exception:
                     pass
-        
+
         # Accept new connection
         self._service2.accept()
         _sock = self._service2.socket()
-        
+
         # Add new socket to active set
         if hasattr(self, '_active_sockets') and _sock is not None:
             self._active_sockets.add(_sock)
             logging.debug('Added new service2 socket to active set')
+
+    # request_shutdown() inherited from ShutdownAware mixin
+
+    def _request_restart(self, reason: str):
+        """
+        Request restart by publishing to 'system' channel for main.py to handle.
+        Called only once per session from _cleanup_and_exit().
+
+        Args:
+            reason: Reason for restart (for logging)
+        """
+        logging.info('TelnetProxy requesting restart: %s', reason)
+        self._com.publish('system', 'RESTART_REQUESTED')
 
     def discover(self):
         """
@@ -359,14 +379,23 @@ class TelnetProxy(ChanelReceiver, MqttBase):
         """
         self._msq = self._com.subscribe(self._channel, self.name())
 
-        while (self.bl_port == 0) or (self.bl_addr == b''):
+        while (self.bl_port == 0 or self.bl_addr == b'') and not self._shutdown_requested:
             logging.debug('waiting for the discovery of the boiler address and port')
             self.handle()
+
+        if self._shutdown_requested:
+            logging.info('TelnetProxy: Shutdown requested during discovery')
+            if self._msq:
+                self._com.unsubscribe(self._channel, self._msq)
+                self._msq = None
+            return
+
         logging.info('TelnetProxy discovered boiler %s:%d', self.bl_addr, self.bl_port)
-        # unsubscribe from the channel to avoid receiving further messages
-        logging.info('TelnetProxy unsubscribe from channel %s', self._channel)
-        self._com.unsubscribe(self._channel, self._msq)
-        self._msq = None
+        self._discovery_complete = True
+
+        # CRITICAL: Stay subscribed to detect duplicate discovery (Trigger 3 - reconnection)
+        # Do NOT unsubscribe! We need to monitor for new HargaWebApp broadcasts during active session
+        logging.info('TelnetProxy: Discovery complete, monitoring for reconnection signals')
 
         # redistribute BL info to the mq Queue for further use
         #todo check if useless
@@ -425,6 +454,77 @@ class TelnetProxy(ChanelReceiver, MqttBase):
         self._com.publish(self._channel, message)
         logging.debug('Published combined message for commands %s', message)
 
+    def _cleanup_and_exit(self, reason: str) -> None:
+        """
+        Clean up all resources and request restart before exiting loop.
+
+        Args:
+            reason: Reason for exit (for logging and restart request)
+        """
+        logging.info('TelnetProxy cleaning up and exiting: %s', reason)
+
+        # Close client connection to boiler
+        if self._client:
+            try:
+                self._client.close()
+            except Exception as e:
+                logging.warning('Error closing client connection: %s', e)
+
+        # Close service sockets
+        for service in [self._service1, self._service2]:
+            sock = service.socket()
+            if sock:
+                try:
+                    sock.close()
+                    self._active_sockets.discard(sock)
+                    logging.debug('Closed service socket')
+                except Exception as e:
+                    logging.warning('Error closing service socket: %s', e)
+
+        # Clear active sockets set
+        self._active_sockets.clear()
+
+        # Unsubscribe from channel if still subscribed
+        if self._msq:
+            try:
+                self._com.unsubscribe(self._channel, self._msq)
+                self._msq = None
+                logging.debug('Unsubscribed from channel %s', self._channel)
+            except Exception as e:
+                logging.warning('Error unsubscribing from channel: %s', e)
+
+        # Request restart
+        self._request_restart(reason)
+
+    def monitor_for_reconnection(self) -> bool:
+        """
+        Check for reconnection signals (non-blocking).
+        Detects Trigger 3: New HargaWebApp broadcast during active session.
+
+        Returns:
+            bool: True if reconnection detected, False otherwise
+        """
+        if not self._msq or not self._discovery_complete:
+            return False
+
+        try:
+            # Non-blocking check for new discovery messages
+            iterator = self._msq.listen(timeout=0.01)  # Very short timeout
+            message = next(iterator)
+
+            if message:
+                msg = message['data']
+
+                # Check for new "HargaWebApp" broadcast during active session
+                if 'HargaWebApp' in msg:
+                    logging.warning('Received new HargaWebApp during active session - IGW reconnected')
+                    return True
+
+        except StopIteration:
+            pass  # No message, continue
+
+        return False
+
     def loop(self) -> None:
         """
         Main loop waiting for requests and replies, handling all active sockets.
@@ -457,11 +557,19 @@ class TelnetProxy(ChanelReceiver, MqttBase):
 
         logging.debug('Active sockets: %d', len(self._active_sockets))
 
-        while self._active_sockets:  # Continue as long as we have active sockets
+        while self._active_sockets and not self._shutdown_requested:  # Continue as long as we have active sockets
+            # TRIGGER 3: Periodically check for reconnection signals (new HargaWebApp)
+            if self.monitor_for_reconnection():
+                self._cleanup_and_exit('new_HargaWebApp_during_session')
+                return
+
             if self._msq:
                 logging.debug('TelnetProxy ChannelQueue size: %d', self._msq.qsize())
             try:
-                read_sockets, write_sockets, error_sockets = select.select(list(self._active_sockets), [], [], 1.0)
+                # Use configurable timeout for select to ensure shutdown responsiveness
+                read_sockets, write_sockets, error_sockets = select.select(
+                    list(self._active_sockets), [], [], self._appconfig.loop_timeout()
+                )
             except select.error as err:
                 logging.error("Select error: %s", str(err))
                 continue
@@ -473,27 +581,27 @@ class TelnetProxy(ChanelReceiver, MqttBase):
                     # Only process service1 if lock is not held (by actuator sending commands to service2)
                     if self._service_lock.locked():
                         logging.debug('Service1 socket is paused/locked, skipping processing')
-                        time.sleep(1)
+                        time.sleep(self._appconfig.service_lock_delay())
                         continue
                     # so we received a request
                     try:
                         _data = self._service1.recv()
                         if not _data:
-                            logging.warning('service1 received empty request - client disconnected')
-                            sock = self._service1.socket()
-                            if sock is not None:
-                                try:
-                                    sock.close()
-                                    self._active_sockets.discard(sock)
-                                except Exception as close_err:
-                                    logging.error("Error closing service1 socket: %s", str(close_err))
-                            raise socket.error("service1: Client disconnected")
+                            # TRIGGER 2: IGW closed connection
+                            logging.info('service1: IGW closed connection')
+                            self._cleanup_and_exit('connection_closed')
+                            return
+
                         logging.debug('service1 received request %d bytes ==>%s', len(_data), repr(_data))
                         _caller = 1
                         # ask the Analyser() to analyse the IGW request
-                        _state = self._analyser.parse_request(_data)
+                        _state, _session_end_requested = self._analyser.parse_request(_data)
                         logging.debug('_state-->%s', _state)
-                        
+
+                        # TRIGGER 1: Update session end flag if $igw clear detected by analyser
+                        if _session_end_requested:
+                            self._session_end_requested = True
+
                         # Forward request to boiler
                         logging.debug('service1 resending %d bytes to %s:%d',
                                     len(_data), repr(self.bl_addr), self.port)
@@ -503,27 +611,15 @@ class TelnetProxy(ChanelReceiver, MqttBase):
                             logging.error("Error sending request to boiler: %s", str(e))
                             # Don't raise here - let the connection continue
                     except socket.error as err:
+                        # TRIGGER 2: Socket error
                         logging.error("Socket error in service1 recv: %s", str(err))
-                        sock = self._service1.socket()
-                        if sock is not None:
-                            try:
-                                sock.close()
-                                self._active_sockets.discard(sock)
-                            except Exception as close_err:
-                                logging.error("Error closing service1 socket: %s", str(close_err))
-                        # Raise with service identification
-                        raise socket.error(f"service1: {str(err)}")
+                        self._cleanup_and_exit('socket_error')
+                        return
+
                     except Exception as err:
                         logging.critical("Unexpected error in service1 recv: %s", type(err))
-                        sock = self._service1.socket()
-                        if sock is not None:
-                            try:
-                                sock.close()
-                                self._active_sockets.discard(sock)
-                            except Exception:
-                                pass
-                        # Raise with service identification
-                        raise socket.error(f"service1: {str(err)}")
+                        self._cleanup_and_exit('unexpected_error')
+                        return
                 if _sock == self._service2.socket():
                     try:
                         _data = self._service2.recv()
@@ -539,42 +635,25 @@ class TelnetProxy(ChanelReceiver, MqttBase):
                         self._client.send(_data)
                     except socket.error as err:
                         logging.error("Socket error in service2 recv: %s", str(err))
-                        sock = self._service2.socket()
-                        if sock is not None:
-                            try:
-                                sock.close()
-                                self._active_sockets.discard(sock)
-                            except Exception as close_err:
-                                logging.error("Error closing service2 socket: %s", str(close_err))
-                        # Raise with service identification
-                        raise socket.error(f"service2: {str(err)}")
+                        self._cleanup_and_exit('socket_error_service2')
+                        return
                     except Exception as err:
                         logging.critical("Unexpected error in service2 recv: %s", type(err))
-                        if self._service2.socket() is not None:
-                            try:
-                                sock = self._service2.socket()
-                                if sock is not None:
-                                    sock.close()
-                                    self._active_sockets.discard(sock)
-                            except Exception as close_err:
-                                logging.error("Error closing service2 socket: %s", str(close_err))
-                        # Raise with service identification
-                        raise socket.error(f"service2: {str(err)}")
+                        self._cleanup_and_exit('unexpected_error_service2')
+                        return
                 if _sock ==self._client.socket():
                     # so we received a reply
                     try:
                         _data = self._client.recv()
                     except Exception as err:
                         logging.critical("Exception on client telnet socket: %s", type(err))
-                        if self._client is not None:
-                            self._client.close()
-                        raise  # Re-raise to be caught by loop() to continue with other sockets
+                        self._cleanup_and_exit('client_socket_exception')
+                        return
 
                     if not _data:
-                        logging.warning('client received empty response')
-                        if self._client is not None:
-                            self._client.close()
-                        raise socket.error("Empty response from client")
+                        logging.warning('client received empty response from boiler')
+                        self._cleanup_and_exit('boiler_disconnected')
+                        return
 
                     if not _data.startswith(b'pm'):
                         logging.debug('telnet received response %d bytes ==>%s',len(_data), repr(_data))
@@ -609,58 +688,39 @@ class TelnetProxy(ChanelReceiver, MqttBase):
 #                            logging.error('telnet send error: not all data sent %d/%d', _sent, len(_data))
                         logging.debug('telnet sent back response to client')
                     except Exception as err:
-                        logging.critical("Exception: %s", type(err))
-                        raise
+                        logging.critical("Exception sending response to IGW: %s", type(err))
+                        self._cleanup_and_exit('send_response_exception')
+                        return
                     # ask Analyser() to analyse the pellet boiler response
                     _login_done: bool = False
+                    _session_end_complete: bool = False
                     #we call the analyser
-                    _buffer, _mode, _state, _login_done = self._analyser.analyse_data_buffer(_data,
-                                   _buffer, _mode, _state)
+                    _buffer, _mode, _state, _login_done, _session_end_complete = \
+                        self._analyser.analyse_data_buffer(
+                            _data, _buffer, _mode, _state, self._session_end_requested)
+
+                    # TRIGGER 1: Check if $igw clear session completed
+                    if _session_end_complete:
+                        logging.info('$igw clear complete')
+                        self._cleanup_and_exit('igw_clear_command')
+                        return
                     if _login_done:
                         logging.info('login done, call get_boiler_config')
                         self.get_boiler_config()
 
-    def restart_service1(self) -> bool:
-        """
-        Restart service1 after failure.
-        Returns:
-            bool: True if restart succeeded, False otherwise.
-        """
-        logging.info("Restarting service1...")
-        try:
-            self._service1 = TelnetService(self.src_iface, self._appconfig.buff_size())
-            self.bind1()
-            self.listen1()
-            self.accept1()
-            return True
-        except Exception as err:
-            logging.error("Failed to restart service1: %s", str(err))
-            return False
+        # Clean exit
+        if self._shutdown_requested:
+            logging.info('TelnetProxy: Exiting loop cleanly due to shutdown request')
+        else:
+            logging.info('TelnetProxy: Exiting loop (no active sockets)')
 
-    def restart_service2(self) -> bool:
+    def connect_client(self) -> bool:
         """
-        Restart service2 after failure.
+        Connect to the boiler for the first time.
         Returns:
-            bool: True if restart succeeded, False otherwise.
+            bool: True if connection succeeded, False otherwise.
         """
-        logging.info("Restarting service2...")
-        try:
-            self._service2 = TelnetService(self.src_iface, self._appconfig.buff_size())
-            self.bind2()
-            self.listen2()
-            self.accept2()
-            return True
-        except Exception as err:
-            logging.error("Failed to restart service2: %s", str(err))
-            return False
-
-    def restart_client(self) -> bool:
-        """
-        Restart client connection after failure.
-        Returns:
-            bool: True if restart succeeded, False otherwise.
-        """
-        logging.info("Restarting client connection...")
+        logging.info("Connecting to boiler...")
         try:
             self.connect()
             # we cannot get_boiler_config until gateway and boiler have exchanged login token and login key
@@ -668,39 +728,26 @@ class TelnetProxy(ChanelReceiver, MqttBase):
             #self.get_boiler_config()
             return True
         except Exception as err:
-            logging.error("Failed to restart client: %s", str(err))
+            logging.error("Failed to connect to boiler: %s", str(err))
             return False
 
     def service(self) -> None:
         """
-        Main service loop that handles reconnections and error recovery.
+        Main service - run once per IGW connection session.
+        No restart logic - let main.py handle restarts.
         """
-        logging.debug('TelnetProxy::service')
-        # Initial setup
-        if not self.restart_client():
-            raise RuntimeError("Failed initial client connection")
-        while True:
-            try:
-                logging.debug('TelnetProxy::service starting loop')
-                self.loop()
-            except socket.error as err:
-                if "service1" in str(err):
-                    logging.error("Service1 failed, attempting restart: %s", str(err))
-                    if self.restart_service1():
-                        continue
-                elif "service2" in str(err):
-                    logging.error("Service2 failed, attempting restart: %s", str(err))
-                    if self.restart_service2():
-                        continue
-                else:
-                    logging.error("Client connection failed, attempting restart: %s", str(err))
-                    if self.restart_client():
-                        continue
-                # If we get here, restart failed
-                time.sleep(5)  # Wait before retry
-            except Exception as err:
-                logging.critical("Fatal error in service: %s", str(err))
-                raise  # Re-raise fatal errors
+        logging.debug('TelnetProxy::service starting')
+
+        # Initial setup - connect to boiler
+        if not self.connect_client():
+            raise RuntimeError("Failed to connect to boiler")
+
+        # Run the main loop for this connection session
+        logging.info('TelnetProxy: Running main loop')
+        self.loop()
+
+        # Clean exit (no restart logic)
+        logging.info('TelnetProxy: Connection ended, exiting service')
 
 class ThreadedTelnetProxy(Thread):
     """
@@ -732,42 +779,67 @@ class ThreadedTelnetProxy(Thread):
         self.tp= TelnetProxy(self._appconfig, self._com, port, self._service_lock)
         # Add any additional initialization logic here
 
+    def request_shutdown(self) -> None:
+        """Request graceful shutdown of TelnetProxy and MqttActuator."""
+        logging.info("ThreadedTelnetProxy: Shutdown requested")
+        self.tp.request_shutdown()
+        # Also shutdown MqttActuator if running
+        if self._ma:
+            self._ma.request_shutdown()
+
     def run(self) -> None:
         """
-        Run the TelnetProxy in a separate thread, handling discovery and service threads.
+        Run the TelnetProxy in a separate thread.
+        Always cleans up MqttActuator when TelnetProxy exits.
         """
         _ts: Thread | None = None
         logging.info('telnet proxy started: %s , %s', self.tp.src_iface, self.tp.dst_iface)
 
-        # we will first discover the boiler
-        self.tp.discover()
+        try:
+            # Discover the boiler
+            self.tp.discover()
 
-        # if we have a BL_ADDR, we create the ThreadedMqttActuator
-        if not self._ma:
-            logging.debug("BL_ADDR present but no actuator found")
-            logging.debug('we create and launch a ThreadedMqttActuator in a separate thread')
-            self.tp.init_device_info(self.tp.bl_addr.decode('ascii'))
-            self._ma = ThreadedMqttActuator(self._appconfig, self._com,
-                                            self.tp.device_info(),
-                                            self._src_iface,
-                                            self._service_lock)
-            self._ma.start()
+            # Create and start MqttActuator
+            if not self._ma:
+                logging.debug("Creating ThreadedMqttActuator")
+                self.tp.init_device_info(self.tp.bl_addr.decode('ascii'))
+                self._ma = ThreadedMqttActuator(
+                    self._appconfig, self._com,
+                    self.tp.device_info(),
+                    self._src_iface,
+                    self._service_lock
+                )
+                self._ma.start()
 
-        # then we can bind/listen/accept and service()
-        self.tp.bind1()
-        self.tp.bind2()
-        self.tp.listen1()
-        self.tp.listen2()
-        # Create separate threads for accepting connections
-        _accept1_thread = Thread(target=self.tp.accept1, name='AcceptService1')
-        _accept2_thread = Thread(target=self.tp.accept2, name='AcceptService2')
-        # Start both accept threads
-        _accept1_thread.start()
-        _accept2_thread.start()
-        # Service thread will handle the communication
-        _ts = Thread(target=self.tp.service, name='TelnetProxyService')
-        _ts.start()
-        # Wait for all threads
-        _accept1_thread.join()
-        _accept2_thread.join()
-        _ts.join()
+            # Bind, listen, accept
+            self.tp.bind1()
+            self.tp.bind2()
+            self.tp.listen1()
+            self.tp.listen2()
+
+            # Create separate threads for accepting connections
+            _accept1_thread = Thread(target=self.tp.accept1, name='AcceptService1')
+            _accept2_thread = Thread(target=self.tp.accept2, name='AcceptService2')
+            _accept1_thread.start()
+            _accept2_thread.start()
+
+            # Service thread
+            _ts = Thread(target=self.tp.service, name='TelnetProxyService')
+            _ts.start()
+
+            # Wait for service to exit (IGW disconnect)
+            _ts.join()
+            _accept1_thread.join(timeout=2)
+            _accept2_thread.join(timeout=2)
+
+        finally:
+            # Always cleanup MqttActuator when TelnetProxy exits
+            logging.info("TelnetProxy exiting, shutting down MqttActuator...")
+            if self._ma:
+                self._ma.request_shutdown()
+                self._ma._thread.join(timeout=5)  # pylint: disable=protected-access
+                if self._ma._thread.is_alive():  # pylint: disable=protected-access
+                    logging.warning("MqttActuator did not exit cleanly")
+                self._ma = None
+
+            logging.info("ThreadedTelnetProxy: Run completed")

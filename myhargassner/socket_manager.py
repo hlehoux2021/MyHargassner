@@ -35,8 +35,6 @@ class InterfaceError(HargSocketError):
     """Exception raised when interface configuration is invalid."""
     pass
 
-DEFAULT_TIMEOUT = 20.0  # Default socket timeout in seconds
-
 class SocketManager:
     """
     Common socket management functionality for HARG project.
@@ -147,8 +145,9 @@ class SocketManager:
             if self.is_broadcast:
                 self._socket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
                 logging.debug('SocketManager: Set SO_BROADCAST')
-            self._socket.settimeout(DEFAULT_TIMEOUT)
-            logging.debug('SocketManager: Set socket timeout to %s', DEFAULT_TIMEOUT)
+            timeout = self.appconfig.socket_timeout()
+            self._socket.settimeout(timeout)
+            logging.debug('SocketManager: Set socket timeout to %s', timeout)
             if platform.system() == 'Linux' and not self.is_valid_ip(self.src_iface):
                 # On Linux, bind to interface name
                 # SO_BINDTODEVICE = 25 from Linux <socket.h>

@@ -49,14 +49,20 @@ class Analyser():
             return True
         return False
 
-    def parse_request(self, data: bytes) -> str:
+    def parse_request(self, data: bytes) -> Tuple[str, bool]:
         """parse the telnet request
         set _state to the state of the request/response dialog
-        extract _subpart from the request"""
+        extract _subpart from the request
+
+        Returns:
+            Tuple of (state, session_end_requested)
+            session_end_requested is True when $igw clear is detected
+        """
         _state: str = ''
         _part: str = ''
         _subpart: str = ''
         _str_parts: list[str] = []
+        _session_end_requested: bool = False
 
         _str_parts = data.decode('ascii').split('\r\n')
         for _part in _str_parts:
@@ -83,6 +89,10 @@ class Analyser():
                 _state = '$igw set'
                 _subpart = _part[9:]
                 self.push('IGW', _subpart)
+            elif _part.startswith('$igw clear'):
+                logging.info('$igw clear detected - session end requested')
+                _state = '$igw clear'
+                _session_end_requested = True
             elif _part.startswith('$daq stop'):
                 logging.debug('$daq stop detected')
                 _state = '$daq stop'
@@ -129,15 +139,26 @@ class Analyser():
                 logging.warning('Analyser received unknown request %s - treating as passthrough', _part)
                 _state = 'passthrough'  # Instead of 'unknown', mark it as passthrough
         logging.debug('_state/_part: %s/%s', _state, _part)
-        return _state
+        return _state, _session_end_requested
 
-    def _parse_response_buffer(self, state: str, buffer: bytes) -> Tuple[str, bool]:
-        """parse the response buffer sent by boiler"""
+    def _parse_response_buffer(self, state: str, buffer: bytes,
+                               session_end_requested: bool = False) -> Tuple[str, bool, bool]:
+        """parse the response buffer sent by boiler
+
+        Args:
+            state: Current request state
+            buffer: Response buffer from boiler
+            session_end_requested: True if waiting for $igw clear response
+
+        Returns:
+            Tuple of (state, login_done, session_end_complete)
+        """
         _state: str = state
         _part: str = ''
         _subpart: str = ''
         _str_parts: list[str] = []
         _login_done: bool = False
+        _session_end_complete: bool = False
 
         logging.debug('Analyser.parse_response_buffer _state=%s', _state)
         if _state == 'passthrough':
@@ -182,6 +203,14 @@ class Analyser():
             elif _state == '$igw set':
                 if "ack" in _part:
                     logging.debug('$igw set $ack detected')
+                    _state = ''
+            elif _state == '$igw clear':
+                # TRIGGER 1: Check for $igw clear response
+                if "$ack" in _part:
+                    logging.debug('$igw clear $ack detected')
+                    if session_end_requested:
+                        logging.info('$igw clear session complete')
+                        _session_end_complete = True
                     _state = ''
             elif "$daq stopped" in _part:
                 logging.debug('$daq stopped')
@@ -260,7 +289,7 @@ class Analyser():
             else:
                 logging.debug('unknown state:%s', _state)
                 _state = ''
-        return _state, _login_done
+        return _state, _login_done, _session_end_complete
 
     def analyse_pm(self, pm: bytes):
         """
@@ -281,21 +310,29 @@ class Analyser():
 
     def analyse_data_buffer(self, _data: bytes,
                                buffer: bytes,
-                               mode: str, state: str
-                            ) -> Tuple[bytes, str, str, bool]:
+                               mode: str, state: str,
+                               session_end_requested: bool = False
+                            ) -> Tuple[bytes, str, str, bool, bool]:
         """analyse the data buffer sent by the boiler
         it can be a buffer response for a request of the IGW
             values split by \\r\\n
         if can be bytes starting with 'pm' , values split by spaces
         _mode can have the following values:
         - '' : normal mode
-        - 'pm' : special mode for pm response : modify _pm 
+        - 'pm' : special mode for pm response : modify _pm
         - 'buffer' : special mode for buffer response : modify _buffer
+
+        Args:
+            session_end_requested: True if $igw clear was sent and we're waiting for response
+
+        Returns:
+            Tuple of (buffer, mode, state, login_done, session_end_complete)
         """
         _mode: str = mode
         _state: str = state
         _buffer: bytes = buffer
         _login_done: bool = False
+        _session_end_complete: bool = False
 
         if self.is_pm_response(_data):
             logging.debug('pm response detected')
@@ -312,7 +349,7 @@ class Analyser():
                 _mode = ''
             else:
                 self._pm = self._pm + _data
-            return _buffer, _mode, _state, False
+            return _buffer, _mode, _state, False, False
 
         #here _mode is not 'pm'
         logging.debug('normal response detected')
@@ -330,7 +367,8 @@ class Analyser():
             if self.is_daq_desc(_buffer):
                 logging.info('dac desq detected (%d bytes), skipped',len(_buffer))
             else:
-                _state, _login_done = self._parse_response_buffer(_state, _buffer)
+                _state, _login_done, _session_end_complete = self._parse_response_buffer(
+                    _state, _buffer, session_end_requested)
             _buffer = b'' #clear working buffer
         #return after processing _buffer
-        return _buffer, _mode, _state, _login_done
+        return _buffer, _mode, _state, _login_done, _session_end_complete
