@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=65.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "myhargassner"
+version = "1.0.0"
+description = "Hargassner boiler gateway and MQTT integration"
+authors = [{name = "hlehoux2021"}]
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.8"
+
+dependencies = [
+    "paho-mqtt>=2.1.0,<3.0.0",
+    "ha-mqtt-discoverable==0.20.1",  # Specific version required for compatibility
+    "psutil>=7.0.0",
+    "pydantic>=2.12.0,<3.0.0",
+    "annotated_types>=0.7.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pylint>=4.0.0",
+    "pytest>=7.0.0",
+]
+
+[project.scripts]
+myhargassner = "myhargassner.main:main"
+
+[tool.setuptools]
+packages = ["myhargassner"]
+
+[tool.pylint.messages_control]
+disable = ["line-too-long", "too-many-arguments", "too-many-locals"]
