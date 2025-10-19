@@ -167,9 +167,7 @@ pip install paho-mqtt ha-mqtt-discoverable psutil pydantic annotated_types
 
 2. Install dependencies:
    ```bash
-   pip install .
-   # or, if you prefer:
-   # pip install -r requirements.txt
+   sudo pip install --break-system-packages .
    ```
 
 

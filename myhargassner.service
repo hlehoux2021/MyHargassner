@@ -4,8 +4,7 @@ After=network.target
 
 [Service]
 Type=simple
-# ExecStart=/usr/local/bin/myhargassner
-ExecStart=/usr/bin/python3 -m myhargassner.main
+ExecStart=/usr/local/bin/myhargassner
 User=root
 WorkingDirectory=/etc/myhargassner
 Restart=on-failure
