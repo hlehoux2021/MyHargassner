@@ -14,7 +14,7 @@ setup(
         "paho-mqtt>=2.1.0,<3.0.0",
         "ha-mqtt-discoverable==0.20.1",  # Specific version required
         "psutil>=7.0.0",
-        "pydantic>=2.12.0,<3.0.0",
+        "pydantic>=2.11.7,<3.0.0",
         "annotated_types>=0.7.0",
     ],
     entry_points={
