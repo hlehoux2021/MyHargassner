@@ -7,6 +7,7 @@ It extends MqttBase to provide functionality for sending commands to devices.
 import logging
 import threading
 import socket
+import time
 
 from typing import Optional, Dict, Generic, TypeVar, Union
 
@@ -579,11 +580,18 @@ class MqttActuator(ShutdownAware, ChanelReceiver, MqttBase):
                 rc = self._main_client.loop(timeout=self._appconfig.loop_timeout())
                 if rc != 0:
                     # Non-zero return code indicates an error
-                    logging.warning("MQTT loop returned error code: %d", rc)
-                    # loop() will handle reconnection automatically, so we just continue
-                    # unless shutdown was requested
-                    if self._shutdown_requested:
-                        break
+                    logging.warning("MQTT loop returned error code: %d. Connection lost, attempting to reconnect...", rc)
+
+                    # Pattern A: Manual reconnect with retry logic
+                    while not self._shutdown_requested:
+                        try:
+                            logging.info("Attempting to reconnect to MQTT broker...")
+                            self._main_client.reconnect()
+                            logging.info("Successfully reconnected to MQTT broker")
+                            break  # Exit retry loop on success
+                        except Exception as e:
+                            logging.error("Reconnection failed: %s. Retrying in 5 seconds...", str(e))
+                            time.sleep(5)  # Wait before next reconnection attempt
 
         except KeyboardInterrupt:
             logging.info("Shutting down MQTT Actuator...")
