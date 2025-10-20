@@ -2,14 +2,17 @@
 Setup description for MyHargassner as a system service
 """
 
-from setuptools import setup, find_namespace_packages
+from setuptools import setup
 
 setup(
     name="myhargassner",
     version="1.0.0",
     description="Hargassner boiler gateway and MQTT integration",
     author="hlehoux2021",
-    packages=find_namespace_packages(include=['myhargassner*']),
+    packages=[
+        'myhargassner',
+        'myhargassner.pubsub',
+    ],
     install_requires=[
         "paho-mqtt>=2.1.0,<3.0.0",
         "ha-mqtt-discoverable==0.20.1",  # Specific version required
