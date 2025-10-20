@@ -377,7 +377,8 @@ class MqttActuator(ShutdownAware, ChanelReceiver, MqttBase):
         if not param_id:
             logging.error(f"No command_id found for select parameter {param_name}")
             return
-        select = Select(select_settings, self.callback_select)
+        #todo ha-mqtt-discoverable :: move to version > 0.20.1 and remove user data usage
+        select = Select(select_settings, self.callback_select, user_data=param_id)
         self._selects[param_id] = select
         select.write_config()
         # Set initial value if available
@@ -477,7 +478,8 @@ class MqttActuator(ShutdownAware, ChanelReceiver, MqttBase):
         if not param_id:
             logging.error(f"No key found for number parameter {param_name}")
             return
-        number = Number(number_settings, self.callback_number)
+        #todo ha-mqtt-discoverable :: move to version > 0.20.1 and remove user data usage
+        number = Number(number_settings, self.callback_number, user_data=param_id)
         if not hasattr(self, '_numbers'):
             self._numbers = {}
         self._numbers[param_id] = number
