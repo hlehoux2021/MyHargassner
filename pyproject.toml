@@ -29,7 +29,7 @@ dev = [
 myhargassner = "myhargassner.main:main"
 
 [tool.setuptools]
-packages = ["myhargassner"]
+packages = ["myhargassner", "myhargassner.pubsub"]
 
 [tool.pylint.messages_control]
 disable = ["line-too-long", "too-many-arguments", "too-many-locals"]
