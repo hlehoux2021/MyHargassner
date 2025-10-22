@@ -180,7 +180,7 @@ class MqttInformer(MqttBase):
                     logging.debug('normal mode analyse message')
                     # we test either the value is changed or it is new
                     if ((_str_parts[0] in self._dict) and (_str_parts[1] != self._dict[_str_parts[0]])) or (not _str_parts[0] in self._dict): # pylint: disable=line-too-long
-                        logging.info('adding new value:[%s/%s]', _str_parts[0], _str_parts[1])
+                        logging.debug('adding new value:[%s/%s]', _str_parts[0], _str_parts[1])
                         self._dict[_str_parts[0]] = _str_parts[1]
                         if _str_parts[0] == 'HargaWebApp':
                             self._web_app.set_state(_str_parts[1])
@@ -188,7 +188,7 @@ class MqttInformer(MqttBase):
                             self._kt.set_state(_str_parts[1])
                         # treat sensors from telnet pm buffer
                         if _str_parts[0] in self.config.wanted and _str_parts[0] in self._sensors:
-                            logging.info('updating state of sensor:%s',_str_parts[0])
+                            logging.debug('updating state of sensor:%s',_str_parts[0])
                             self._sensors[_str_parts[0]].set_state(_str_parts[1])
                     else:
                         logging.debug('ignored [%s/%s]', _str_parts[0], _str_parts[1])

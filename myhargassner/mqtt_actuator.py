@@ -342,7 +342,7 @@ class MqttActuator(ChanelReceiver, MqttBase):
                     else:
                         logging.warning("No Select found for parameter ID: %s", param_id)
                 else:
-                    logging.info('No new mode found for %s in response, keeping requested value: %s',
+                    logging.warning('No new mode found for %s in response, keeping requested value: %s',
                                param_id, payload)
                     # If we don't get a response, keep the requested value
                     select = self._selects.get(param_id)
