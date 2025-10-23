@@ -10,14 +10,14 @@ import threading
 from typing import Optional
 import re
 
-# Apply paho-mqtt FIX patch BEFORE importing anything that uses paho
-# This fixes the 'bad char in struct format' error on Raspberry Pi
-import paho_mqtt_fix_patch
-paho_mqtt_fix_patch.apply_fix()
+# Apply paho-mqtt DEBUG patch to see what's happening
+# Use this to diagnose the problem
+import paho_mqtt_debug_patch
+paho_mqtt_debug_patch.apply_patch()
 
-# Uncomment below to use debug patch instead of fix patch:
-# import paho_mqtt_debug_patch
-# paho_mqtt_debug_patch.apply_patch()
+# Uncomment below to use FIX patch instead (after confirming the bug):
+# import paho_mqtt_fix_patch
+# paho_mqtt_fix_patch.apply_fix()
 
 from ha_mqtt_discoverable import DeviceInfo  # type: ignore
 
