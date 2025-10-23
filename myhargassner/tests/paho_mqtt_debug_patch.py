@@ -67,6 +67,22 @@ def _debug_handle_publish(self) -> MQTTErrorCode:
         logging.error("=" * 80)
         return MQTTErrorCode.MQTT_ERR_PROTOCOL
 
+    # Let's also pre-calculate what the SECOND pack_format will be
+    # to see if THAT's the problematic one
+    try:
+        # Simulate first unpack
+        (test_slen, test_packet) = struct.unpack(pack_format, bytes(packet_data))
+        second_pack_format = f"!{test_slen}s{len(test_packet) - test_slen}s"
+        logging.error(f"PREDICTED second pack_format: '{second_pack_format}'")
+        logging.error(f"Second format topic length: {test_slen}")
+        logging.error(f"Second format payload length: {len(test_packet) - test_slen}")
+
+        # Check if second format is valid
+        if test_slen < 0 or (len(test_packet) - test_slen) < 0:
+            logging.error(f"ERROR: Second pack_format will have NEGATIVE length!")
+    except Exception as e:
+        logging.error(f"Could not pre-calculate second pack_format: {e}")
+
     logging.error(f"About to call ORIGINAL _handle_publish() - no double processing")
     logging.error("=" * 80)
     # ============ DEBUGGING END ============
@@ -78,9 +94,18 @@ def _debug_handle_publish(self) -> MQTTErrorCode:
     except struct.error as e:
         logging.error("=" * 80)
         logging.error(f"STRUCT.ERROR CAUGHT from original method: {e}")
-        logging.error(f"Failed pack_format was: '{pack_format}'")
+        logging.error(f"Failed at pack_format: '{pack_format}'")
         logging.error(f"Packet data: {packet_data!r}")
         logging.error(f"Packet hex: {packet_data.hex()}")
+        logging.error(f"Packet type: {type(packet_data)}")
+
+        # Try to figure out WHERE in _handle_publish it failed
+        import traceback
+        tb_lines = traceback.format_exc().split('\n')
+        for line in tb_lines:
+            if 'pack_format' in line or 'struct.unpack' in line:
+                logging.error(f"Traceback detail: {line}")
+
         logging.error("=" * 80)
         raise  # Re-raise to see full stack trace
 
