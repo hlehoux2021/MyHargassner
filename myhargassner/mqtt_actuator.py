@@ -568,30 +568,24 @@ class MqttActuator(ShutdownAware, ChanelReceiver, MqttBase):
         self.create_subscribers()
 
         try:
-            logging.info("Starting MQTT loop - waiting for messages...")
+            logging.info("Starting MQTT service - waiting for messages...")
             logging.debug("self._main_client is: %r", self._main_client)
             if not self._main_client:
                 raise RuntimeError("No MQTT client available")
 
-            # Use loop() in a custom loop instead of loop_forever() for graceful shutdown
-            # loop() processes network traffic, dispatches callbacks and handles reconnecting
-            # timeout parameter determines how long it will wait for network activity (in seconds)
-            while not self._shutdown_requested:
-                rc = self._main_client.loop(timeout=self._appconfig.loop_timeout())
-                if rc != 0:
-                    # Non-zero return code indicates an error
-                    logging.warning("MQTT loop returned error code: %d. Connection lost, attempting to reconnect...", rc)
+            # IMPORTANT: Do NOT call client.loop() here!
+            # ha-mqtt-discoverable already started a background thread (paho-mqtt-client-)
+            # when creating Select/Number entities. Calling loop() here would create
+            # a DUAL-LOOP situation where both MainThread and the background thread
+            # process the same MQTT messages, causing duplicate callbacks and race conditions.
+            #
+            # Instead, just wait/sleep and let the background thread handle everything.
+            logging.info("MQTT background thread already running. Waiting for shutdown signal...")
 
-                    # Pattern A: Manual reconnect with retry logic
-                    while not self._shutdown_requested:
-                        try:
-                            logging.info("Attempting to reconnect to MQTT broker...")
-                            self._main_client.reconnect()
-                            logging.info("Successfully reconnected to MQTT broker")
-                            break  # Exit retry loop on success
-                        except Exception as e:
-                            logging.error("Reconnection failed: %s. Retrying in 5 seconds...", str(e))
-                            time.sleep(5)  # Wait before next reconnection attempt
+            while not self._shutdown_requested:
+                # Just sleep and check for shutdown periodically
+                # The background thread handles all MQTT processing
+                time.sleep(1)
 
         except KeyboardInterrupt:
             logging.info("Shutting down MQTT Actuator...")
