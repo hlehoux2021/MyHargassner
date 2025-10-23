@@ -30,12 +30,21 @@ def _debug_handle_publish(self) -> MQTTErrorCode:
 
     # Log which client instance this is
     import threading
+    import traceback
     thread_id = threading.current_thread().ident
+    thread_name = threading.current_thread().name
     client_id = id(self)
 
     logging.error("=" * 80)
     logging.error(f"PAHO MQTT DEBUG - _handle_publish() called")
-    logging.error(f"Client ID: {client_id} | Thread ID: {thread_id}")
+    logging.error(f"Client ID: {client_id} | Thread: {thread_name} (ID: {thread_id})")
+
+    # Log call stack to see what called this
+    stack = traceback.extract_stack()
+    logging.error("Call stack (last 5 frames):")
+    for frame in stack[-6:-1]:  # Skip this frame, show 5 before
+        logging.error(f"  {frame.filename}:{frame.lineno} in {frame.name}")
+
     logging.error("=" * 80)
     logging.error(f"Packet length: {packet_len}")
     logging.error(f"Packet data (hex): {packet_data.hex()}")
