@@ -28,8 +28,14 @@ def _debug_handle_publish(self) -> MQTTErrorCode:
     packet_len = len(packet_data)
     header = self._in_packet['command']
 
+    # Log which client instance this is
+    import threading
+    thread_id = threading.current_thread().ident
+    client_id = id(self)
+
     logging.error("=" * 80)
-    logging.error("PAHO MQTT DEBUG - _handle_publish() called")
+    logging.error(f"PAHO MQTT DEBUG - _handle_publish() called")
+    logging.error(f"Client ID: {client_id} | Thread ID: {thread_id}")
     logging.error("=" * 80)
     logging.error(f"Packet length: {packet_len}")
     logging.error(f"Packet data (hex): {packet_data.hex()}")
