@@ -28,7 +28,7 @@ from myhargassner.appconfig import AppConfig
 from myhargassner.telnetproxy import ThreadedTelnetProxy
 from myhargassner.boiler import ThreadedBoilerListenerSender
 from myhargassner.gateway import ThreadedGatewayListenerSender
-from myhargassner.mqtt_informer import MqttInformer
+from myhargassner.mqtt_informer import ThreadedMqttInformer
 
 #----------------------------------------------------------#
 
@@ -46,8 +46,6 @@ logging.info('Started MyHargassner')
 #----------------------------------------------------------#
 
 #from queue import Queue,Empty
-
-pub = PubSub(max_queue_in_a_channel=9999)
 
 class PubSubListener(threading.Thread):
     """ Class defining a listener used in a thread """
@@ -82,31 +80,114 @@ class PubSubListener(threading.Thread):
             counter += 1
 
 
+def wait_for_restart_trigger(pub: PubSub) -> str:
+    """
+    Wait for restart request from any component via PubSub.
+
+    Args:
+        pub: PubSub instance to subscribe to system channel
+
+    Returns:
+        str: Reason for restart
+    """
+    # Subscribe to system channel for restart messages
+    system_queue = pub.subscribe('system', 'MainRestartMonitor')
+
+    try:
+        while True:
+            try:
+                # Wait for restart request message
+                iterator = system_queue.listen(timeout=1.0)
+                message = next(iterator)
+
+                if message and message['data'] == 'RESTART_REQUESTED':
+                    logging.info("Restart request received via PubSub")
+                    return "System_Restart_Request"
+
+            except StopIteration:
+                # No message received, continue waiting
+                continue
+
+    finally:
+        # Cleanup subscription
+        pub.unsubscribe('system', system_queue)
+
+
 def main():
-    """Main entry point for the application."""
-    # move all your top-level code here (except for imports and function/class defs)
+    """Main entry point with restart orchestration."""
+    restart_count = 0
+    max_restarts = 10000  # Safety limit to prevent infinite restart loops
 
-    pln= PubSubListener('test', 'PubSubListener', pub)
-    pln.start()
+    # optional PubSubListener for testing messages
+    # pln = PubSubListener('chosen_channel_to_spy', 'PubSubListener', session_pub)
+    #pln.start()
+    while True: # restart_count < max_restarts:
+        restart_count += 1
+        logging.info("System session starting (session #%d)", restart_count)
 
-    # MqttInfomer will receive info on the mq queue
-    mi = MqttInformer(app_config, pub)
+        try:
+            # Create fresh PubSub for this session
+            session_pub = PubSub(max_queue_in_a_channel=9999)
 
-    # create a telnet proxy.
-    tln = ThreadedTelnetProxy(app_config, pub, port=23)
+            # Create all components
 
-    # create a BoilerListener
-    # it will discover the boiler and forward its addr:port to Telnet Proxy through the tln queue
-    bls = ThreadedBoilerListenerSender(app_config, pub, delta=100)
+            mi = ThreadedMqttInformer(app_config, session_pub)
+            bls = ThreadedBoilerListenerSender(app_config, session_pub, delta=100)
+            gls = ThreadedGatewayListenerSender(app_config, session_pub, delta=100)
+            tln = ThreadedTelnetProxy(app_config, session_pub, port=23)
 
-    # create a gateway listener
-    # it will discover the IGW
-    gls = ThreadedGatewayListenerSender(app_config, pub, delta=100)
+            # Start all threads
+            logging.info("Starting all components...")
 
-    tln.start()
-    bls.start()
-    gls.start()
-    mi.start()
+            bls.start()
+            gls.start()
+            tln.start()
+            mi.start()
+
+            # Wait for restart request from any component
+            logging.info("System running, waiting for restart request...")
+            restart_reason = wait_for_restart_trigger(session_pub)
+            logging.info("Restart requested: %s", restart_reason)
+
+            # Orchestrate graceful shutdown of ALL components
+            logging.info("Orchestrating shutdown of all components...")
+
+            # Request shutdown via request_shutdown() method
+            gls.request_shutdown()
+            bls.request_shutdown()
+            tln.request_shutdown()
+            mi.request_shutdown()
+            # Note: PubSubListener doesn't have request_shutdown yet
+
+            # Wait for all threads to exit cleanly (with timeout)
+            logging.info("Waiting for threads to exit...")
+            gls.join(timeout=5)
+            bls.join(timeout=5)
+            tln.join(timeout=5)
+            mi.join(timeout=5)
+
+            # Check for zombie threads
+            if gls.is_alive():
+                logging.warning("GatewayListener did not exit cleanly")
+            if bls.is_alive():
+                logging.warning("BoilerListener did not exit cleanly")
+            if tln.is_alive():
+                logging.warning("TelnetProxy did not exit cleanly")
+            if mi.is_alive():
+                logging.warning("MqttInformer did not exit cleanly")
+
+            logging.info("All components stopped")
+            logging.info("Waiting for next IGW connection...")
+            time.sleep(2)  # Brief pause before restart
+
+        except KeyboardInterrupt:
+            logging.info("Keyboard interrupt, exiting...")
+            break
+        except Exception as e:
+            logging.error("Unexpected error: %s", e, exc_info=True)
+            time.sleep(5)  # Wait before retry on error
+
+    logging.info("System exiting after %d sessions", restart_count)
 
 if __name__ == '__main__':
     main()

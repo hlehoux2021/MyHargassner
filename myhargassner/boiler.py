@@ -12,7 +12,7 @@ from myhargassner.pubsub.pubsub import PubSub
 
 # Project imports
 from myhargassner.appconfig import AppConfig
-from myhargassner.core import ListenerSender
+from myhargassner.core import ListenerSender, ThreadedListenerSender
 from myhargassner.socket_manager import (
     SocketSendError,
     SocketTimeoutError,
@@ -85,9 +85,12 @@ class BoilerListenerSender(ListenerSender):
         """ This method discovers the gateway ip address and port. ip address and port."""
         logging.info('BoilerListenerSender discovering gateway')
         self._msq = self._com.subscribe(self._channel, self.name())
-        while self.gw_port == 0:
+        while self.gw_port == 0 and not self._shutdown_requested:
             self.handle()
-        logging.info('BoilerListenerSender received gateway information %s:%d', self.gw_addr, self.gw_port)
+        if self._shutdown_requested:
+            logging.info('BoilerListenerSender: Shutdown requested during discovery')
+        else:
+            logging.info('BoilerListenerSender received gateway information %s:%d', self.gw_addr, self.gw_port)
         #unsubscribe from the channel to avoid receiving further messages
         logging.debug('BoilerListenerSender unsubscribe from channel %s', self._channel)
         self._com.unsubscribe(self._channel,self._msq)
@@ -134,18 +137,31 @@ class BoilerListenerSender(ListenerSender):
             logging.info('SYS=%s',data[len(data)-16:len(data)].decode())
             self._com.publish(self._channel, f"SYS££{data[len(data)-16:len(data)].decode()}")
 
-class ThreadedBoilerListenerSender(Thread):
-    """ 
+class ThreadedBoilerListenerSender(ThreadedListenerSender):
+    """
     This class implements a Thread to run the boiler proxy
     """
-    bls: BoilerListenerSender
 
     def __init__(self, appconfig: AppConfig, communicator: PubSub, delta: int = 0):
-        super().__init__(name='BoilerListener')
-        self.bls= BoilerListenerSender(appconfig, communicator, delta)
+        """
+        Initialize the threaded boiler listener.
+
+        Args:
+            appconfig: Application configuration
+            communicator: PubSub instance for inter-component communication
+            delta: Port delta for same-machine scenarios
+        """
+        bls = BoilerListenerSender(appconfig, communicator, delta)
+        super().__init__(bls, 'BoilerListener')
 
     def run(self):
+        """
+        Run the boiler listener.
+        Boiler needs to discover the gateway address before it can bind and listen.
+        """
         logging.info('BoilerListenerSender started')
-        self.bls.discover()
-        self.bls.bind()
-        self.bls.loop()
+        self._listener_sender.discover()
+        if not self._listener_sender._shutdown_requested:
+            self._listener_sender.bind()
+            self._listener_sender.loop()
+        logging.info('BoilerListenerSender exiting')

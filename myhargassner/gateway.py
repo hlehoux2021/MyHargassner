@@ -7,7 +7,6 @@ and forwards messages from the IGW to the boiler.
 # Standard library imports
 import logging
 from queue import Queue
-from threading import Thread
 from typing import Annotated, Tuple
 
 # Third party imports
@@ -16,7 +15,7 @@ from myhargassner.pubsub.pubsub import PubSub
 
 # Project imports
 from myhargassner.appconfig import AppConfig
-from myhargassner.core import ListenerSender
+from myhargassner.core import ListenerSender, ThreadedListenerSender
 from myhargassner.socket_manager import (
     SocketSendError,
     SocketTimeoutError,
@@ -125,8 +124,10 @@ class GatewayListenerSender(ListenerSender):
             raise
 
     def handle_data(self, data: bytes, addr: tuple):
-        """handle udp data
-            
+        """Handle UDP data from the gateway.
+
+        Publishes discovery information (HargaWebApp, SN) to the bootstrap channel.
+        Note: GatewayListener does NOT request system restart - that is handled by TelnetProxy.
         """
         _str: str = ''
         _subpart: str = ''
@@ -148,15 +149,26 @@ class GatewayListenerSender(ListenerSender):
                 logging.info('SN: [%s]', _subpart)
                 self._com.publish(self._channel, f"SN££{_subpart}")
 
-class ThreadedGatewayListenerSender(Thread):
+class ThreadedGatewayListenerSender(ThreadedListenerSender):
     """This class implements a Thread to run the gateway."""
-    gls: GatewayListenerSender
 
     def __init__(self, appconfig: AppConfig, communicator: PubSub, delta=0):
-        super().__init__(name='GatewayListener')
-        self.gls= GatewayListenerSender(appconfig, communicator, delta)
+        """
+        Initialize the threaded gateway listener.
+
+        Args:
+            appconfig: Application configuration
+            communicator: PubSub instance for inter-component communication
+            delta: Port delta for same-machine scenarios
+        """
+        gls = GatewayListenerSender(appconfig, communicator, delta)
+        super().__init__(gls, 'GatewayListener')
 
     def run(self):
+        """
+        Run the gateway listener.
+        Gateway doesn't need discovery - it directly binds and listens for broadcasts.
+        """
         logging.info('GatewayListenerSender started')
-        self.gls.bind()
-        self.gls.loop()
+        self._listener_sender.bind()
+        self._listener_sender.loop()
