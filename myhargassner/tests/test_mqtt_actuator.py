@@ -10,6 +10,10 @@ import threading
 from typing import Optional
 import re
 
+# Apply paho-mqtt debugging patch BEFORE importing anything that uses paho
+import paho_mqtt_debug_patch
+paho_mqtt_debug_patch.apply_patch()
+
 from ha_mqtt_discoverable import DeviceInfo  # type: ignore
 
 from myhargassner.appconfig import AppConfig
