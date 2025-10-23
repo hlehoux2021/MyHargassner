@@ -1,27 +1,10 @@
 """
 Setup description for MyHargassner as a system service
+
+Note: Configuration is now in pyproject.toml (modern Python packaging standard).
+This file exists only for backward compatibility.
 """
 
-from setuptools import setup, find_packages
+from setuptools import setup
 
-setup(
-    name="myhargassner",
-    version="1.0.0",
-    description="Hargassner boiler gateway and MQTT integration",
-    author="hlehoux2021",
-    packages=find_packages(),
-    install_requires=[
-        "paho-mqtt",
-        "ha-mqtt-discoverable",
-        "psutil",
-        "pydantic",
-        "annotated_types",
-    ],
-    entry_points={
-        'console_scripts': [
-            'myhargassner = myhargassner.main:main',
-        ],
-    },
-    include_package_data=True,
-    python_requires='>=3.8',
-)
+setup()

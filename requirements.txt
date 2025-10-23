@@ -1,0 +1,17 @@
+# MyHargassner Dependencies
+# Core dependencies
+ha-mqtt-discoverable==0.20.1
+paho-mqtt==2.1.0
+annotated_types==0.7.0
+psutil==7.1.0
+
+# Optional development dependencies
+pylint>=4.0.0ssner Dependencies
+# Core dependencies
+ha-mqtt-discoverable==0.22.0
+paho-mqtt==2.1.0
+annotated-types==0.7.0
+psutil==7.1.0
+
+# Optional development dependencies
+pylint>=4.0.0

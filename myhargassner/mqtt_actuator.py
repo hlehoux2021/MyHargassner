@@ -7,6 +7,7 @@ It extends MqttBase to provide functionality for sending commands to devices.
 import logging
 import threading
 import socket
+import time
 
 from typing import Optional, Dict, Generic, TypeVar, Union
 
@@ -20,11 +21,11 @@ from myhargassner.pubsub.pubsub import PubSub
 # Project imports
 from myhargassner.appconfig import AppConfig
 from myhargassner.telnethelper import TelnetClient
-from myhargassner.core import ChanelReceiver
+from myhargassner.core import ChanelReceiver, ShutdownAware
 from myhargassner.mqtt_base import MqttBase
 
 
-class MqttActuator(ChanelReceiver, MqttBase):
+class MqttActuator(ShutdownAware, ChanelReceiver, MqttBase):
     """
     MqttActuator is a class for controlling devices via MQTT.
     It extends MqttBase to provide functionality for sending commands to devices.
@@ -53,8 +54,10 @@ class MqttActuator(ChanelReceiver, MqttBase):
         """
         logging.debug("MqttActuator instantiated")
         logging.debug("MqttActuator.__init__ called")
-        ChanelReceiver.__init__(self, communicator)  # Initialize ChanelReceiver
-        MqttBase.__init__(self, appconfig)  # Initialize MqttBase
+        # Explicit initialization of all base classes
+        ShutdownAware.__init__(self)
+        ChanelReceiver.__init__(self, communicator, appconfig)
+        MqttBase.__init__(self, appconfig)
         self.src_iface = src_iface
         self._device_info = device_info
         self._service_lock = lock
@@ -247,6 +250,7 @@ class MqttActuator(ChanelReceiver, MqttBase):
         else:
             logging.warning("Failed to parse boiler configuration from message")
 
+
     # wait for the boiler configuration to be discovered
     def discover(self) -> None:
         """
@@ -264,7 +268,7 @@ class MqttActuator(ChanelReceiver, MqttBase):
         self._msq = self._com.subscribe(self._channel, self.name())
         logging.debug("MqttActuator.discover called, subscribed to channel %s", self._channel)
 
-        while self._boiler_config is None:
+        while self._boiler_config is None and not self._shutdown_requested:
             logging.debug('Waiting for boiler configuration, calling handle with decode_boiler_config')
             try:
                 self.handle(self.decode_boiler_config)
@@ -273,6 +277,9 @@ class MqttActuator(ChanelReceiver, MqttBase):
             except Exception as e:
                 logging.error('Error in discovery loop: %s', str(e))
                 break
+
+        if self._shutdown_requested:
+            logging.info('MqttActuator: Shutdown requested during discovery')
 
         logging.debug("MqttActuator.discover finished, unsubscribing from channel")
         self._com.unsubscribe(self._channel, self._msq)
@@ -297,6 +304,7 @@ class MqttActuator(ChanelReceiver, MqttBase):
         Handle MQTT select state change messages.
         """
         logging.debug("MqttActuator.callback_select called with data: %s", data)
+        #todo ha-mqtt-discoverable :: move to version > 0.20.1 and remove user data usage
         with self._service_lock:
             try:
                 param_id = data  # data is already the param_id
@@ -370,6 +378,7 @@ class MqttActuator(ChanelReceiver, MqttBase):
         if not param_id:
             logging.error(f"No command_id found for select parameter {param_name}")
             return
+        #todo ha-mqtt-discoverable :: move to version > 0.20.1 and remove user data usage
         select = Select(select_settings, self.callback_select, user_data=param_id)
         self._selects[param_id] = select
         select.write_config()
@@ -470,6 +479,7 @@ class MqttActuator(ChanelReceiver, MqttBase):
         if not param_id:
             logging.error(f"No key found for number parameter {param_name}")
             return
+        #todo ha-mqtt-discoverable :: move to version > 0.20.1 and remove user data usage
         number = Number(number_settings, self.callback_number, user_data=param_id)
         if not hasattr(self, '_numbers'):
             self._numbers = {}
@@ -545,6 +555,12 @@ class MqttActuator(ChanelReceiver, MqttBase):
         logging.debug("MqttActuator.service called")
         # Discover the boiler configuration
         self.discover()
+
+        # Check if shutdown was requested during discovery
+        if self._shutdown_requested:
+            logging.info("MqttActuator: Shutdown requested, skipping service start")
+            return
+
         # connect to the boiler
         self._get_client().connect()
 
@@ -553,28 +569,67 @@ class MqttActuator(ChanelReceiver, MqttBase):
 
         try:
             logging.info("Starting MQTT loop - waiting for messages...")
-            # Use the base class's MQTT client loop_forever which handles reconnections
-            # and doesn't block like sleep() does
             logging.debug("self._main_client is: %r", self._main_client)
             if not self._main_client:
                 raise RuntimeError("No MQTT client available")
-            self._main_client.loop_forever()
+
+            # Use loop() in a custom loop instead of loop_forever() for graceful shutdown
+            # loop() processes network traffic, dispatches callbacks and handles reconnecting
+            # timeout parameter determines how long it will wait for network activity (in seconds)
+            while not self._shutdown_requested:
+                rc = self._main_client.loop(timeout=self._appconfig.loop_timeout())
+                if rc != 0:
+                    # Non-zero return code indicates an error
+                    logging.warning("MQTT loop returned error code: %d. Connection lost, attempting to reconnect...", rc)
+
+                    # Pattern A: Manual reconnect with retry logic
+                    while not self._shutdown_requested:
+                        try:
+                            logging.info("Attempting to reconnect to MQTT broker...")
+                            self._main_client.reconnect()
+                            logging.info("Successfully reconnected to MQTT broker")
+                            break  # Exit retry loop on success
+                        except Exception as e:
+                            logging.error("Reconnection failed: %s. Retrying in 5 seconds...", str(e))
+                            time.sleep(5)  # Wait before next reconnection attempt
+
         except KeyboardInterrupt:
             logging.info("Shutting down MQTT Actuator...")
-            if self._main_client:
-                self._main_client.disconnect()
-            # Disconnect all select clients
-            for select in self._selects.values():
-                select.mqtt_client.disconnect()
+            self._cleanup_mqtt_clients()
         except Exception as e:
             logging.critical("Error in MQTT loop: %s", str(e))
-            if self._main_client:
-                self._main_client.disconnect()
-            # Disconnect all select clients
-            for select in self._selects.values():
-                select.mqtt_client.disconnect()
+            self._cleanup_mqtt_clients()
             logging.critical("MQTT Actuator encountered a critical error and terminated.")
             raise
+        finally:
+            # Clean exit: disconnect telnet and MQTT clients
+            logging.info('MqttActuator: Exiting cleanly')
+            self._cleanup_mqtt_clients()
+            if self._client:
+                try:
+                    self._client.close()
+                except Exception as e:
+                    logging.warning('Error closing telnet client: %s', e)
+
+    def _cleanup_mqtt_clients(self) -> None:
+        """Disconnect all MQTT clients."""
+        if self._main_client:
+            try:
+                self._main_client.disconnect()
+            except Exception as e:
+                logging.warning('Error disconnecting main MQTT client: %s', e)
+        # Disconnect all select clients
+        for select in self._selects.values():
+            try:
+                select.mqtt_client.disconnect()
+            except Exception as e:
+                logging.warning('Error disconnecting select client: %s', e)
+        # Disconnect all number clients
+        for number in self._numbers.values():
+            try:
+                number.mqtt_client.disconnect()
+            except Exception as e:
+                logging.warning('Error disconnecting number client: %s', e)
 
     def _send_command_and_parse_response(self, command: str, param_id: str, *, value_type: str) -> Union[float, str, None]:
         """
@@ -740,3 +795,7 @@ class ThreadedMqttActuator(Threaded[MqttActuator]):
         logging.debug("ThreadedMqttActuator.__init__ called")
         entity = MqttActuator(appconfig, communicator, device_info, src_iface, lock)
         super().__init__(entity)
+
+    def request_shutdown(self) -> None:
+        """Request graceful shutdown of the MQTT actuator thread."""
+        self._entity.request_shutdown()

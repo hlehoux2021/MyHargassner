@@ -19,6 +19,47 @@ I'm a beginner python programmer, be kind with my errors
 
 ## Setup
 
+### Dependencies
+
+MyHargassner requires Python 3.8 or newer and has the following key dependencies:
+- `ha-mqtt-discoverable==0.20.1` (specific version required for compatibility)
+- `paho-mqtt>=2.1.0`
+- `psutil>=7.0.0`
+- `annotated_types>=0.7.0`
+
+### Installation
+
+#### Option 1: Using pip with requirements.txt
+```bash
+# Clone the repository
+git clone https://github.com/hlehoux2021/MyHargassner.git
+cd MyHargassner
+
+# Install dependencies
+pip install -r requirements.txt
+```
+
+#### Option 2: Using pip install (recommended)
+```bash
+# Clone the repository
+git clone https://github.com/hlehoux2021/MyHargassner.git
+cd MyHargassner
+
+# Install in development mode
+pip install -e .
+
+# Or install normally
+pip install .
+```
+
+#### Option 3: For developers
+```bash
+# Install with development dependencies
+pip install -e ".[dev]"
+```
+
+### Configuration
+
 ### Prerequisites
 - An Hargassner pellet boiler (typically a NanoPK), *and* the internet gateway (IGW) from the vendor
 - Raspberry Pi with Raspberry Pi OS
@@ -126,9 +167,7 @@ pip install paho-mqtt ha-mqtt-discoverable psutil pydantic annotated_types
 
 2. Install dependencies:
    ```bash
-   pip install .
-   # or, if you prefer:
-   # pip install -r requirements.txt
+   sudo pip install --break-system-packages .
    ```
 
 
@@ -177,6 +216,8 @@ You can install and run the gateway as a systemd service using the provided bash
 
 To uninstall, use the provided `uninstall_system_service.sh` script.
 
+To debug problems, remember you can use
+ journalctl -u myhargassner.service -n 50 --no-pager
 ---
 
 

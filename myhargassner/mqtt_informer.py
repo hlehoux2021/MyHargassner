@@ -4,6 +4,7 @@ Module for MQTT client to handle to boiler
 
 # Standard library imports
 import logging
+import threading
 import traceback
 from queue import Empty
 from typing import Union
@@ -18,6 +19,7 @@ from myhargassner.pubsub.pubsub import PubSub, ChanelQueue, ChanelPriorityQueue
 from myhargassner.appconfig import AppConfig
 import myhargassner.hargconfig as hargconfig
 from myhargassner.mqtt_base import MqttBase
+from myhargassner.core import ShutdownAware
 
 class MySensor(Sensor):
     """
@@ -58,11 +60,11 @@ class MySensor(Sensor):
         if _id in _config.desc:
             self.set_attributes({'description': _config.desc[_id]['desc']})
 
-class MqttInformer(MqttBase):
+class MqttInformer(ShutdownAware, MqttBase):
     """
     class MqttInformer provides Boiler information via MQTT to MqttDiscovery plugin in Jeedom or Home Assistant
     it receives data on a ChannelQueue and publishes it to the MQTT broker.
-    
+
     It will create the device_info and sensors from the boiler data.
 
     Name: will be BL_ADDR ip adress of the boiler
@@ -79,8 +81,11 @@ class MqttInformer(MqttBase):
     _key: Sensor # login key.
     _kt: Sensor # Model of Boiler.
     _msg: Sensor # base sensor to display messages.
+
     def __init__(self, appconfig: AppConfig, communicator: PubSub):
-        super().__init__(appconfig)
+        # Explicit initialization of all base classes
+        ShutdownAware.__init__(self)
+        MqttBase.__init__(self, appconfig)
         self._com = communicator
         self._dict = {}
         self._sensors= {}
@@ -121,6 +126,7 @@ class MqttInformer(MqttBase):
             _sensor.set_attributes({'description': self.config.desc[_id]['desc']})
         return _sensor
 
+
     def _create_all_sensors(self):
         # create basis mandatory sensors
         self._msg = MySensor("Message","MSG",
@@ -155,12 +161,12 @@ class MqttInformer(MqttBase):
 
         self._msq = self._com.subscribe(self._channel, self.name())
 
-        while True:
+        while not self._shutdown_requested:
             try:
                 logging.debug('MqttInformer: waiting for messages')
                 #logging.debug('MQTT ChannelQueue size: %d', self._msq.qsize())
-                # Use a non-blocking iterator with a timeout
-                iterator = self._msq.listen(timeout=3)
+                # Use a non-blocking iterator with timeout for inter-component communication
+                iterator = self._msq.listen(timeout=self._appconfig.queue_timeout())
                 try:
                     _message = next(iterator)
                 except StopIteration:
@@ -227,3 +233,28 @@ class MqttInformer(MqttBase):
                 self._com.unsubscribe(self._channel, self._msq)
                 self._msq = None
                 break
+
+        # Clean exit: unsubscribe from channel
+        logging.info('MqttInformer: Exiting cleanly')
+        if self._msq:
+            self._com.unsubscribe(self._channel, self._msq)
+            self._msq = None
+
+
+class ThreadedMqttInformer(threading.Thread):
+    """
+    Threaded wrapper for MqttInformer to run in a separate thread.
+    """
+    def __init__(self, appconfig: AppConfig, communicator: PubSub):
+        super().__init__(name='MqttInformer')
+        self._informer = MqttInformer(appconfig, communicator)
+
+    def request_shutdown(self) -> None:
+        """Request graceful shutdown of MqttInformer."""
+        self._informer.request_shutdown()
+
+    def run(self) -> None:
+        """Run the MqttInformer in a separate thread."""
+        logging.info('ThreadedMqttInformer started')
+        self._informer.start()
+        logging.info('ThreadedMqttInformer exiting')
