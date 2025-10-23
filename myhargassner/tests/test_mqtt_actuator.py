@@ -67,9 +67,11 @@ class MockTelnetClient:
                 # Generate acknowledgment response
                 if param_type == '6':  # Select parameter
                     # Map index to option name - using REAL boiler options
-                    # NOTE: Currently only PR001 is configured in mock config
                     options_map = {
                         'PR001': ['Manu', 'Arr', 'Ballon', 'Auto', 'Arr combustion'],
+                        'PR011': ['Arr', 'Auto', 'Réduire', 'Confort', '1x Confort', 'Refroid.'],
+                        'PR012': ['Arr', 'Auto', 'Réduire', 'Confort', '1x Confort', 'Refroid.'],
+                        'PR040': ['Non', 'Oui']
                     }
                     options = options_map.get(param_id, ['Unknown'])
                     try:
@@ -127,14 +129,24 @@ class MockChanelQueue:
         """
         if not self._config_provided:
             self._config_provided = True
-            # Return MINIMAL configuration - ONLY ONE SELECT to test with single client
+            # Return REAL boiler parameter configuration from production logs
             # Format: Multiple parameters separated by $
             # Select parameters MUST start with $PR for proper parsing
             config = (
-                # PR001: Mode (5 options) - ONLY THIS ONE
+                # PR001: Mode (5 options)
                 "$PR001;6;0;4;3;0;0;0;Mode;Manu;Arr;Ballon;Auto;Arr combustion;0;"
+                # PR011: Zone 1 Mode (6 options)
+                "$PR011;6;0;5;1;0;0;0;Zone 1 Mode;Arr;Auto;Réduire;Confort;1x Confort;Refroid.;0;"
+                # PR012: Zone 2 Mode (6 options)
+                "$PR012;6;0;5;1;0;0;0;Zone 2 Mode;Arr;Auto;Réduire;Confort;1x Confort;Refroid.;0;"
+                # PR040: Tampon Démarrer chrgt (2 options)
+                "$PR040;6;0;1;0;0;0;0;Tampon Démarrer chrgt;Non;Oui;0;"
+                # ID 4: Zone 1 Temp. ambiante jour (number: 14-26°C, step 0.5, current 20.0, default 20.0)
+                "$4;3;20.000;14.000;26.000;0.500;°C;20.000;0;0;0;Zone 1 Temp. ambiante jour;"
+                # ID 5: Zone 1 Température ambiante de réduit (number: 8-24°C, step 0.5, current 18.0, default 16.0)
+                "$5;3;18.000;8.000;24.000;0.500;°C;16.000;0;0;0;Zone 1 Température ambiante de réduit;"
             )
-            logging.info("MockChanelQueue: providing MINIMAL config (1 select only)")
+            logging.info("MockChanelQueue: providing REAL boiler config (6 parameters)")
             yield {'data': config, 'id': 0}
         # Generator ends here (no more messages)
 
@@ -225,11 +237,17 @@ class TestMqttActuator:
 
 def main():
     """Main entry point"""
-    # Setup logging
+    # Setup logging - force reconfiguration
+    # Use force=True to override any previous logging configuration
     logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        level=logging.DEBUG,
+        format='%(asctime)s - %(levelname)s - %(message)s',
+        force=True
     )
+
+    # Also ensure root logger is set to DEBUG
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.DEBUG)
 
     logging.info("=" * 60)
     logging.info("Test MQTT Actuator - Testing REAL Implementation")
