@@ -17,6 +17,16 @@ I'm a beginner python programmer, be kind with my errors
 - todo: implement more controls of the boiler (today only Boiler mode, and Zone 1 & 2 Mode)
 - todo: enhance management of "error" or "permission denied" responses from the boiler
 
+## Bugs
+bugs are recorded on github: https://github.com/hlehoux2021/MyHargassner/issues
+
+recent and important corrections:
+Mishandling of $dhcp renew and $igw clear #1 : 
+Fixed in commits 3822d8c and a52c019 on bug-001-system-restart branch
+
+critical exception in paho-mqtt-client.loop after several changes pushed through mqtt #2
+solved by PR https://github.com/hlehoux2021/MyHargassner/pull/3
+
 ## Setup
 
 ### Dependencies
