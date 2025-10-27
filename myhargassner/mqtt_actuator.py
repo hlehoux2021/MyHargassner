@@ -39,9 +39,8 @@ class MqttActuator(ShutdownAware, ChanelReceiver, MqttBase):
     src_iface: bytes
     _service_lock: threading.Lock
 
-    _msq: Union[ChanelQueue, ChanelPriorityQueue, None] = None  # Message queue for receiving messages
-    _com: PubSub
-    _channel= "track" # Channel to receive tracking messages from the boiler
+    _trk: Union[ChanelQueue, ChanelPriorityQueue, None] = None  # Message queue for tracking messages
+#    _channel= "track" # Channel to receive tracking messages from the boiler
 
     def __init__(self, appconfig: AppConfig, communicator: PubSub, device_info: DeviceInfo, src_iface: bytes, lock: threading.Lock) -> None: # pylint: disable=line-too-long
         """
@@ -268,7 +267,8 @@ class MqttActuator(ShutdownAware, ChanelReceiver, MqttBase):
             - Uses self._channel for communication
             - Updates self._boiler_config when successful
         """
-        self._msq = self._com.subscribe(self._channel, self.name())
+        #self._msq = self._com.subscribe(self._channel, self.name())
+        self.subscribe("bootstrap", self.name())
         logging.debug("MqttActuator.discover called, subscribed to channel %s", self._channel)
 
         while self._boiler_config is None and not self._shutdown_requested:
@@ -285,8 +285,9 @@ class MqttActuator(ShutdownAware, ChanelReceiver, MqttBase):
             logging.info('MqttActuator: Shutdown requested during discovery')
 
         logging.debug("MqttActuator.discover finished, unsubscribing from channel")
-        self._com.unsubscribe(self._channel, self._msq)
-        self._msq = None
+        #self._com.unsubscribe(self._channel, self._msq)
+        #self._msq = None
+        self.unsubscribe()
 
     def _get_client(self) -> TelnetClient:
         """
@@ -593,7 +594,7 @@ class MqttActuator(ShutdownAware, ChanelReceiver, MqttBase):
             logging.info("Starting MQTT service - waiting for messages...")
             logging.debug("self._main_client is: %r", self._main_client)
 
-            self._msq = self._com.subscribe(self._channel, self.name())
+            self._trk = self._com.subscribe("track", self.name())
             if not self._main_client:
                 raise RuntimeError("No MQTT client available")
 
@@ -611,7 +612,7 @@ class MqttActuator(ShutdownAware, ChanelReceiver, MqttBase):
                     logging.debug('MqttActuator: waiting for messages')
                     #logging.debug('MQTT ChannelQueue size: %d', self._msq.qsize())
                     # Use a non-blocking iterator with timeout for inter-component communication
-                    iterator = self._msq.listen(timeout=self._appconfig.queue_timeout())
+                    iterator = self._trk.listen(timeout=self._appconfig.queue_timeout())
                     try:
                         _message = next(iterator)
                     except StopIteration:
@@ -628,8 +629,8 @@ class MqttActuator(ShutdownAware, ChanelReceiver, MqttBase):
                 except Exception as e: # pylint: disable=broad-except
                     logging.critical("MqttActuator: error %s", e)
                     # whenever we exit the loop, we unsubscribe from the channel
-                    self._com.unsubscribe(self._channel, self._msq)
-                    self._msq = None
+                    self._com.unsubscribe(self._channel, self._trk)
+                    self._trk = None
                     break
 
         except KeyboardInterrupt:
