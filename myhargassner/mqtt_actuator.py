@@ -691,7 +691,7 @@ class MqttActuator(ShutdownAware, ChanelReceiver, MqttBase):
                     new_mode = parts[1].strip()
                     logging.debug("Extracted value: %s", new_mode)
                     if new_mode:
-                        logging.info('Received message new mode for %s: %s', param_id, new_mode)
+                        logging.debug('Received message new mode for %s: %s', param_id, new_mode)
                         select = self._selects.get(param_id)
                         if select is not None:
                             options = param_info.get('options', [])
