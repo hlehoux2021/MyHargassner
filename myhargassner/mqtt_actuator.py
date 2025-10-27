@@ -7,8 +7,7 @@ It extends MqttBase to provide functionality for sending commands to devices.
 import logging
 import threading
 import socket
-import time
-
+from queue import Empty
 from typing import Optional, Dict, Generic, TypeVar, Union
 
 # Third party imports
@@ -16,7 +15,7 @@ from paho.mqtt.client import Client, MQTTMessage
 from ha_mqtt_discoverable import Settings, DeviceInfo  # type: ignore
 from ha_mqtt_discoverable.sensors import Select, SelectInfo, Number, NumberInfo # type: ignore
 
-from myhargassner.pubsub.pubsub import PubSub
+from myhargassner.pubsub.pubsub import PubSub, ChanelQueue, ChanelPriorityQueue
 
 # Project imports
 from myhargassner.appconfig import AppConfig
@@ -39,6 +38,9 @@ class MqttActuator(ShutdownAware, ChanelReceiver, MqttBase):
     _client: Optional[TelnetClient] = None
     src_iface: bytes
     _service_lock: threading.Lock
+
+    _trk: Union[ChanelQueue, ChanelPriorityQueue, None] = None  # Message queue for tracking messages
+#    _channel= "track" # Channel to receive tracking messages from the boiler
 
     def __init__(self, appconfig: AppConfig, communicator: PubSub, device_info: DeviceInfo, src_iface: bytes, lock: threading.Lock) -> None: # pylint: disable=line-too-long
         """
@@ -265,7 +267,8 @@ class MqttActuator(ShutdownAware, ChanelReceiver, MqttBase):
             - Uses self._channel for communication
             - Updates self._boiler_config when successful
         """
-        self._msq = self._com.subscribe(self._channel, self.name())
+        #self._msq = self._com.subscribe(self._channel, self.name())
+        self.subscribe("bootstrap", self.name())
         logging.debug("MqttActuator.discover called, subscribed to channel %s", self._channel)
 
         while self._boiler_config is None and not self._shutdown_requested:
@@ -282,8 +285,9 @@ class MqttActuator(ShutdownAware, ChanelReceiver, MqttBase):
             logging.info('MqttActuator: Shutdown requested during discovery')
 
         logging.debug("MqttActuator.discover finished, unsubscribing from channel")
-        self._com.unsubscribe(self._channel, self._msq)
-        self._msq = None
+        #self._com.unsubscribe(self._channel, self._msq)
+        #self._msq = None
+        self.unsubscribe()
 
     def _get_client(self) -> TelnetClient:
         """
@@ -532,6 +536,27 @@ class MqttActuator(ShutdownAware, ChanelReceiver, MqttBase):
         if self._main_client is None:
             logging.error("No valid MQTT client found in selects.")
 
+    def _cleanup_mqtt_clients(self) -> None:
+        """Disconnect all MQTT clients."""
+        if self._main_client:
+            try:
+                self._main_client.disconnect()
+            except Exception as e:
+                logging.warning('Error disconnecting main MQTT client: %s', e)
+        # Disconnect all select clients
+        for select in self._selects.values():
+            try:
+                select.mqtt_client.disconnect()
+            except Exception as e:
+                logging.warning('Error disconnecting select client: %s', e)
+        # Disconnect all number clients
+        for number in self._numbers.values():
+            try:
+                number.mqtt_client.disconnect()
+            except Exception as e:
+                logging.warning('Error disconnecting number client: %s', e)
+
+
     def service(self) -> None:
         """
         Start and run the MQTT actuator service.
@@ -544,8 +569,6 @@ class MqttActuator(ShutdownAware, ChanelReceiver, MqttBase):
         5. Handles graceful shutdown on interruption
 
         The service runs indefinitely until interrupted or an error occurs.
-        Uses MQTT client's loop_forever() which properly handles reconnections
-        and maintains the MQTT connection.
 
         Raises:
             RuntimeError: If MQTT client initialization fails
@@ -570,6 +593,8 @@ class MqttActuator(ShutdownAware, ChanelReceiver, MqttBase):
         try:
             logging.info("Starting MQTT service - waiting for messages...")
             logging.debug("self._main_client is: %r", self._main_client)
+
+            self._trk = self._com.subscribe("track", self.name())
             if not self._main_client:
                 raise RuntimeError("No MQTT client available")
 
@@ -583,9 +608,30 @@ class MqttActuator(ShutdownAware, ChanelReceiver, MqttBase):
             logging.info("MQTT background thread already running. Waiting for shutdown signal...")
 
             while not self._shutdown_requested:
-                # Just sleep and check for shutdown periodically
-                # The background thread handles all MQTT processing
-                time.sleep(1)
+                try:
+                    logging.debug('MqttActuator: waiting for messages')
+                    #logging.debug('MQTT ChannelQueue size: %d', self._msq.qsize())
+                    # Use a non-blocking iterator with timeout for inter-component communication
+                    iterator = self._trk.listen(timeout=self._appconfig.queue_timeout())
+                    try:
+                        _message = next(iterator)
+                    except StopIteration:
+                        # No message received within the timeout
+                        continue
+                    if not _message:
+                        logging.debug('MqttActuator: received empty message')
+                        continue
+                    msg = _message['data']
+                    logging.debug('MqttActuator: received message: %s', msg)
+                    self._handle_message(msg.encode('latin-1'))
+                except Empty:
+                    logging.debug("MqttActuator: no message received")
+                except Exception as e: # pylint: disable=broad-except
+                    logging.critical("MqttActuator: error %s", e)
+                    # whenever we exit the loop, we unsubscribe from the channel
+                    self._com.unsubscribe(self._channel, self._trk)
+                    self._trk = None
+                    break
 
         except KeyboardInterrupt:
             logging.info("Shutting down MQTT Actuator...")
@@ -605,25 +651,59 @@ class MqttActuator(ShutdownAware, ChanelReceiver, MqttBase):
                 except Exception as e:
                     logging.warning('Error closing telnet client: %s', e)
 
-    def _cleanup_mqtt_clients(self) -> None:
-        """Disconnect all MQTT clients."""
-        if self._main_client:
-            try:
-                self._main_client.disconnect()
-            except Exception as e:
-                logging.warning('Error disconnecting main MQTT client: %s', e)
-        # Disconnect all select clients
-        for select in self._selects.values():
-            try:
-                select.mqtt_client.disconnect()
-            except Exception as e:
-                logging.warning('Error disconnecting select client: %s', e)
-        # Disconnect all number clients
-        for number in self._numbers.values():
-            try:
-                number.mqtt_client.disconnect()
-            except Exception as e:
-                logging.warning('Error disconnecting number client: %s', e)
+    def _handle_message(self, buffer: bytes) -> None:
+        """
+        Handle incoming messages from the boiler.
+
+        Args:
+            buffer (bytes): The incoming message to process
+        """
+        logging.debug("MqttActuator._handle_message called with buffer: %s", buffer)
+
+        while b'\r\n' in buffer:
+            line, buffer = buffer.split(b'\r\n', 1)
+            line_str = line.decode('latin1', errors='replace').strip()
+            if not line_str:
+                continue
+            param_id = None
+            # Parse lines like: "zPa N: PR011 (Mode) = Confort"
+            if line_str.startswith('zPa N:'):
+                # Split by space and get the second part (PR011)
+                parts = line_str.split()
+                if len(parts) >= 3:
+                    param_id = parts[2]  # PR011
+                    logging.debug("Extracted param_id: %s", param_id)
+                else:
+                    continue
+                param_info = None
+                for info in self._boiler_config.values():
+                    if info.get('command_id') == param_id:
+                        param_info = info
+                        break
+                if not param_info:
+                    logging.error("Received message for unknown parameter ID: %s", param_id)
+                    continue
+                if param_info.get('type') != 'select':
+                    logging.error("Message received for non-select parameter ID: %s", param_id)
+                    continue
+                parts = line_str.split('=', 1)
+                if len(parts) == 2:
+                    new_mode = parts[1].strip()
+                    logging.debug("Extracted value: %s", new_mode)
+                    if new_mode:
+                        logging.debug('Received message new mode for %s: %s', param_id, new_mode)
+                        select = self._selects.get(param_id)
+                        if select is not None:
+                            options = param_info.get('options', [])
+                            if new_mode not in options:
+                                logging.warning("Received invalid mode '%s' for %s. Valid options: %s",
+                                             new_mode, param_id, options)
+                                continue
+                            logging.debug('Setting select state to: %s', new_mode)
+                            select.select_option(new_mode)
+                        else:
+                            logging.debug("No Select found for parameter ID: %s", param_id)
+                            continue
 
     def _send_command_and_parse_response(self, command: str, param_id: str, *, value_type: str) -> Union[float, str, None]:
         """

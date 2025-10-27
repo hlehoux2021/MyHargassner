@@ -221,7 +221,7 @@ class MqttInformer(ShutdownAware, MqttBase):
                         # now we init the already available sensors
                         self._init_sensors()
             except Empty:
-                logging.debug("handleReceiveQueue: no message received")
+                logging.debug("MqttInformer: no message received")
                 logging.debug('MqttInformer stage is now %s', _stage)
             except Exception as e: # pylint: disable=broad-except
                 logging.critical("MqttInformer: error %s", e)
