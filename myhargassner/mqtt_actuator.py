@@ -683,6 +683,7 @@ class MqttActuator(ShutdownAware, ChanelReceiver, MqttBase):
                     logging.info("key: /%s/ /%s/", info.get('key'), param_id)
                     if info.get('command_id') == param_id:
                         param_info = info
+                        logging.info("match command_id type: %s", param_info.get('type'))
                         break
                     if info.get('key') == param_id:
                         param_info = info
