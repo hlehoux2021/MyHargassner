@@ -681,13 +681,18 @@ class MqttActuator(ShutdownAware, ChanelReceiver, MqttBase):
                 for info in self._boiler_config.values():
                     logging.info("command_id: /%s/ /%s/", info.get('command_id'), param_id)
                     logging.info("key: /%s/ /%s/", info.get('key'), param_id)
+                    
+                    found_match = False
                     if info.get('command_id') == param_id:
                         param_info = info
                         logging.info("match command_id type: %s", param_info.get('type'))
-                        break
-                    if info.get('key') == param_id:
+                        found_match = True
+                    elif info.get('key') == param_id:
                         param_info = info
                         logging.info("match key type: %s", param_info.get('type'))
+                        found_match = True
+                    
+                    if found_match:
                         break
                 if not param_info:
                     logging.error("Received message for unknown parameter ID: %s", param_id)
