@@ -679,8 +679,8 @@ class MqttActuator(ShutdownAware, ChanelReceiver, MqttBase):
                     continue
                 param_info = None
                 for info in self._boiler_config.values():
-                    logging.info("found command_id: %s", info.get('command_id'))
-                    logging.info("found key: %s", info.get('key'))
+                    logging.info("command_id: /%s/ /%s/", info.get('command_id'), param_id)
+                    logging.info("key: /%s/ /%s/", info.get('key'), param_id)
                     if info.get('command_id') == param_id:
                         param_info = info
                         break
