@@ -4,7 +4,6 @@ This module implements the boiler proxy
 
 # Standard library imports
 import logging
-from threading import Thread
 from typing import Tuple
 
 # Third party imports
@@ -142,7 +141,7 @@ class ThreadedBoilerListenerSender(ThreadedListenerSender):
     """
     This class implements a Thread to run the boiler proxy
     """
-
+    _bls: BoilerListenerSender
     def __init__(self, appconfig: AppConfig, communicator: PubSub, delta: int = 0):
         """
         Initialize the threaded boiler listener.
@@ -152,8 +151,8 @@ class ThreadedBoilerListenerSender(ThreadedListenerSender):
             communicator: PubSub instance for inter-component communication
             delta: Port delta for same-machine scenarios
         """
-        bls = BoilerListenerSender(appconfig, communicator, delta)
-        super().__init__(bls, 'BoilerListener')
+        self._bls = BoilerListenerSender(appconfig, communicator, delta)
+        super().__init__(self._bls, 'BoilerListener')
 
     def run(self):
         """
@@ -161,8 +160,8 @@ class ThreadedBoilerListenerSender(ThreadedListenerSender):
         Boiler needs to discover the gateway address before it can bind and listen.
         """
         logging.info('BoilerListenerSender started')
-        self._listener_sender.discover()
-        if not self._listener_sender._shutdown_requested:
-            self._listener_sender.bind()
-            self._listener_sender.loop()
+        self._bls.discover()
+        if not self._bls._shutdown_requested:
+            self._bls.bind()
+            self._bls.loop()
         logging.info('BoilerListenerSender exiting')
