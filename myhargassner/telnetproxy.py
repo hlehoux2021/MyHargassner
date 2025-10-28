@@ -688,6 +688,8 @@ class TelnetProxy(ShutdownAware, ChanelReceiver, MqttBase):
                             elif _caller == 2:
                                 logging.debug('telnet sending response to service2')
                                 _sent = self._service2.send(_data)
+                                #todo experimental, send also to the IGW to inform about changes
+                                _sent = self._service1.send(_data)
                             else:
                                 logging.warning('Beware received a buffer with not registered caller %d', _caller)
                                 if self._service1.socket() is not None:
