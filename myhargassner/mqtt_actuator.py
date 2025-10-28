@@ -682,30 +682,38 @@ class MqttActuator(ShutdownAware, ChanelReceiver, MqttBase):
                     if info.get('command_id') == param_id:
                         param_info = info
                         break
+                    if info.get('key') == param_id:
+                        param_info = info
+                        break
                 if not param_info:
                     logging.error("Received message for unknown parameter ID: %s", param_id)
                     continue
-                if param_info.get('type') != 'select':
-                    logging.error("Message received for non-select parameter ID: %s", param_id)
-                    continue
+                #if param_info.get('type') != 'select':
+                #    logging.error("Message received for non-select parameter ID: %s", param_id)
+                #    continue
                 parts = line_str.split('=', 1)
                 if len(parts) == 2:
                     new_mode = parts[1].strip()
                     logging.debug("Extracted value: %s", new_mode)
                     if new_mode:
                         logging.debug('Received message new mode for %s: %s', param_id, new_mode)
-                        select = self._selects.get(param_id)
-                        if select is not None:
-                            options = param_info.get('options', [])
-                            if new_mode not in options:
-                                logging.warning("Received invalid mode '%s' for %s. Valid options: %s",
-                                             new_mode, param_id, options)
+                        if param_info.get('type') == 'select':
+                            select = self._selects.get(param_id)
+                            if select is not None:
+                                options = param_info.get('options', [])
+                                if new_mode not in options:
+                                    logging.warning("Received invalid mode '%s' for %s. Valid options: %s",
+                                                 new_mode, param_id, options)
+                                    continue
+                                logging.debug('Setting select state to: %s', new_mode)
+                                select.select_option(new_mode)
+                            else:
+                                logging.debug("No Select found for parameter ID: %s", param_id)
                                 continue
-                            logging.debug('Setting select state to: %s', new_mode)
-                            select.select_option(new_mode)
-                        else:
-                            logging.debug("No Select found for parameter ID: %s", param_id)
-                            continue
+                        if param_info.get('type') == 'number':
+                            number = self._numbers.get(param_id)
+                            if number is not None:
+                                number.set_value(float(new_mode))
 
     def _send_command_and_parse_response(self, command: str, param_id: str, *, value_type: str) -> Union[float, str, None]:
         """
