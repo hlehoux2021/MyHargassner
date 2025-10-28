@@ -686,6 +686,7 @@ class MqttActuator(ShutdownAware, ChanelReceiver, MqttBase):
                         break
                     if info.get('key') == param_id:
                         param_info = info
+                        logging.info("match key type: %s", param_info.get('type'))
                         break
                 if not param_info:
                     logging.error("Received message for unknown parameter ID: %s", param_id)
