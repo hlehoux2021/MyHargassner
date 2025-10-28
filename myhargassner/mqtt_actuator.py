@@ -679,23 +679,17 @@ class MqttActuator(ShutdownAware, ChanelReceiver, MqttBase):
                     continue
                 param_info = None
                 for info in self._boiler_config.values():
-                    logging.info("command_id: /%s/ /%s/", info.get('command_id'), param_id)
-                    logging.info("key: /%s/ /%s/", info.get('key'), param_id)
-
                     if info.get('command_id') == param_id:
                         param_info = info
-                        logging.info("match command_id type: %s", param_info.get('type'))
+                        logging.debug("match command_id type: %s", param_info.get('type'))
                         break
                     elif str(info.get('key')) == param_id:
                         param_info = info
-                        logging.info("match key type: %s", param_info.get('type'))
+                        logging.debug("match key type: %s", param_info.get('type'))
                         break
                 if not param_info:
                     logging.error("Received message for unknown parameter ID: %s", param_id)
                     continue
-                #if param_info.get('type') != 'select':
-                #    logging.error("Message received for non-select parameter ID: %s", param_id)
-                #    continue
                 parts = line_str.split('=', 1)
                 if len(parts) == 2:
                     new_mode = parts[1].strip()
