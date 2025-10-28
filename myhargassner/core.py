@@ -131,6 +131,30 @@ class ChanelReceiver(NetworkData, ABC):
         self._com = communicator
         self._appconfig = appconfig
 
+    def subscribe(self, channel: str, name: str) -> None:
+        """
+        Subscribe to a channel with a given name.
+
+        Args:
+            channel (str): The channel to subscribe to.
+            name (str): The name of the subscriber.
+        """
+        self._channel = channel
+        self._msq = self._com.subscribe(self._channel, name)
+        logging.debug("ChanelReceiver.subscribe called, subscribed to channel %s with name %s",
+                      self._channel, name)
+
+    def unsubscribe(self) -> None:
+        """
+        Unsubscribe from the current channel.
+        """
+        if self._msq:
+            self._com.unsubscribe(self._channel, self._msq)
+            logging.debug("ChanelReceiver.unsubscribe called, unsubscribed from channel %s", self._channel)
+            self._msq = None
+        else:
+            logging.debug("ChanelReceiver.unsubscribe called, but no active subscription to channel %s", self._channel)
+
     def handle(self, message_handler: Optional[Callable[[str], None]] = None) -> None:
         """
         This method handles received messages from the queue.

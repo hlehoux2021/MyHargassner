@@ -362,12 +362,13 @@ class Analyser():
             _buffer = _data
 
         if _buffer[-2:] == b'\r\n':
-            logging.debug('buffer is complete')
-            logging.info('buffer (%d bytes): %s',len(_buffer), repr(_buffer))
+            logging.debug('buffer complete (%d bytes): %s',len(_buffer), repr(_buffer))
             _mode = '' # revert to normal mode for next data
             if self.is_daq_desc(_buffer):
                 logging.info('dac desq detected (%d bytes), skipped',len(_buffer))
             else:
+                # we will push the data to mqtt_actuator for further processing
+                self._com.publish("track", _buffer.decode('latin-1'))
                 _state, _login_done, _session_end_complete = self._parse_response_buffer(
                     _state, _buffer, session_end_requested)
             _buffer = b'' #clear working buffer
