@@ -241,14 +241,16 @@ class MqttActuator(ShutdownAware, ChanelReceiver, MqttBase):
         # Extract the actual configuration data by removing the prefix if present
         if msg.startswith('BoilerConfig:'):
             msg = msg[len('BoilerConfig:'):]
-        # Convert string to bytes with latin1 encoding to match the parser's expectations
-        msg_bytes = msg.encode('latin1')
-        result = self._parse_parameter_response(msg_bytes)
-        if result:
-            self._display_parameters_config(result)
-            self._boiler_config = result
+            # Convert string to bytes with latin1 encoding to match the parser's expectations
+            msg_bytes = msg.encode('latin1')
+            result = self._parse_parameter_response(msg_bytes)
+            if result:
+                self._display_parameters_config(result)
+                self._boiler_config = result
+            else:
+                logging.warning("Failed to parse boiler configuration from message")
         else:
-            logging.warning("Failed to parse boiler configuration from message")
+            logging.debug("decode_boiler_config: silently ignore unexpected message format: %s", ms
 
 
     # wait for the boiler configuration to be discovered

@@ -136,8 +136,8 @@ class Analyser():
                 #logging.debug('empty _part')
                 pass
             else:
-                logging.warning('Analyser received unknown request %s - treating as passthrough', _part)
-                _state = 'passthrough'  # Instead of 'unknown', mark it as passthrough
+                logging.debug('Analyser received unhandled request %s - treating as passthrough', _part)
+                _state = 'passthrough'  # mark it as passthrough
         logging.debug('_state/_part: %s/%s', _state, _part)
         return _state, _session_end_requested
 

@@ -133,7 +133,8 @@ class BoilerListenerSender(ListenerSender):
         if data.startswith(b'\x00\x02\x48\x53\x56'):
             logging.info('HSV discovered')
             logging.info('HSV=%s',data[2:32].decode())
-            self._com.publish(self._channel, f"HSV££{data[2:32].decode()}")
+            # we do not publish HSV as it is not used by other components
+            #self._com.publish(self._channel, f"HSV££{data[2:32].decode()}")
             logging.info('SYS=%s',data[len(data)-16:len(data)].decode())
             self._com.publish(self._channel, f"SYS££{data[len(data)-16:len(data)].decode()}")
 
