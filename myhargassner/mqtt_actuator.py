@@ -337,10 +337,10 @@ class MqttActuator(ShutdownAware, ChanelReceiver, MqttBase):
                     return
                 option_index = options.index(payload)
                 command = f'$par set "{param_id};6;{option_index}"\r\n'
-                logging.info("Sending command: %s", command)
+                logging.debug("Sending command: %s", command)
                 new_mode = self._send_command_and_parse_response(command, param_id, value_type='select')
                 if new_mode:
-                    logging.info('Received new mode for %s: %s', param_id, new_mode)
+                    logging.debug('Received new mode for %s: %s', param_id, new_mode)
                     select = self._selects.get(param_id)
                     if select is not None:
                         # Verify the received mode is in the list of options
