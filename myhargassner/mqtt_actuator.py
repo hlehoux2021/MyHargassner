@@ -243,14 +243,16 @@ class MqttActuator(ShutdownAware, ChanelReceiver, MqttBase):
         # Extract the actual configuration data by removing the prefix if present
         if msg.startswith('BoilerConfig:'):
             msg = msg[len('BoilerConfig:'):]
-        # Convert string to bytes with latin1 encoding to match the parser's expectations
-        msg_bytes = msg.encode('latin1')
-        result = self._parse_parameter_response(msg_bytes)
-        if result:
-            self._display_parameters_config(result)
-            self._boiler_config = result
+            # Convert string to bytes with latin1 encoding to match the parser's expectations
+            msg_bytes = msg.encode('latin1')
+            result = self._parse_parameter_response(msg_bytes)
+            if result:
+                self._display_parameters_config(result)
+                self._boiler_config = result
+            else:
+                logging.warning("Failed to parse boiler configuration from message")
         else:
-            logging.warning("Failed to parse boiler configuration from message")
+            logging.debug("decode_boiler_config: silently ignore unexpected message format: %s", msg)
 
 
     # wait for the boiler configuration to be discovered
@@ -335,10 +337,10 @@ class MqttActuator(ShutdownAware, ChanelReceiver, MqttBase):
                     return
                 option_index = options.index(payload)
                 command = f'$par set "{param_id};6;{option_index}"\r\n'
-                logging.info("Sending command: %s", command)
+                logging.debug("Sending command: %s", command)
                 new_mode = self._send_command_and_parse_response(command, param_id, value_type='select')
                 if new_mode:
-                    logging.info('Received new mode for %s: %s', param_id, new_mode)
+                    logging.debug('Received new mode for %s: %s', param_id, new_mode)
                     select = self._selects.get(param_id)
                     if select is not None:
                         # Verify the received mode is in the list of options
@@ -679,12 +681,14 @@ class MqttActuator(ShutdownAware, ChanelReceiver, MqttBase):
                 for info in self._boiler_config.values():
                     if info.get('command_id') == param_id:
                         param_info = info
+                        logging.debug("match command_id type: %s", param_info.get('type'))
+                        break
+                    elif str(info.get('key')) == param_id:
+                        param_info = info
+                        logging.debug("match key type: %s", param_info.get('type'))
                         break
                 if not param_info:
                     logging.error("Received message for unknown parameter ID: %s", param_id)
-                    continue
-                if param_info.get('type') != 'select':
-                    logging.error("Message received for non-select parameter ID: %s", param_id)
                     continue
                 parts = line_str.split('=', 1)
                 if len(parts) == 2:
@@ -692,18 +696,23 @@ class MqttActuator(ShutdownAware, ChanelReceiver, MqttBase):
                     logging.debug("Extracted value: %s", new_mode)
                     if new_mode:
                         logging.debug('Received message new mode for %s: %s', param_id, new_mode)
-                        select = self._selects.get(param_id)
-                        if select is not None:
-                            options = param_info.get('options', [])
-                            if new_mode not in options:
-                                logging.warning("Received invalid mode '%s' for %s. Valid options: %s",
-                                             new_mode, param_id, options)
+                        if param_info.get('type') == 'select':
+                            select = self._selects.get(param_id)
+                            if select is not None:
+                                options = param_info.get('options', [])
+                                if new_mode not in options:
+                                    logging.warning("Received invalid mode '%s' for %s. Valid options: %s",
+                                                 new_mode, param_id, options)
+                                    continue
+                                logging.debug('Setting select state to: %s', new_mode)
+                                select.select_option(new_mode)
+                            else:
+                                logging.debug("No Select found for parameter ID: %s", param_id)
                                 continue
-                            logging.debug('Setting select state to: %s', new_mode)
-                            select.select_option(new_mode)
-                        else:
-                            logging.debug("No Select found for parameter ID: %s", param_id)
-                            continue
+                        if param_info.get('type') == 'number':
+                            number = self._numbers.get(param_id)
+                            if number is not None:
+                                number.set_value(float(new_mode))
 
     def _send_command_and_parse_response(self, command: str, param_id: str, *, value_type: str) -> Union[float, str, None]:
         """
@@ -715,47 +724,78 @@ class MqttActuator(ShutdownAware, ChanelReceiver, MqttBase):
         Returns:
             The new value/mode if found, else None
         """
-        self._get_client().send(command.encode('latin1'))
         buffer = b''
         found_ack = False
         max_tries = 20
         tries = 0
-        ack_token = '$ack' # if value_type == 'select' else '$a'
+        ack_token = '$ack'
         result_float: float | None = None
         result_str: str | None = None
+        command_sent = False
+        command_bytes = command.encode('latin1')
+        exit_reason = 'success'  # Track why we exited: 'success', 'max_tries', 'reconnect_failed', 'unexpected_error'
+
         while not found_ack and tries < max_tries:
             tries += 1
+
+            # Send command if not yet sent or after reconnection
+            if not command_sent:
+                try:
+                    self._get_client().send(command_bytes)
+                    command_sent = True
+                    logging.debug('Command sent successfully (attempt %d/%d)', tries, max_tries)
+                except socket.error as e:
+                    logging.error('Socket error sending command: %s (attempt %d/%d)', str(e), tries, max_tries)
+                    if self._get_client().reconnect():
+                        continue  # Retry sending after reconnection
+                    else:
+                        exit_reason = 'reconnect_failed'
+                        break  # Failed to reconnect
+                except Exception as e:
+                    logging.error('Unexpected error sending command: %s (attempt %d/%d)', str(e), tries, max_tries)
+                    exit_reason = 'unexpected_error'
+                    break
+
+            # Receive response
             try:
                 chunk = self._get_client().recv()
+
+                # CRITICAL: Empty bytes means connection closed by remote end
+                if not chunk:
+                    logging.warning('Connection closed by boiler (recv returned empty) - attempt %d/%d', tries, max_tries)
+                    command_sent = False  # Need to resend after reconnect
+                    if self._get_client().reconnect():
+                        continue  # Retry send/recv after reconnection
+                    else:
+                        exit_reason = 'reconnect_failed'
+                        break  # Failed to reconnect
+
             except socket.timeout:
-                logging.warning('No data received from boiler (try %d/%d)', tries, max_tries)
-                # Try to reconnect if connection was closed
-                try:
-                    self._get_client().connect()
-                    # Resend the command after reconnecting
-                    self._get_client().send(command.encode('latin1'))
-                except Exception as reconnect_error:
-                    logging.error('Failed to reconnect: %s', str(reconnect_error))
-                    break
+                logging.warning('Socket timeout waiting for boiler response (try %d/%d)', tries, max_tries)
                 continue
+
             except socket.error as e:
-                logging.error('Socket error during recv: %s', str(e))
-                # Try to reconnect on socket errors
-                try:
-                    self._get_client().connect()
-                    # Resend the command after reconnecting
-                    self._get_client().send(command.encode('latin1'))
-                except Exception as reconnect_error:
-                    logging.error('Failed to reconnect: %s', str(reconnect_error))
-                    break
-                continue
-            if not chunk:
-                logging.warning('No data received from boiler (try %d/%d)', tries, max_tries)
-                continue
-            logging.debug('Received chunk: %s', chunk)
+                logging.error('Socket error during recv: %s (try %d/%d)', str(e), tries, max_tries)
+                command_sent = False  # Need to resend after reconnect
+                if self._get_client().reconnect():
+                    continue  # Retry send/recv after reconnection
+                else:
+                    exit_reason = 'reconnect_failed'
+                    break  # Failed to reconnect
+
+            except Exception as e:
+                logging.error('Unexpected error during recv: %s (try %d/%d)', str(e), tries, max_tries)
+                exit_reason = 'unexpected_error'
+                break
+
+            # If we got data, process it
+            logging.debug('Received chunk (%d bytes): %s', len(chunk), chunk)
             buffer += chunk
+
             # Split buffer into lines
             while b'\r\n' in buffer:
+                # Extract one line at a time from the buffer
+                # buffer: Gets everything after the first \r\n (the remaining unprocessed data)
                 line, buffer = buffer.split(b'\r\n', 1)
                 line_str = line.decode('latin1', errors='replace').strip()
                 if not line_str:
@@ -786,8 +826,18 @@ class MqttActuator(ShutdownAware, ChanelReceiver, MqttBase):
                             logging.info('Extracted new value for %s: %s', param_id, parts[1].strip())
                         except Exception:
                             pass
-        if not found_ack and tries >= max_tries:
-            logging.warning('Exiting response loop after %d tries without %s or error', max_tries, ack_token)
+
+        # Log exit reason
+        if not found_ack:
+            if tries >= max_tries:
+                logging.warning('Exiting response loop: max tries (%d) reached without receiving %s', max_tries, ack_token)
+            elif exit_reason == 'reconnect_failed':
+                logging.error('Exiting response loop: failed to reconnect after connection error')
+            elif exit_reason == 'unexpected_error':
+                logging.error('Exiting response loop: unexpected error occurred')
+        else:
+            logging.debug('Response loop completed successfully with %s', ack_token)
+
         if value_type == 'number':
             return result_float
         else:

@@ -266,6 +266,7 @@ class TelnetProxy(ShutdownAware, ChanelReceiver, MqttBase):
     _service_lock: Lock
     _session_end_requested: bool = False  # Flag for $igw clear detection
     _discovery_complete: bool = False  # Flag to track discovery completion
+    _telnet_session_active: bool = False  # Flag to track if telnet session is active
     # Note: _shutdown_requested is inherited from ShutdownAware mixin
 
     def __init__(self, appconfig: AppConfig, communicator: PubSub, port, lock: Lock):
@@ -516,7 +517,8 @@ class TelnetProxy(ShutdownAware, ChanelReceiver, MqttBase):
                 msg = message['data']
 
                 # Check for new "HargaWebApp" broadcast during active session
-                if 'HargaWebApp' in msg:
+                # only return True if telnet session is active
+                if 'HargaWebApp' in msg and self._telnet_session_active:
                     logging.warning('Received new HargaWebApp during active session - IGW reconnected')
                     return True
 
@@ -557,10 +559,11 @@ class TelnetProxy(ShutdownAware, ChanelReceiver, MqttBase):
 
         logging.debug('Active sockets: %d', len(self._active_sockets))
 
+        _telnet_session_active = False
         while self._active_sockets and not self._shutdown_requested:  # Continue as long as we have active sockets
             # TRIGGER 3: Periodically check for reconnection signals (new HargaWebApp)
             if self.monitor_for_reconnection():
-                self._cleanup_and_exit('new_HargaWebApp_during_session')
+                self._cleanup_and_exit('new_HargaWebApp_during_active_session')
                 return
 
             if self._msq:
@@ -597,6 +600,9 @@ class TelnetProxy(ShutdownAware, ChanelReceiver, MqttBase):
                         # ask the Analyser() to analyse the IGW request
                         _state, _session_end_requested = self._analyser.parse_request(_data)
                         logging.debug('_state-->%s', _state)
+                        # if _state is "$login token" then telnet session with IGW is active.
+                        if _state == "$login token":
+                            self._telnet_session_active = True
 
                         # TRIGGER 1: Update session end flag if $igw clear detected by analyser
                         if _session_end_requested:
@@ -682,8 +688,15 @@ class TelnetProxy(ShutdownAware, ChanelReceiver, MqttBase):
                             elif _caller == 2:
                                 logging.debug('telnet sending response to service2')
                                 _sent = self._service2.send(_data)
+                                #todo experimental, send also to the IGW to inform about changes
+                                _sent = self._service1.send(_data)
                             else:
-                                logging.warning('Beware received a response with not registered caller %d', _caller)
+                                logging.warning('Beware received a buffer with not registered caller %d', _caller)
+                                if self._service1.socket() is not None:
+                                    logging.warning('telnet sending generic buffer to service1')
+                                    _sent = self._service1.send(_data)
+                                else:
+                                    logging.warning('No service1 socket registered yet to send generic buffer')
 #                        if _sent != len(_data):
 #                            logging.error('telnet send error: not all data sent %d/%d', _sent, len(_data))
                         logging.debug('telnet sent back response to client')

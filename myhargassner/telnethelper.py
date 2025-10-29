@@ -142,6 +142,24 @@ class TelnetClient:
         else:
             logging.warning('telnet close called but not connected')
 
+    def reconnect(self) -> bool:
+        """
+        Reconnect to the boiler by closing and reopening the connection.
+
+        Returns:
+            bool: True if reconnection succeeded, False otherwise
+        """
+        try:
+            logging.info('Attempting to reconnect')
+            self.close()
+            time.sleep(0.5)
+            self.connect()
+            logging.info('Reconnected successfully')
+            return True
+        except Exception as reconnect_error:
+            logging.error('Failed to reconnect: %s', str(reconnect_error))
+            return False
+
     def send(self, data: bytes) -> None:
         """
         Send data over the telnet connection.

@@ -113,7 +113,8 @@ class NetworkData():
             self.gwt_port = int(msg.split(':')[1])
             logging.debug('decode_message: gwt_port=%d', self.gwt_port)
         else:
-            logging.warning('decode_message: unknown message %s', msg)
+            # silently ignore other messages
+            logging.debug('decode_message: unknown message %s', msg)
 
 class ChanelReceiver(NetworkData, ABC):
     """
