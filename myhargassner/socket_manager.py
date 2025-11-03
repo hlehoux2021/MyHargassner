@@ -145,7 +145,7 @@ class SocketManager:
             if self.is_broadcast:
                 self._socket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
                 logging.debug('SocketManager: Set SO_BROADCAST')
-            timeout = self.appconfig.socket_timeout()
+            timeout = self.appconfig.socket_timeout
             self._socket.settimeout(timeout)
             logging.debug('SocketManager: Set socket timeout to %s', timeout)
             if platform.system() == 'Linux' and not self.is_valid_ip(self.src_iface):
@@ -331,7 +331,7 @@ class SocketManager:
         try:
             #logging.debug('SocketManager: Waiting to receive data (buffer size %d)', buffer_size)
             result = self._socket.recvfrom(
-                self.appconfig.buff_size()
+                self.appconfig.buff_size
             )
             logging.debug('SocketManager: Received %d bytes from %s:%d', len(result[0]), result[1][0], result[1][1])
             return result

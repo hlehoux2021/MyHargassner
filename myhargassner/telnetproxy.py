@@ -25,6 +25,8 @@ from myhargassner.analyser import Analyser
 from myhargassner.mqtt_actuator import ThreadedMqttActuator, MqttBase
 from myhargassner.socket_manager import SocketManager
 
+#pylint: disable=broad-exception-caught
+
 # $login token
 #   $00A000A0
 # $login key xxxxx
@@ -280,8 +282,8 @@ class TelnetProxy(ShutdownAware, ChanelReceiver, MqttBase):
         self.dst_iface = self._appconfig.bl_iface()
         self.port = port
         self._analyser = Analyser(communicator)
-        self._service1 = TelnetService(self.src_iface, self._appconfig.buff_size())
-        self._service2 = TelnetService(self.src_iface, self._appconfig.buff_size())
+        self._service1 = TelnetService(self.src_iface, self._appconfig.buff_size)
+        self._service2 = TelnetService(self.src_iface, self._appconfig.buff_size)
         self._service_lock = lock
         self._active_sockets = set()
         self._session_end_requested = False
@@ -409,7 +411,7 @@ class TelnetProxy(ShutdownAware, ChanelReceiver, MqttBase):
         """
         logging.debug('TelnetProxy connecting to boiler bl_addr=%s  dst_iface=%s',
                       repr(self.bl_addr), repr(self.dst_iface))
-        self._client= TelnetClient(self.bl_addr, self.dst_iface, buffer_size=self._appconfig.buff_size())
+        self._client= TelnetClient(self.bl_addr, self.dst_iface, buffer_size=self._appconfig.buff_size)
         self._client.connect()
 
     def get_boiler_config(self) -> None:
@@ -427,7 +429,7 @@ class TelnetProxy(ShutdownAware, ChanelReceiver, MqttBase):
             b'$par get 4\r\n', # parameter 4 : Temp. ambiante jour
             b'$par get 5\r\n' # parameter 5 : Temp. ambiante de réduit
         ]
-        if not self._client.connected():
+        if not self._client.connected:
             logging.error('Client not connected')
             return
         logging.debug('telnet getting boiler config from %s', repr(self.bl_addr))
@@ -584,7 +586,7 @@ class TelnetProxy(ShutdownAware, ChanelReceiver, MqttBase):
                     # Only process service1 if lock is not held (by actuator sending commands to service2)
                     if self._service_lock.locked():
                         logging.debug('Service1 socket is paused/locked, skipping processing')
-                        time.sleep(self._appconfig.service_lock_delay())
+                        time.sleep(self._appconfig.service_lock_delay)
                         continue
                     # so we received a request
                     try:

@@ -31,7 +31,8 @@ class HargConfig():
 #        ]
         self.wanted= [
             'MSG', 'TOKEN', 'KEY', 'UPTIME', 'SYS', 'BOOT', 'KT', 'IGW', 'SWV', 'FWV', 'SNIO', 'SNBCE', 'RTC',
-	    'c0', 'c3', 'c5', 'c6', 'c7', 'c8', 'c9', 'c10', 'c11', 'c21', 'c22', 'c23', 'c24', 'c27', 'c95', 'c96', 'c99', 'c115','c134', 'c138', 'c180'
+	    'c0', 'c3', 'c5', 'c6', 'c7', 'c8', 'c9', 'c10', 'c11', 'c21', 'c22', 'c23', 'c24', 'c27',
+            'c95', 'c96', 'c99', 'c115','c134', 'c138', 'c180'
         ]
 
         # explaining the values

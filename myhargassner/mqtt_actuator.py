@@ -23,25 +23,14 @@ from myhargassner.telnethelper import TelnetClient
 from myhargassner.core import ChanelReceiver, ShutdownAware
 from myhargassner.mqtt_base import MqttBase
 
+# pylint: disable=logging-fstring-interpolation
+# pylint: disable=broad-exception-caught
 
 class MqttActuator(ShutdownAware, ChanelReceiver, MqttBase):
     """
     MqttActuator is a class for controlling devices via MQTT.
     It extends MqttBase to provide functionality for sending commands to devices.
     """
-
-    _selects: Dict[str, Select] = {}  # Stores Select entities by parameter name
-    _numbers: Dict[str, Number] = {}  # Stores Number entities by parameter name
-
-    _main_client: Optional[Client] = None
-    _boiler_config: Optional[Dict[str, dict]] = None
-    _client: Optional[TelnetClient] = None
-    src_iface: bytes
-    _service_lock: threading.Lock
-
-    _trk: Union[ChanelQueue, ChanelPriorityQueue, None] = None  # Message queue for tracking messages
-#    _channel= "track" # Channel to receive tracking messages from the boiler
-
     def __init__(self, appconfig: AppConfig, communicator: PubSub, device_info: DeviceInfo, src_iface: bytes, lock: threading.Lock) -> None: # pylint: disable=line-too-long
         """
         Initialize the MqttActuator with communication and device settings.
@@ -54,6 +43,17 @@ class MqttActuator(ShutdownAware, ChanelReceiver, MqttBase):
             This initializes both the ChanelReceiver and MqttBase parent classes,
             sets up device information, and creates a telnet client connection.
         """
+        self._selects: Dict[str, Select] = {}  # Stores Select entities by parameter name
+        self._numbers: Dict[str, Number] = {}  # Stores Number entities by parameter name
+
+        self._main_client: Optional[Client] = None
+        self._boiler_config: Dict[str, dict] = {}
+        self._client: Optional[TelnetClient] = None
+        self.src_iface: bytes
+        self._service_lock: threading.Lock
+
+        self._trk: Union[ChanelQueue, ChanelPriorityQueue, None] = None  # Message queue for tracking messages
+
         logging.debug("MqttActuator instantiated")
         logging.debug("MqttActuator.__init__ called")
         # Explicit initialization of all base classes
@@ -63,7 +63,7 @@ class MqttActuator(ShutdownAware, ChanelReceiver, MqttBase):
         self.src_iface = src_iface
         self._device_info = device_info
         self._service_lock = lock
-        self._client = TelnetClient(self.src_iface, b'', buffer_size=self._appconfig.buff_size(), port=4000)
+        self._client = TelnetClient(self.src_iface, b'', buffer_size=self._appconfig.buff_size, port=4000)
 
     def _parse_parameter_response(self, data: bytes) -> dict[str, dict]:
         """Parse parameter responses from the boiler, including numeric and select types.
@@ -151,7 +151,7 @@ class MqttActuator(ShutdownAware, ChanelReceiver, MqttBase):
                         raw_current_index = int(items[2]) if len(items) > 2 else 0
                         default_index = int(items[4]) if len(items) > 4 else 0  # Default option index
                         key = items[8]
-                        logging.debug("Select parameter: key=%s,max_index=%d, num_items=%d, current_index=%d, default_index=%d",
+                        logging.debug("Select: key=%s,max_index=%d, num_items=%d, current_index=%d, default_index=%d",
                                     key, max_index, num_items, raw_current_index, default_index)
                         # Get all available values (num_items is max_index + 1)
                         all_values = []
@@ -338,7 +338,7 @@ class MqttActuator(ShutdownAware, ChanelReceiver, MqttBase):
                 option_index = options.index(payload)
                 command = f'$par set "{param_id};6;{option_index}"\r\n'
                 logging.debug("Sending command: %s", command)
-                new_mode = self._send_command_and_parse_response(command, param_id, value_type='select')
+                new_mode = self._send_command_and_parse(command, param_id, value_type='select')
                 if new_mode:
                     logging.debug('Received new mode for %s: %s', param_id, new_mode)
                     select = self._selects.get(param_id)
@@ -414,7 +414,7 @@ class MqttActuator(ShutdownAware, ChanelReceiver, MqttBase):
                     except Exception as e2:
                         logging.warning("Failed to set fallback value for select %s: %s", param_name, e2)
 
-    def callback_number(self, client: Client, data: str, message: MQTTMessage) -> None: #pylint disable=unused-argument
+    def callback_number(self, _: Client, data: str, message: MQTTMessage) -> None: #pylint disable=unused-argument
         """
         Handle MQTT number state change messages.
         """
@@ -445,7 +445,7 @@ class MqttActuator(ShutdownAware, ChanelReceiver, MqttBase):
                     return
                 command = f'$par set "{param_id};3;{value}"\r\n'
                 logging.info("Sending command: %s", command)
-                new_value = self._send_command_and_parse_response(command, param_id, value_type='number')
+                new_value = self._send_command_and_parse(command, param_id, value_type='number')
                 if new_value is not None:
                     logging.info('Final new value for param %s (id: %s): %s', data, param_id, new_value)
                     number = self._numbers.get(param_id)
@@ -614,9 +614,13 @@ class MqttActuator(ShutdownAware, ChanelReceiver, MqttBase):
                     logging.debug('MqttActuator: waiting for messages')
                     #logging.debug('MQTT ChannelQueue size: %d', self._msq.qsize())
                     # Use a non-blocking iterator with timeout for inter-component communication
-                    iterator = self._trk.listen(timeout=self._appconfig.queue_timeout())
+                    iterator = None
+                    _message = None
+                    if self._trk:
+                        iterator = self._trk.listen(timeout=self._appconfig.queue_timeout())
                     try:
-                        _message = next(iterator)
+                        if iterator:
+                            _message = next(iterator)
                     except StopIteration:
                         # No message received within the timeout
                         continue
@@ -683,7 +687,7 @@ class MqttActuator(ShutdownAware, ChanelReceiver, MqttBase):
                         param_info = info
                         logging.debug("match command_id type: %s", param_info.get('type'))
                         break
-                    elif str(info.get('key')) == param_id:
+                    if str(info.get('key')) == param_id:
                         param_info = info
                         logging.debug("match key type: %s", param_info.get('type'))
                         break
@@ -714,7 +718,7 @@ class MqttActuator(ShutdownAware, ChanelReceiver, MqttBase):
                             if number is not None:
                                 number.set_value(float(new_mode))
 
-    def _send_command_and_parse_response(self, command: str, param_id: str, *, value_type: str) -> Union[float, str, None]:
+    def _send_command_and_parse(self, command: str, param_id: str, *, value_type: str) -> Union[float, str, None]:
         """
         Send a command to the boiler and parse the response for select or number.
         Args:
@@ -748,9 +752,9 @@ class MqttActuator(ShutdownAware, ChanelReceiver, MqttBase):
                     logging.error('Socket error sending command: %s (attempt %d/%d)', str(e), tries, max_tries)
                     if self._get_client().reconnect():
                         continue  # Retry sending after reconnection
-                    else:
-                        exit_reason = 'reconnect_failed'
-                        break  # Failed to reconnect
+                    #else
+                    exit_reason = 'reconnect_failed'
+                    break  # Failed to reconnect
                 except Exception as e:
                     logging.error('Unexpected error sending command: %s (attempt %d/%d)', str(e), tries, max_tries)
                     exit_reason = 'unexpected_error'
@@ -762,13 +766,12 @@ class MqttActuator(ShutdownAware, ChanelReceiver, MqttBase):
 
                 # CRITICAL: Empty bytes means connection closed by remote end
                 if not chunk:
-                    logging.warning('Connection closed by boiler (recv returned empty) - attempt %d/%d', tries, max_tries)
+                    logging.warning('Connection closed (recv returned empty) - attempt %d/%d', tries, max_tries)
                     command_sent = False  # Need to resend after reconnect
                     if self._get_client().reconnect():
                         continue  # Retry send/recv after reconnection
-                    else:
-                        exit_reason = 'reconnect_failed'
-                        break  # Failed to reconnect
+                    exit_reason = 'reconnect_failed'
+                    break  # Failed to reconnect
 
             except socket.timeout:
                 logging.warning('Socket timeout waiting for boiler response (try %d/%d)', tries, max_tries)
@@ -779,9 +782,8 @@ class MqttActuator(ShutdownAware, ChanelReceiver, MqttBase):
                 command_sent = False  # Need to resend after reconnect
                 if self._get_client().reconnect():
                     continue  # Retry send/recv after reconnection
-                else:
-                    exit_reason = 'reconnect_failed'
-                    break  # Failed to reconnect
+                exit_reason = 'reconnect_failed'
+                break  # Failed to reconnect
 
             except Exception as e:
                 logging.error('Unexpected error during recv: %s (try %d/%d)', str(e), tries, max_tries)
@@ -830,7 +832,7 @@ class MqttActuator(ShutdownAware, ChanelReceiver, MqttBase):
         # Log exit reason
         if not found_ack:
             if tries >= max_tries:
-                logging.warning('Exiting response loop: max tries (%d) reached without receiving %s', max_tries, ack_token)
+                logging.warning('Exiting response loop: max tries (%d) reached', max_tries)
             elif exit_reason == 'reconnect_failed':
                 logging.error('Exiting response loop: failed to reconnect after connection error')
             elif exit_reason == 'unexpected_error':
@@ -840,8 +842,7 @@ class MqttActuator(ShutdownAware, ChanelReceiver, MqttBase):
 
         if value_type == 'number':
             return result_float
-        else:
-            return result_str
+        return result_str
 
 T = TypeVar("T", bound=MqttActuator)
 

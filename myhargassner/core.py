@@ -18,7 +18,8 @@ from myhargassner.pubsub.pubsub import PubSub, ChanelQueue, ChanelPriorityQueue
 
 # Project imports
 from myhargassner.appconfig import AppConfig
-from myhargassner.socket_manager import SocketManager, HargSocketError, SocketBindError, InterfaceError, SocketTimeoutError
+from myhargassner.socket_manager import SocketManager
+from myhargassner.socket_manager import HargSocketError, SocketBindError, InterfaceError, SocketTimeoutError
 
 
 class ShutdownAware:
@@ -51,6 +52,13 @@ class ShutdownAware:
         Uses explicit initialization pattern - no super() call.
         """
         self._shutdown_requested = False
+
+    @property
+    def is_shutdown_requested(self) -> bool:
+        """
+        Check if shutdown has been requested.
+        """
+        return self._shutdown_requested
 
     def request_shutdown(self) -> None:
         """

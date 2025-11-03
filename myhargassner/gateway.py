@@ -6,7 +6,6 @@ and forwards messages from the IGW to the boiler.
 
 # Standard library imports
 import logging
-from queue import Queue
 from typing import Annotated, Tuple
 
 # Third party imports
@@ -23,6 +22,8 @@ from myhargassner.socket_manager import (
     InterfaceError
 )
 
+# pylint: disable=logging-fstring-interpolation
+
 class GatewayListenerSender(ListenerSender):
     """
     This class extends ListenerSender class to implement the gateway listener.
@@ -30,6 +31,14 @@ class GatewayListenerSender(ListenerSender):
     udp_port: Annotated[int, annotated_types.Gt(0)]
 
     def __init__(self, appconfig: AppConfig, communicator: PubSub, delta: int = 0):
+        """
+        Initialize the gateway listener.
+
+        Args:
+            appconfig (AppConfig): Application configuration
+            communicator (PubSub): Communication instance
+            delta (int, optional): Port offset for same-machine scenarios. Defaults to 0.
+        """
         # initiate a ListenerSender from gw_iface to bl_iface
         super().__init__(appconfig, communicator, appconfig.gw_iface(), appconfig.bl_iface())
         # Add any additional initialization logic here
@@ -63,14 +72,6 @@ class GatewayListenerSender(ListenerSender):
         """
         logging.debug('Getting gateway resend port: %d delta:%d', self.gw_port, -self.delta)
         return self.gw_port, -self.delta
-
-
-
-    def queue(self) -> Queue:
-        """
-        This method returns the queue to receive data from.
-        """
-        return self.queue()
 
     def send(self, data: bytes) -> None:
         """

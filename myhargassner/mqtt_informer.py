@@ -7,7 +7,7 @@ import logging
 import threading
 import traceback
 from queue import Empty
-from typing import Union
+from typing import Union, Optional
 
 # Third party imports
 from ha_mqtt_discoverable import Settings, DeviceInfo # type: ignore
@@ -17,7 +17,7 @@ from myhargassner.pubsub.pubsub import PubSub, ChanelQueue, ChanelPriorityQueue
 
 # Project imports
 from myhargassner.appconfig import AppConfig
-import myhargassner.hargconfig as hargconfig
+from myhargassner import hargconfig
 from myhargassner.mqtt_base import MqttBase
 from myhargassner.core import ShutdownAware
 
@@ -70,9 +70,6 @@ class MqttInformer(ShutdownAware, MqttBase):
     Name: will be BL_ADDR ip adress of the boiler
 
     """
-    _msq: Union[ChanelQueue, ChanelPriorityQueue, None] = None  # Message queue for receiving messages
-    _com: PubSub
-    _channel= "info" # Channel to receive info about the boiler
 
     _dict: dict
     _sensors: dict
@@ -83,10 +80,15 @@ class MqttInformer(ShutdownAware, MqttBase):
     _msg: Sensor # base sensor to display messages.
 
     def __init__(self, appconfig: AppConfig, communicator: PubSub):
+        """ Constructor of the MqttInformer class """
         # Explicit initialization of all base classes
+        self._com: PubSub
+        self._channel= "info" # Channel to receive info about the boiler
+
         ShutdownAware.__init__(self)
         MqttBase.__init__(self, appconfig)
         self._com = communicator
+        self._msq: Optional[Union[ChanelPriorityQueue,ChanelQueue]] = None # Message queue for receiving messages
         self._dict = {}
         self._sensors= {}
 
@@ -161,7 +163,7 @@ class MqttInformer(ShutdownAware, MqttBase):
 
         self._msq = self._com.subscribe(self._channel, self.name())
 
-        while not self._shutdown_requested:
+        while self._msq and not self._shutdown_requested:
             try:
                 logging.debug('MqttInformer: waiting for messages')
                 #logging.debug('MQTT ChannelQueue size: %d', self._msq.qsize())

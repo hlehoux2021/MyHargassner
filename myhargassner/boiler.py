@@ -161,7 +161,7 @@ class ThreadedBoilerListenerSender(ThreadedListenerSender):
         """
         logging.info('BoilerListenerSender started')
         self._bls.discover()
-        if not self._bls._shutdown_requested:
+        if not self._bls.is_shutdown_requested:
             self._bls.bind()
             self._bls.loop()
         logging.info('BoilerListenerSender exiting')

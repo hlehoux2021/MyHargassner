@@ -30,12 +30,14 @@ from myhargassner.boiler import ThreadedBoilerListenerSender
 from myhargassner.gateway import ThreadedGatewayListenerSender
 from myhargassner.mqtt_informer import ThreadedMqttInformer
 
+#pylint: disable=broad-exception-caught
+
 #----------------------------------------------------------#
 
 app_config = AppConfig()
 
 # Check for required password
-if not app_config.mqtt_password():
+if not app_config.mqtt_password:
     print("ERROR: MQTT password must be set in the configuration file or via command-line argument.")
     sys.exit(1)
 
@@ -116,7 +118,6 @@ def wait_for_restart_trigger(pub: PubSub) -> str:
 def main():
     """Main entry point with restart orchestration."""
     restart_count = 0
-    max_restarts = 10000  # Safety limit to prevent infinite restart loops
 
     # optional PubSubListener for testing messages
     # pln = PubSubListener('chosen_channel_to_spy', 'PubSubListener', session_pub)

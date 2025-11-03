@@ -74,6 +74,7 @@ class TelnetClient:
                 return addr.address
         raise RuntimeError(f"No IPv4 address found for interface {iface}.")
 
+    @property
     def connected(self) -> bool:
         """
         Check if the telnet connection is active.

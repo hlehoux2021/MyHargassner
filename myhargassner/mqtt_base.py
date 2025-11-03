@@ -10,7 +10,7 @@ from ha_mqtt_discoverable import Settings, DeviceInfo  # type: ignore
 
 # Project imports
 from myhargassner.appconfig import AppConfig
-import myhargassner.hargconfig as hargconfig
+from myhargassner import hargconfig
 
 class MqttBase():
     """
@@ -31,9 +31,9 @@ class MqttBase():
         self._appconfig = appconfig
 
         self.mqtt_settings = Settings.MQTT(
-            host=self._appconfig.mqtt_host(),
-            username=self._appconfig.mqtt_username(),
-            password=self._appconfig.mqtt_password())
+            host=self._appconfig.mqtt_host,
+            username=self._appconfig.mqtt_username,
+            password=self._appconfig.mqtt_password)
 
     @staticmethod
     def attach_paho_logger(sensor):
@@ -67,7 +67,7 @@ class MqttBase():
         Args:
             _name (str): The name to use for the device.
         """
-        lstr = list()
+        lstr = []
         lstr.append(_name)
         self._device_info = DeviceInfo(
                             name=_name,

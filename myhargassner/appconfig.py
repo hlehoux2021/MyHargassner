@@ -42,7 +42,7 @@ class AppConfig:
             },
             'timeouts': {
                 # Shutdown responsiveness timeouts (all in seconds)
-                'loop_timeout': '1.0',        # Main loop timeout (select/MQTT loop) - determines shutdown responsiveness
+                'loop_timeout': '1.0',        # Main loop timeout (select/MQTT) - determines shutdown responsiveness
                 'queue_timeout': '3.0',       # Message queue timeout for inter-component communication
                 'retry_delay': '5.0',         # Delay before retrying failed operations
                 'service_lock_delay': '1.0'   # Delay when service is locked/paused
@@ -88,24 +88,22 @@ class AppConfig:
         Configure the Python logging system using the log path and log level from the configuration.
         Uses a standard log message format and supports all standard log levels.
         """
-        LOG_LEVELS = {
+        log_levels = {
             'debug': logging.DEBUG,
             'info': logging.INFO,
             'warning': logging.WARNING,
             'error': logging.ERROR,
             'critical': logging.CRITICAL
         }
-        log_level_str = self.log_level().lower()
-        log_level = LOG_LEVELS.get(log_level_str, logging.INFO)
+        log_level_str = self.log_level.lower()
+        log_level = log_levels.get(log_level_str, logging.INFO)
         logging.basicConfig(
-            filename=self.log_path(),
+            filename=self.log_path,
             level=log_level,
             format='%(asctime)s - %(levelname)s - %(threadName)s - %(message)s',
             filemode='a',
             force=True
         )
-
-
 
     @property
     def network(self):
@@ -155,54 +153,63 @@ class AppConfig:
         """
         return int(self.network.get('udp_port', 35601))
 
+    @property
     def socket_timeout(self):
         """
         Return the socket timeout value as a float (seconds).
         """
         return float(self.network.get('socket_timeout', 5))
 
+    @property
     def buff_size(self):
         """
         Return the buffer size for network data as an integer (bytes).
         """
         return int(self.network.get('buff_size', 4096))
 
+    @property
     def mqtt_host(self):
         """
         Return the MQTT broker host as a string.
         """
         return self.mqtt.get('host', 'localhost')
 
+    @property
     def mqtt_port(self):
         """
         Return the MQTT broker port as an integer.
         """
         return int(self.mqtt.get('port', 1883))
 
+    @property
     def mqtt_username(self):
         """
         Return the MQTT username as a string.
         """
         return self.mqtt.get('username', '')
 
+    @property
     def mqtt_password(self):
         """
         Return the MQTT password as a string.
         """
         return self.mqtt.get('password', '')
 
+    @property
     def mqtt_topic_prefix(self):
         """
         Return the MQTT topic prefix as a string.
         """
         return self.mqtt.get('topic_prefix', 'myhargassner')
 
+    @property
     def log_path(self):
         """
         Return the log file path as a string.
         """
         return self.logging.get('log_path', './trace.log')
 
+    @property
     def log_level(self):
         """
         Return the log level as an uppercase string (e.g., 'INFO').
@@ -228,6 +235,7 @@ class AppConfig:
         """
         return float(self.timeouts.get('queue_timeout', 3.0))
 
+    @property
     def retry_delay(self):
         """
         Return the delay before retrying failed operations as a float (seconds).
@@ -235,6 +243,7 @@ class AppConfig:
         """
         return float(self.timeouts.get('retry_delay', 5.0))
 
+    @property
     def service_lock_delay(self):
         """
         Return the delay when service is locked/paused as a float (seconds).

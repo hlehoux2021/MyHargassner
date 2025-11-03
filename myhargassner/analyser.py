@@ -28,7 +28,7 @@ class Analyser():
     def __init__(self, communicator: PubSub) -> None:
         self._com = communicator
 
-        self._values= dict()
+        self._values= {}
         self.config= hargconfig.HargConfig()
 
     def push(self, key: str, subpart: str):
