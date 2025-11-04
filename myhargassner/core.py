@@ -21,6 +21,7 @@ from myhargassner.appconfig import AppConfig
 from myhargassner.socket_manager import SocketManager
 from myhargassner.socket_manager import HargSocketError, SocketBindError, InterfaceError, SocketTimeoutError
 
+#pylint: disable=unnecessary-pass
 
 class ShutdownAware:
     """
