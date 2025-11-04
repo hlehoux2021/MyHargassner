@@ -29,44 +29,23 @@ solved by PR https://github.com/hlehoux2021/MyHargassner/pull/3
 
 ## Setup
 
-### Dependencies
+## Installation
 
-MyHargassner requires Python 3.8 or newer and has the following key dependencies:
-- `ha-mqtt-discoverable==0.20.1` (specific version required for compatibility)
-- `paho-mqtt>=2.1.0`
-- `psutil>=7.0.0`
-- `annotated_types>=0.7.0`
-
-### Installation
-
-#### Option 1: Using pip with requirements.txt
+### From Source
 ```bash
 # Clone the repository
 git clone https://github.com/hlehoux2021/MyHargassner.git
 cd MyHargassner
 
-# Install dependencies
-pip install -r requirements.txt
-```
-
-#### Option 2: Using pip install (recommended)
-```bash
-# Clone the repository
-git clone https://github.com/hlehoux2021/MyHargassner.git
-cd MyHargassner
-
-# Install in development mode
-pip install -e .
-
-# Or install normally
+# Install the package
 pip install .
-```
 
-#### Option 3: For developers
-```bash
-# Install with development dependencies
+# For development (editable install with dev dependencies)
 pip install -e ".[dev]"
 ```
+
+### Dependencies
+This project uses `pyproject.toml` for dependency management. All required dependencies will be automatically installed when you run `pip install .`
 
 ### Configuration
 
