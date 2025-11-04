@@ -8,24 +8,49 @@ This is a hobby project, provided free and as-is. There is no professional suppo
 I work on this project when i have time, mainly during summer holidays
 I'm a beginner python programmer, be kind with my errors
 
-## known limitations and bugs
-- many, many !
-- todo: implement a configuration file when installed as a system service
-- bug: sometimes a "struct.unpack() excpetion is raised in paho-mqtt
-- limit: when you use the project, the information in the IGW, and on the Hargassner App is not updated with what you do
-- todo: today only Hargassner software version V14.0n3 is supported
-- todo: implement more controls of the boiler (today only Boiler mode, and Zone 1 & 2 Mode)
-- todo: enhance management of "error" or "permission denied" responses from the boiler
+## Recent Changes and Improvements
 
-## Bugs
-bugs are recorded on github: https://github.com/hlehoux2021/MyHargassner/issues
+### Version 1.0.0 Updates
 
-recent and important corrections:
-Mishandling of $dhcp renew and $igw clear #1 : 
-Fixed in commits 3822d8c and a52c019 on bug-001-system-restart branch
+**Dependency Management**
+- Migrated from `requirements.txt` to `pyproject.toml` as single source of truth for dependencies (commit 3dc8787)
+- Upgraded `ha-mqtt-discoverable` from 0.20.1 to >=0.22.0 for improved features and compatibility
+- Updated dependency descriptions for better clarity
 
-critical exception in paho-mqtt-client.loop after several changes pushed through mqtt #2
-solved by PR https://github.com/hlehoux2021/MyHargassner/pull/3
+**Bug Fixes**
+- **Issue #2** - Fixed critical `struct.error` crash in paho-mqtt caused by MQTT dual-loop race condition (PR #3, commit 3714075)
+- **Issue #1** - Fixed mishandling of `$dhcp renew` and `$igw clear` commands (commits 3822d8c and a52c019)
+- **Issue #4** - Resolved via PR #6
+- **Issue #7** - Enhanced error handling on sockets (commits ba00390, f4c7ab8)
+- Fixed import errors and corrected requirements dependencies (commit ffd2c61)
+- Fixed `parse_parameter_response` function (commit 9cdf3a9)
+
+**New Features**
+- **Issue #7** - Added pubsub communication between telnetproxy/analyser and mqtt_actuator (feature-007 branch, PR #8)
+- Implemented subscribe and unsubscribe functionality
+- Added "track" channel with dedicated queue for internal communication
+- Enhanced handling of numeric parameters in `_handle_message`
+- Improved MQTT client reconnect handling
+- **Bidirectional communication** - Added relay of changes back to IGW, enabling real-time updates in the Hargassner App when making changes through MQTT (commit 04557c5)
+
+**Code Quality Improvements**
+- Removed pylint warnings across the codebase (commit 5af3d00)
+- Improved logging: moved verbose output to debug level for cleaner production logs
+- Added comprehensive debug logging for troubleshooting
+- Enhanced error handling throughout the application
+
+## Known Limitations and Future Enhancements
+
+**Current Limitations**
+- Only Hargassner software version V14.0n3 is currently supported
+
+**Planned Features**
+- Implement more controls for the boiler (currently supports Boiler mode, Zone 1 & 2 Mode)
+- Enhanced management of "error" or "permission denied" responses from the boiler
+- Additional software version support
+
+## Bug Tracking
+All bugs and feature requests are tracked on GitHub: https://github.com/hlehoux2021/MyHargassner/issues
 
 ## Setup
 
@@ -45,7 +70,14 @@ pip install -e ".[dev]"
 ```
 
 ### Dependencies
-This project uses `pyproject.toml` for dependency management. All required dependencies will be automatically installed when you run `pip install .`
+This project uses `pyproject.toml` for dependency management (migrated from requirements.txt). All required dependencies will be automatically installed when you run `pip install .`
+
+Main dependencies:
+- `paho-mqtt>=2.1.0` - MQTT client library
+- `ha-mqtt-discoverable>=0.22.0` - Home Assistant MQTT discovery integration
+- `psutil>=7.0.0` - System and process utilities
+- `pydantic>=2.11.7` - Data validation using Python type annotations
+- `annotated_types>=0.7.0` - Type annotation support
 
 ### Configuration
 
@@ -132,20 +164,6 @@ The pellet boiler will be connected directly to your Raspberry (through a second
      ```
  
 Note: The secondary interface (eth1) will only be active when the Ethernet cable is physically connected. You may need to reboot both the Raspberry Pi and the Nano.PK to establish the connection.
-
-### Required Python Packages
-
-Main dependencies (see `setup.py`):
-- `paho-mqtt`
-- `ha-mqtt-discoverable`
-- `psutil`
-- `pydantic`
-- `annotated_types`
-
-Install with:
-```bash
-pip install paho-mqtt ha-mqtt-discoverable psutil pydantic annotated_types
-```
 
 ### Installation
 1. Clone the repository:
