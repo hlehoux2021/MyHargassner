@@ -1,202 +1,125 @@
-# MyHargassner (Hargassner Gateway to MQTT)
+# MyHargassner
 
-## Summary
-MyHargassner is a Python-based  project designed to interface with Hargassner pellet boilers. It acts as a bridge between the boiler's network communication and MQTT, enabling integration with home automation systems like Jeedom or Home Assistant. The project reuses and builds upon the work of [Jahislove](https://github.com/Jahislove/Hargassner/tree/master) and uses the PubSub library from [Thierry Maillard](https://github.com/Thierry46/pubsub).
+> **Hargassner Pellet Boiler Gateway to MQTT for Home Automation**
+
+MyHargassner is a Python-based gateway that bridges Hargassner pellet boilers with MQTT, enabling seamless integration with home automation systems like Home Assistant and Jeedom. It intercepts communication between the Hargassner Internet Gateway (IGW) and the boiler, extracting telemetry data and enabling bidirectional control.
+
+## Features
+
+- **Network Relay Architecture**: Acts as transparent relay between IGW and boiler
+- **MQTT Integration**: Full Home Assistant MQTT Discovery support
+- **Bidirectional Control**: Control boiler from Home Assistant, changes reflected in Hargassner App
+- **Real-time Telemetry**: ~30 sensor values (temperatures, states, performance metrics)
+- **Controllable Parameters**: 6 parameters including boiler mode, zone modes, and temperature setpoints
+- **Automatic Discovery**: Dynamic parameter discovery system
+
+## Quick Links
+
+- 📋 [Changelog](docs/CHANGELOG.md) - Version history and recent changes
+- 🔧 [Network Setup Guide](docs/NETWORK_SETUP.md) - Detailed network configuration
+- 🐛 [Bug Tracker](https://github.com/hlehoux2021/MyHargassner/issues) - Report issues and request features
+- 📖 [Architecture Details](CLAUDE.md) - Technical architecture and development guide
+
+## Known Limitations
+
+- Only Hargassner software version V14.0n3 is currently tested
+- Control limited to 6 parameters (PR001, PR011, PR012, PR040, parameter 4, parameter 5)
+
+See [CHANGELOG.md](docs/CHANGELOG.md) for planned features and recent improvements.
 
 ## Disclaimer
-This is a hobby project, provided free and as-is. There is no professional support included
-I work on this project when i have time, mainly during summer holidays
-I'm a beginner python programmer, be kind with my errors
 
-## Recent Changes and Improvements
+This is a hobby project, provided free and as-is. There is no professional support included. I work on this project when I have time, mainly during summer holidays. I'm a beginner Python programmer - be kind with my errors!
 
-### Version 1.0.0 Updates
+## Credits
 
-**Dependency Management**
-- Migrated from `requirements.txt` to `pyproject.toml` as single source of truth for dependencies (commit 3dc8787)
-- Upgraded `ha-mqtt-discoverable` from 0.20.1 to >=0.22.0 for improved features and compatibility
-- Updated dependency descriptions for better clarity
+- Based on reverse engineering work by [Jahislove](https://github.com/Jahislove/Hargassner/tree/master)
+- Uses PubSub library from [Thierry Maillard](https://github.com/Thierry46/pubsub)
 
-**Bug Fixes**
-- **Issue #2** - Fixed critical `struct.error` crash in paho-mqtt caused by MQTT dual-loop race condition (PR #3, commit 3714075)
-- **Issue #1** - Fixed mishandling of `$dhcp renew` and `$igw clear` commands (commits 3822d8c and a52c019)
-- **Issue #4** - Resolved via PR #6
-- **Issue #7** - Enhanced error handling on sockets (commits ba00390, f4c7ab8)
-- Fixed import errors and corrected requirements dependencies (commit ffd2c61)
-- Fixed `parse_parameter_response` function (commit 9cdf3a9)
-
-**New Features**
-- **Issue #7** - Added pubsub communication between telnetproxy/analyser and mqtt_actuator (feature-007 branch, PR #8)
-- Implemented subscribe and unsubscribe functionality
-- Added "track" channel with dedicated queue for internal communication
-- Enhanced handling of numeric parameters in `_handle_message`
-- Improved MQTT client reconnect handling
-- **Bidirectional communication** - Added relay of changes back to IGW, enabling real-time updates in the Hargassner App when making changes through MQTT (commit 04557c5)
-
-**Code Quality Improvements**
-- Removed pylint warnings across the codebase (commit 5af3d00)
-- Improved logging: moved verbose output to debug level for cleaner production logs
-- Added comprehensive debug logging for troubleshooting
-- Enhanced error handling throughout the application
-
-## Known Limitations and Future Enhancements
-
-**Current Limitations**
-- Only Hargassner software version V14.0n3 is currently supported
-
-**Planned Features**
-- Implement more controls for the boiler (currently supports Boiler mode, Zone 1 & 2 Mode)
-- Enhanced management of "error" or "permission denied" responses from the boiler
-- Additional software version support
-
-## Bug Tracking
-All bugs and feature requests are tracked on GitHub: https://github.com/hlehoux2021/MyHargassner/issues
-
-## Setup
+---
 
 ## Installation
 
-### From Source
-```bash
-# Clone the repository
-git clone https://github.com/hlehoux2021/MyHargassner.git
-cd MyHargassner
+### Prerequisites
 
-# Install the package
-pip install .
+**Hardware:**
+- Hargassner pellet boiler (typically a Nano.PK)
+- Hargassner Internet Gateway (IGW)
+- Raspberry Pi with Raspberry Pi OS
+- Two network interfaces (built-in + USB Ethernet adapter)
 
-# For development (editable install with dev dependencies)
-pip install -e ".[dev]"
-```
+**Software:**
+- Python >= 3.8
+- MQTT broker (Mosquitto, Home Assistant's built-in broker, etc.)
 
-### Dependencies
-This project uses `pyproject.toml` for dependency management (migrated from requirements.txt). All required dependencies will be automatically installed when you run `pip install .`
+**Dependencies:**
 
-Main dependencies:
+This project uses `pyproject.toml` for dependency management. All required dependencies will be automatically installed:
 - `paho-mqtt>=2.1.0` - MQTT client library
 - `ha-mqtt-discoverable>=0.22.0` - Home Assistant MQTT discovery integration
 - `psutil>=7.0.0` - System and process utilities
 - `pydantic>=2.11.7` - Data validation using Python type annotations
 - `annotated_types>=0.7.0` - Type annotation support
 
-### Configuration
+**Network Architecture:**
 
-### Prerequisites
-- An Hargassner pellet boiler (typically a NanoPK), *and* the internet gateway (IGW) from the vendor
-- Raspberry Pi with Raspberry Pi OS
-- Two network interfaces:
-  - Primary interface (`eth0`) connected to your router (same network as the Hargassner IGW internet gateway)
-  - Secondary interface (`eth1`) connected directly to the pellet boiler (typically a Nano.PK)
-    - Can be a USB-to-Ethernet adapter
-- MQTT broker (configuration in `hargconfig.py`)
-- DHCP server for the boiler network (instructions below)
+MyHargassner must sit between the IGW and the boiler on separate network interfaces:
+- **eth0**: Connected to home network (same network as IGW)
+- **eth1**: Direct connection to boiler (dedicated network with DHCP server)
 
-### Network Setup on Raspberry Pi
-The project relies on being deployed on a Raspberry PI between the IGW and the NanoPK. 
-I will establish connections with both and act as a relay between them, while getting necessary information.
-The IGW and the NanoPK *must* be on seperate network interfaces connected to your Raspberry
+⚠️ **Important:** The IGW and boiler must be on **separate physical networks**.
 
-Typically, your PI will be on the home network connected (through eth0) to your router, like the IGW.
-The pellet boiler will be connected directly to your Raspberry (through a second ethernet card on eth1)
+📖 **See [Network Setup Guide](docs/NETWORK_SETUP.md) for detailed configuration instructions.**
 
-1. **Install DHCP Server**
-   ```bash
-   sudo apt-get install dnsmasq
-   ```
+### Step 1: Network Setup
 
-2. **Configure Static IP for eth1**
-   Using Network Manager
-   ```
-   sudo nmcli con add type ethernet ifname eth1 con-name eth1-static ipv4.method manual ipv4.addresses 10.0.0.1/24 ipv4.gateway ""
-   sudo nmcli con mod eth1-static ipv4.dns ""
-   sudo nmcli con up eth1-static
+Complete the network configuration first before installing MyHargassner.
 
-   ```
+Follow the [Network Setup Guide](docs/NETWORK_SETUP.md) to:
+- Configure static IP on eth1
+- Install and configure DHCP server
+- Verify network connectivity
 
-3. **Configure DHCP Server**
-   Edit `/etc/dnsmasq.conf`:
-   ```bash
-   sudo nano /etc/dnsmasq.conf
-   ```
-   Add the following:
-   ```
-   interface=eth1
-   port=0
-   dhcp-range=10.0.0.10,10.0.0.99,24h
-   dhcp-authoritative
-   ```
+### Step 2: Install MyHargassner
 
-4. **Apply Changes**
-   ```bash
-   sudo reboot
-   ```
+Clone the repository:
+```bash
+git clone --recurse-submodules https://github.com/hlehoux2021/MyHargassner.git
+cd MyHargassner
+```
 
-5. **Verify Setup**
-   - Check network interfaces:
-     ```bash
-     ifconfig eth1
-     ```
-     Should show:
-     ```
-     eth1: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 1500
-     inet 10.0.0.1  netmask 255.255.255.0  broadcast 10.0.0.255
-     ```
-   - Check routing table:
-     ```bash
-     route
-     ```
-     Should show a routing table comparable with the following:
-     ```
-    Kernel IP routing table
-    Destination     Gateway         Genmask         Flags Metric Ref    Use Iface
-    default         box             0.0.0.0         UG    1002   0        0 eth0
-    10.0.0.0        0.0.0.0         255.0.0.0       U     1003   0        0 eth1 // The network 10.0.0.0 on eth1 to service the pellet boiler
-    192.168.100.0   0.0.0.0         255.255.255.0   U     1002   0        0 eth0 // The network of your internet router
-     
-     ```
-   - Verify DHCP lease (after boiler connects):
-     ```bash
-     cat /var/lib/misc/dnsmasq.leases
-     ```
-     Should show the boiler's MAC address and assigned IP
-     ```
-     1724017448 00:24:bd:04:3f:6c 10.0.0.72 HSV1 01:00:24:bd:04:3f:6c
-     ```
- 
-Note: The secondary interface (eth1) will only be active when the Ethernet cable is physically connected. You may need to reboot both the Raspberry Pi and the Nano.PK to establish the connection.
+Install the package:
+```bash
+sudo pip install --break-system-packages .
+```
 
-### Installation
-1. Clone the repository:
-   ```bash
-   git clone --recurse-submodules https://github.com/hlehoux2021/MyHargassner.git
-   cd MyHargassner
-   ```
+### Step 3: Configure
 
-2. Install dependencies:
-   ```bash
-   sudo pip install --break-system-packages .
-   ```
+Edit `myhargassner.ini` to configure:
+- Network interfaces (gw_iface, bl_iface)
+- MQTT broker settings (host, port, credentials)
+- Logging preferences
 
+Optionally, edit `hargconfig.py` to customize which boiler parameters are monitored (see the `wanted` list in `HargConfig`).
 
-3. Configure your system:
-   - Edit `myhargassner.ini` for all network, MQTT, and logging settings. This file is the main configuration file for the application.
-   - Optionally, edit `hargconfig.py` if you want to customize which boiler parameters are monitored (see the `wanted` list in `HargConfig`).
+### Step 4: Run
 
-### Run the programm
-   ```bash
-   sudo -E env -S PATH=$PATH python3 -m myhargassner.main
-   ```
-The following command line arguments are accepted:
--g --GW_IFACE  Source interface
--b --BL_IFACE  Destination interface
--p --port      Source port
--d --debug     Enable debug logging
--i --info'     info logging level
--w --warning   warning logging level
--e --error     error logging level
--c --critical  critical logging level
+Test the application:
+```bash
+sudo -E env -S PATH=$PATH python3 -m myhargassner.main
+```
 
-### Setting up as a System Service
+**Command-line Arguments:**
+- `-g/--GW_IFACE` - Source interface (gateway side)
+- `-b/--BL_IFACE` - Destination interface (boiler side)
+- `-p/--port` - Source port
+- `-d/--debug` - Enable debug logging
+- `-i/--info` - Info logging level
+- `-w/--warning` - Warning logging level
+- `-e/--error` - Error logging level
+- `-c/--critical` - Critical logging level
+
+### Step 5: Setting up as a System Service (Optional)
 
 You can install and run the gateway as a systemd service using the provided bash script. This will copy the project to `/etc/myhargassner`, install the Python package system-wide, and set up the service to start on boot.
 
@@ -223,120 +146,69 @@ You can install and run the gateway as a systemd service using the provided bash
 
 To uninstall, use the provided `uninstall_system_service.sh` script.
 
-To debug problems, remember you can use
- journalctl -u myhargassner.service -n 50 --no-pager
+To debug problems, use:
+```bash
+journalctl -u myhargassner.service -n 50 --no-pager
+```
+
 ---
-
-
-### File Structure
-
-```
-MyHargassner/
-├── analyser.py
-├── appconfig.py
-├── boiler.py
-├── clients/
-│   ├── boiler-client-ai.py
-│   ├── boiler-simple.py
-│   ├── gateway-client-ai.py
-│   ├── gateway-simple.py
-│   └── shared_simulator.py
-├── core.py
-├── gateway.py
-├── hargconfig.py
-├── install_system_service.sh
-├── main.py
-├── mqtt_actuator.py
-├── mqtt_base.py
-├── mqtt_informer.py
-├── myhargassner.service
-├── myhargassner.ini         # Main configuration file (edit this for your setup)
-├── parse.py
-├── pubsub/
-│   ├── __init__.py
-│   ├── pubsub.py
-│   └── tests/
-│       ├── test_PubSub.py
-│       ├── test_PubSub_load.py
-│       └── test_pubsub_priority.py
-├── pylintrc
-├── README.md
-├── setup.py
-├── shared.py
-├── socket_manager.py
-├── telnethelper.py
-├── telnetproxy.py
-├── uninstall_system_service.sh
-└── ...
-```
-
-**Note:**
-- The `myhargassner.ini` file is the main configuration file. Copy and edit this file to match your environment.
-- The `clients/` and `pubsub/tests/` folders contain example scripts and tests.
-- Some files may be omitted above for brevity; see the repository for the full structure.
-   - Analyses telnet requests from IGW and responses from pellet boiler (through the Analyser class) and pushes key information to the "info" channel
-   - Analyses specific "pm ..." telnet buffer sent every second by pellet boiler,  maps it to valuable data and publishes it to the "info" channel
-
-
-5. **MQTT Informer** (`MqttInformer`)
-   - Receives data from other components on the "info" channel
-   - Maintains a dictionary of pellet boiler information received (from TelnetProxy)
-   - when key boiler information has been received (at least network addr), 
-        creates a device info for the boiler and publishes it to MQTT for discovery
-        creates Sensor information for each key mandatory information ("HargaWebApp", "Login Token" and "Login key")
-        creates Sensor information for regular boiler data we want (configured in hargconfig.py)
-   - when regular boiler data changes, publish it to MQTT
-
-5. **MQTT Actuator** (`MqttActuator`)
-   - waits for the pellet boiler configuration (Modes for the boiler and the different zones) to be published on the "info" channel
-   - creates a Select MQTT subscriber for each Mode discovered
-   -  implements a callback() thread for each Select
-        when callback() received, implement a telnet command "$par set " and send it to the pellet boiler through TelnetProxy (internal)
 
 ## Configuration
 
+### Main Configuration File
 
-### Main Settings (`myhargassner.ini`)
-All main settings are configured in the `myhargassner.ini` file. Example:
+Edit `myhargassner.ini` to configure all settings:
 
+**Network Settings:**
 ```ini
 [network]
-gw_iface = eth0
-bl_iface = eth1
+gw_iface = eth0           # Interface connected to IGW (home network)
+bl_iface = eth1           # Interface connected to boiler
 udp_port = 35601
 socket_timeout = 5
 buff_size = 4096
-
-[logging]
-log_path = /var/log/myhargassner.log
-log_level = INFO
 ```
 
-See the comments in `myhargassner.ini` for more details on each option.
-
-
-### MQTT Configuration (`myhargassner.ini`)
-MQTT broker settings are also configured in the `myhargassner.ini` file:
-
+**MQTT Settings:**
 ```ini
 [mqtt]
-host = localhost
+host = localhost          # MQTT broker hostname/IP
 port = 1883
 username = youruser
 password = yourpassword
 topic_prefix = myhargassner
 ```
 
-You can override any of these values using command-line arguments if needed.
+**Logging Settings:**
+```ini
+[logging]
+log_path = /var/log/myhargassner.log
+log_level = INFO
+```
+
+See comments in `myhargassner.ini` for all available options.
 
 ### Boiler Parameters
-The `hargconfig.py` file contains extensive mapping of boiler parameters including:
-- Temperature readings
-- System states
-- Performance metrics
-- Operating hours
-- Error codes
 
-You can customize which parameters to monitor by modifying the `wanted` list in `HargConfig` class.
-Please refer to https://github.com/Jahislove/Hargassner/tree/master for details on the parameters sent by the Hargassner pellet boiler
+The `hargconfig.py` file contains mappings for 180+ boiler parameters (temperatures, states, performance metrics, operating hours, error codes).
+
+Customize which parameters to monitor by editing the `wanted` list in the `HargConfig` class.
+
+For parameter details, see [Jahislove's reverse engineering work](https://github.com/Jahislove/Hargassner/tree/master).
+
+---
+
+## Architecture
+
+MyHargassner uses a multi-threaded relay architecture with 5 main components:
+
+1. **GatewayListenerSender** - Listens for IGW UDP broadcasts, relays to boiler
+2. **BoilerListenerSender** - Listens for boiler UDP broadcasts, relays to IGW
+3. **TelnetProxy** - Relays telnet communication, analyzes protocol
+4. **MqttInformer** - Publishes boiler telemetry to MQTT
+5. **MqttActuator** - Handles MQTT control commands
+
+Components communicate via a PubSub message bus with 4 channels: `bootstrap`, `info`, `track`, `system`.
+
+For detailed architecture information including class inheritance, data flow diagrams, and implementation details, see [docs/TECHNICAL_ARCHITECTURE.md](docs/TECHNICAL_ARCHITECTURE.md).
 
