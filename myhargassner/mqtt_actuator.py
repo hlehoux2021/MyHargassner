@@ -275,7 +275,7 @@ class MqttActuator(ShutdownAware, ChanelReceiver, MqttBase):
         self.subscribe("bootstrap", self.name())
         logging.debug("MqttActuator.discover called, subscribed to channel %s", self._channel)
 
-        while self._boiler_config is None and not self._shutdown_requested:
+        while not self._boiler_config and not self._shutdown_requested:
             logging.debug('Waiting for boiler configuration, calling handle with decode_boiler_config')
             try:
                 self.handle(self.decode_boiler_config)
