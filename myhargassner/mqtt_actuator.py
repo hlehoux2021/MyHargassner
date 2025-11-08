@@ -45,6 +45,8 @@ class MqttActuator(ShutdownAware, ChanelReceiver, MqttBase):
         """
         self._selects: Dict[str, Select] = {}  # Stores Select entities by parameter name
         self._numbers: Dict[str, Number] = {}  # Stores Number entities by parameter name
+        self._topic_to_select_id: Dict[str, str] = {}  # Maps command_topic to select param_id
+        self._topic_to_number_id: Dict[str, str] = {}  # Maps command_topic to number param_id
 
         self._main_client: Optional[Client] = None
         self._boiler_config: Dict[str, dict] = {}
@@ -273,7 +275,7 @@ class MqttActuator(ShutdownAware, ChanelReceiver, MqttBase):
         self.subscribe("bootstrap", self.name())
         logging.debug("MqttActuator.discover called, subscribed to channel %s", self._channel)
 
-        while self._boiler_config is None and not self._shutdown_requested:
+        while not self._boiler_config and not self._shutdown_requested:
             logging.debug('Waiting for boiler configuration, calling handle with decode_boiler_config')
             try:
                 self.handle(self.decode_boiler_config)
@@ -305,15 +307,24 @@ class MqttActuator(ShutdownAware, ChanelReceiver, MqttBase):
             raise RuntimeError("TelnetClient is not initialized")
         return self._client
 
-    def callback_select(self, client: Client, data: str, message: MQTTMessage) -> None:  # pylint: disable=unused-argument
+    def callback_select(self, client: Client, user_data, message: MQTTMessage) -> None:  # pylint: disable=unused-argument
         """
         Handle MQTT select state change messages.
+
+        Args:
+            client: The MQTT client instance
+            user_data: Client's global user_data (from paho-mqtt)
+            message: The MQTT message containing topic and payload
         """
-        logging.debug("MqttActuator.callback_select called with data: %s", data)
-        #todo ha-mqtt-discoverable :: move to version > 0.20.1 and remove user data usage
+        logging.debug("MqttActuator.callback_select called for topic: %s", message.topic)
         with self._service_lock:
             try:
-                param_id = data  # data is already the param_id
+                # Look up param_id from the message topic
+                param_id = self._topic_to_select_id.get(message.topic)
+                if not param_id:
+                    logging.error("Received callback for unknown topic: %s", message.topic)
+                    return
+
                 payload = message.payload.decode()
                 logging.debug("Received payload: %s for parameter ID: %s", payload, param_id)
                 # Find parameter info from boiler config
@@ -363,7 +374,7 @@ class MqttActuator(ShutdownAware, ChanelReceiver, MqttBase):
                     if select is not None:
                         select.select_option(payload)
             except Exception as e:
-                logging.error("Error processing %s selection: %s", data, str(e))
+                logging.error("Error processing %s selection: %s", param_id, str(e))
             logging.debug("MqttActuator.callback_select finished, lock released")
 
     def create_select(self, param_name: str, param_info: dict) -> None:
@@ -384,9 +395,15 @@ class MqttActuator(ShutdownAware, ChanelReceiver, MqttBase):
         if not param_id:
             logging.error(f"No command_id found for select parameter {param_name}")
             return
-        #todo ha-mqtt-discoverable :: move to version > 0.20.1 and remove user data usage
-        select = Select(select_settings, self.callback_select, user_data=param_id)
+        # Create the select without user_data parameter (removed in newer versions)
+        select = Select(select_settings, self.callback_select)
         self._selects[param_id] = select
+
+        # Derive command_topic from public state_topic attribute
+        command_topic = select.state_topic.replace('/state', '/command')
+        self._topic_to_select_id[command_topic] = param_id
+        logging.debug("Registered select: topic=%s -> param_id=%s", command_topic, param_id)
+
         select.write_config()
         # Set initial value if available
         if param_info.get('current'):
@@ -414,14 +431,24 @@ class MqttActuator(ShutdownAware, ChanelReceiver, MqttBase):
                     except Exception as e2:
                         logging.warning("Failed to set fallback value for select %s: %s", param_name, e2)
 
-    def callback_number(self, _: Client, data: str, message: MQTTMessage) -> None: #pylint disable=unused-argument
+    def callback_number(self, client: Client, user_data, message: MQTTMessage) -> None: #pylint: disable=unused-argument
         """
         Handle MQTT number state change messages.
+
+        Args:
+            client: The MQTT client instance
+            user_data: Client's global user_data (from paho-mqtt)
+            message: The MQTT message containing topic and payload
         """
-        logging.debug("MqttActuator.callback_number called with data: %s", data)
+        logging.debug("MqttActuator.callback_number called for topic: %s", message.topic)
         with self._service_lock:
             try:
-                param_id = data  # data is already the param_id
+                # Look up param_id from the message topic
+                param_id = self._topic_to_number_id.get(message.topic)
+                if not param_id:
+                    logging.error("Received callback for unknown topic: %s", message.topic)
+                    return
+
                 payload = message.payload.decode()
                 logging.debug("Received payload: %s for parameter ID: %s", payload, param_id)
                 if not self._boiler_config:
@@ -447,7 +474,7 @@ class MqttActuator(ShutdownAware, ChanelReceiver, MqttBase):
                 logging.info("Sending command: %s", command)
                 new_value = self._send_command_and_parse(command, param_id, value_type='number')
                 if new_value is not None:
-                    logging.info('Final new value for param %s (id: %s): %s', data, param_id, new_value)
+                    logging.info('Final new value for param %s (id: %s): %s', param_id, param_id, new_value)
                     number = self._numbers.get(param_id)
                     if number is not None:
                         try:
@@ -457,9 +484,9 @@ class MqttActuator(ShutdownAware, ChanelReceiver, MqttBase):
                     else:
                         logging.warning("No Number found for parameter ID: %s", param_id)
                 else:
-                    logging.info('No new value extracted for param %s (id: %s)', data, param_id)
+                    logging.info('No new value extracted for param %s (id: %s)', param_id, param_id)
             except Exception as e:
-                logging.error("Error in callback_number for %s: %s", data, str(e))
+                logging.error("Error in callback_number for %s: %s", param_id, str(e))
             logging.debug("MqttActuator.callback_number" \
             " finished, lock released")
 
@@ -485,11 +512,17 @@ class MqttActuator(ShutdownAware, ChanelReceiver, MqttBase):
         if not param_id:
             logging.error(f"No key found for number parameter {param_name}")
             return
-        #todo ha-mqtt-discoverable :: move to version > 0.20.1 and remove user data usage
-        number = Number(number_settings, self.callback_number, user_data=param_id)
+        # Create the number without user_data parameter (removed in newer versions)
+        number = Number(number_settings, self.callback_number)
         if not hasattr(self, '_numbers'):
             self._numbers = {}
         self._numbers[param_id] = number
+
+        # Derive command_topic from public state_topic attribute
+        command_topic = number.state_topic.replace('/state', '/command')
+        self._topic_to_number_id[command_topic] = param_id
+        logging.debug("Registered number: topic=%s -> param_id=%s", command_topic, param_id)
+
         number.write_config()
         # Optionally set initial value
         try:

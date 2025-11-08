@@ -6,14 +6,29 @@ build-backend = "setuptools.build_meta"
 name = "myhargassner"
 version = "1.0.0"
 description = "Hargassner boiler gateway and MQTT integration"
-authors = [{name = "hlehoux2021"}]
+authors = [{name = "hlehoux2021", email = "hlehoux2021@users.noreply.github.com"}]
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.8"
+keywords = ["hargassner", "mqtt", "home-automation", "boiler", "gateway", "home-assistant"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Home Automation",
+    "Topic :: System :: Networking",
+]
 
 dependencies = [
     "paho-mqtt>=2.1.0,<3.0.0",
-    "ha-mqtt-discoverable==0.20.1",  # Specific version required for compatibility
+    "ha-mqtt-discoverable>=0.22.0",  # Upgraded from 0.20.1 for new features and compatibility
     "psutil>=7.0.0",
     "pydantic>=2.11.7,<3.0.0",
     "annotated_types>=0.7.0",
@@ -23,7 +38,14 @@ dependencies = [
 dev = [
     "pylint>=4.0.0",
     "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/hlehoux2021/MyHargassner"
+Repository = "https://github.com/hlehoux2021/MyHargassner"
+Issues = "https://github.com/hlehoux2021/MyHargassner/issues"
+Documentation = "https://github.com/hlehoux2021/MyHargassner#readme"
 
 [project.scripts]
 myhargassner = "myhargassner.main:main"
@@ -31,5 +53,26 @@ myhargassner = "myhargassner.main:main"
 [tool.setuptools]
 packages = ["myhargassner", "myhargassner.pubsub"]
 
+[tool.setuptools.package-data]
+myhargassner = ["*.ini", "*.service"]
+
 [tool.pylint.messages_control]
-disable = ["line-too-long", "too-many-arguments", "too-many-locals"]
+disable = [
+    "line-too-long", 
+    "too-many-arguments", 
+    "too-many-locals",
+    "too-many-instance-attributes",
+    "too-many-branches",
+    "broad-exception-caught"
+]
+
+[tool.pylint.format]
+max-line-length = 120
+
+[tool.pytest.ini_options]
+testpaths = ["tests", "myhargassner/pubsub/tests"]
+python_files = ["test_*.py", "*_test.py"]
+addopts = [
+    "--verbose",
+    "--tb=short",
+]
