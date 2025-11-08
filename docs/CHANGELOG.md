@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Issue #5** - Upgraded ha-mqtt-discoverable from 0.20.1 to >=0.22.0 (PR #10, merged 2025-11-08)
+  - Removed deprecated user-data usage in callbacks
+  - Migrated to modern callback approach without user_data parameter
+  - Improved compatibility with latest ha-mqtt-discoverable features
+- **Claude Code GitHub Integration** - Added GitHub Actions workflow for AI-assisted development (PR #9, merged 2025-11-07)
+  - Enables @claude mentions in PR and issue comments
+  - Automated code reviews, bug fixes, and improvements
+  - Secure integration with repository access controls
 - **Issue #7** - Added pubsub communication between telnetproxy/analyser and mqtt_actuator (feature-007 branch, PR #8)
   - Implemented subscribe and unsubscribe functionality
   - Added "track" channel with dedicated queue for internal communication
@@ -27,13 +35,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **Dependency Management**
+- **Dependency Management** (PR #10)
   - Migrated from `requirements.txt` to `pyproject.toml` as single source of truth for dependencies (commit 3dc8787)
-  - Upgraded `ha-mqtt-discoverable` from 0.20.1 to >=0.22.0 for improved features and compatibility
   - Updated dependency descriptions for better clarity
+- **Documentation** (PR #10)
+  - Reorganized and updated project documentation
+  - Updated README to reflect recent changes, evolutions, and bug fixes
 
 ### Fixed
 
+- **Boiler Discovery** - Fixed incorrect validation check in `_boiler-config` discovery process (PR #10, commit 3af5d58)
 - **Issue #2** - Fixed critical `struct.error` crash in paho-mqtt caused by MQTT dual-loop race condition (PR #3, commit 3714075)
   - Removed redundant `client.loop()` call from MainThread
   - Rely solely on ha-mqtt-discoverable's background thread
