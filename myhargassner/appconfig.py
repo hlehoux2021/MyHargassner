@@ -104,6 +104,9 @@ class AppConfig:
             filemode='a',
             force=True
         )
+        # Set specific logger level
+        logging.getLogger('ha_mqtt_discoverable').setLevel(log_level)
+        logging.getLogger('paho.mqtt').setLevel(log_level)
 
     @property
     def network(self):
