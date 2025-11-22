@@ -790,6 +790,7 @@ class MqttActuator(ShutdownAware, ChanelReceiver, MqttBase):
                     break  # Failed to reconnect
                 except Exception as e:
                     logging.error('Unexpected error sending command: %s (attempt %d/%d)', str(e), tries, max_tries)
+                    logging.error('Exception: %s - %s', e.__class__.__name__, str(e))
                     exit_reason = 'unexpected_error'
                     break
 
@@ -820,6 +821,7 @@ class MqttActuator(ShutdownAware, ChanelReceiver, MqttBase):
 
             except Exception as e:
                 logging.error('Unexpected error during recv: %s (try %d/%d)', str(e), tries, max_tries)
+                logging.error('Exception: %s - %s', e.__class__.__name__, str(e))
                 exit_reason = 'unexpected_error'
                 break
 
