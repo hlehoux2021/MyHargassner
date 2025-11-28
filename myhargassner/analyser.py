@@ -366,6 +366,8 @@ class Analyser():
             _mode = '' # revert to normal mode for next data
             if self.is_daq_desc(_buffer):
                 logging.info('dac desq detected (%d bytes), skipped',len(_buffer))
+                # do not process daq desc further and reset _state for next request 
+                _state= ''
             else:
                 # we will push the data to mqtt_actuator for further processing
                 self._com.publish("track", _buffer.decode('latin-1'))
