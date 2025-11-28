@@ -64,6 +64,7 @@ class Analyser():
         _str_parts: list[str] = []
         _session_end_requested: bool = False
 
+        logging.info('Analyser: request=%s', repr(data))
         _str_parts = data.decode('ascii').split('\r\n')
         for _part in _str_parts:
             #logging.debug('_part=%s',_part)
