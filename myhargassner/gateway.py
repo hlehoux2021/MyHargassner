@@ -140,6 +140,7 @@ class GatewayListenerSender(ListenerSender):
         _str = data.decode()
         _str_parts = _str.split('\r\n')
         for part in _str_parts:
+            logging.info('UDP received: %s', part)
             if part.startswith('HargaWebApp'):
                 _subpart = part[13]  # Extract portion after the key
                 logging.info('HargaWebApp££%s', _subpart)

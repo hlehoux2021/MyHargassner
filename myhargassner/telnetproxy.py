@@ -758,6 +758,7 @@ class TelnetProxy(ShutdownAware, ChanelReceiver, MqttBase):
         if not self.connect_client():
             raise RuntimeError("Failed to connect to boiler")
 
+        #todo should wait here HargaWebApp sequence begin from IGW before starting telnet
         # Run the main loop for this connection session
         logging.info('TelnetProxy: Running main loop')
         self.loop()
