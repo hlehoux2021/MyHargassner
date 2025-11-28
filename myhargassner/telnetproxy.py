@@ -632,8 +632,9 @@ class TelnetProxy(ShutdownAware, ChanelReceiver, MqttBase):
                     try:
                         _data = self._service2.recv()
                         if not _data:
-                            logging.warning('service2 received empty request')
-                            continue
+                            logging.error('service2 received empty request')
+                            self._cleanup_and_exit('received_empty_request_service2')
+                            return
                         logging.debug('service2 received request %d bytes ==>%s', len(_data), repr(_data))
                         _caller = 2
                         # we should resend it
