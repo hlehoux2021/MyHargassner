@@ -64,7 +64,7 @@ class Analyser():
         _str_parts: list[str] = []
         _session_end_requested: bool = False
 
-        logging.info('Analyser: request=%s', repr(data))
+        logging.log(15, 'Analyser: request=%s', repr(data))
         _str_parts = data.decode('ascii').split('\r\n')
         for _part in _str_parts:
             #logging.debug('_part=%s',_part)
@@ -367,7 +367,7 @@ class Analyser():
             _mode = '' # revert to normal mode for next data
             if self.is_daq_desc(_buffer):
                 logging.info('dac desq detected (%d bytes), skipped',len(_buffer))
-                # do not process daq desc further and reset _state for next request 
+                # do not process daq desc further and reset _state for next request
                 _state= ''
             else:
                 # we will push the data to mqtt_actuator for further processing

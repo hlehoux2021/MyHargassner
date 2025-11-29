@@ -88,8 +88,21 @@ class AppConfig:
         Configure the Python logging system using the log path and log level from the configuration.
         Uses a standard log message format and supports all standard log levels.
         """
+
+        VERBOSE = 15
+        logging.addLevelName(VERBOSE, "VERBOSE")
+
+        def _logger_verbose(self, msg, *args, **kwargs):
+            if self.isEnabledFor(VERBOSE):
+                self._log(VERBOSE, msg, args, **kwargs)
+
+        # attach method to Logger class
+        #logging.Logger.verbose = _logger_verbose
+        setattr(logging.Logger, "verbose", _logger_verbose)  # type: ignore[attr-defined]
+        # ...existing code...
         log_levels = {
             'debug': logging.DEBUG,
+            'verbose': VERBOSE,
             'info': logging.INFO,
             'warning': logging.WARNING,
             'error': logging.ERROR,
