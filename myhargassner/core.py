@@ -45,7 +45,7 @@ class ShutdownAware:
     Note: This mixin uses explicit initialization pattern (no super() call).
     Each class must explicitly call ShutdownAware.__init__(self) in its __init__.
     """
-    _shutdown_requested: bool = False
+    _shutdown_requested: bool
 
     def __init__(self):
         """
@@ -130,14 +130,16 @@ class ChanelReceiver(NetworkData, ABC):
     This class extends NetworkData class with the possibility to receive messages on a ChanelQueue.
     It defines a method to handle received messages.
     """
-    _channel= "bootstrap" # Channel to exchange bootstrap information about boiler and gateway, addr, port, etc
+    _channel: str  # Channel to exchange bootstrap information about boiler and gateway, addr, port, etc
     _com: PubSub # every data receiver should have a PubSub communicator
-    _msq: Union[ChanelQueue, ChanelPriorityQueue, None] = None # Message queue for receiving data
+    _msq: Union[ChanelQueue, ChanelPriorityQueue, None] # Message queue for receiving data
     _appconfig: AppConfig  # Add AppConfig reference
 
     def __init__(self, communicator: PubSub, appconfig: AppConfig) -> None:
         super().__init__()
+        self._channel = "bootstrap"
         self._com = communicator
+        self._msq = None
         self._appconfig = appconfig
 
     def subscribe(self, channel: str, name: str) -> None:
@@ -221,11 +223,11 @@ class ListenerSender(ShutdownAware, ChanelReceiver, ABC):
     """
     listen: socket.socket
     resend: socket.socket
-    src_iface: bytes
-    dst_iface: bytes
+    src_iface: bytes  # network interface where to listen
+    dst_iface: bytes  # network interface where to resend
     dst_ip: str
-    bound: bool = False
-    resender_bound: bool = False
+    _bound: bool # indicates if the listener socket is bound
+    _resender_bound: bool # indicates if the resender socket is bound
     _appconfig: AppConfig
 
     @staticmethod
@@ -236,6 +238,10 @@ class ListenerSender(ShutdownAware, ChanelReceiver, ABC):
             return len(parts) == 4 and all(0 <= int(part) <= 255 for part in parts)
         except (AttributeError, TypeError, ValueError):
             return False
+
+    def setbound(self) -> None:
+        """ Set the listener socket as bound. """
+        self._bound = True
 
     def __init__(self, appconfig: AppConfig, communicator: PubSub, src_iface: bytes, dst_iface: bytes) -> None:
         """
@@ -255,10 +261,10 @@ class ListenerSender(ShutdownAware, ChanelReceiver, ABC):
         ChanelReceiver.__init__(self, communicator, appconfig)
 
         self._appconfig = appconfig
-        self.src_iface = src_iface  # network interface where to listen
-        self.dst_iface = dst_iface  # network interface where to resend
-        self.bound = False
-        self.resender_bound = False
+        self.src_iface = src_iface
+        self.dst_iface = dst_iface
+        self._bound = False
+        self._resender_bound = False
 
         try:
             # Initialize listener socket
@@ -295,7 +301,7 @@ class ListenerSender(ShutdownAware, ChanelReceiver, ABC):
         self.publish_discovery(addr)  # Call the method to publish discovery
 
         # first time we receive a packet, bind the resender
-        if self.resender_bound:
+        if self._resender_bound:
             logging.debug('resender already bound, skipping bind operation')
         else:
             try:
@@ -306,7 +312,7 @@ class ListenerSender(ShutdownAware, ChanelReceiver, ABC):
                     port=port,
                     delta=delta
                 )
-                self.resender_bound = True
+                self._resender_bound = True
                 logging.debug('resender bound to port %d', port)
             except (SocketBindError, InterfaceError) as e:
                 logging.error('Failed to bind resender: %s', str(e))
@@ -362,7 +368,7 @@ class ListenerSender(ShutdownAware, ChanelReceiver, ABC):
         data: bytes
         addr: tuple
 
-        if not self.bound:
+        if not self._bound:
             logging.error("Cannot start loop - socket not bound yet")
             return
         while not self._shutdown_requested:
@@ -381,7 +387,7 @@ class ListenerSender(ShutdownAware, ChanelReceiver, ABC):
                     logging.debug('Data: %s', data)
 
                     # If destination is not yet discovered, handle first packet and bind the resend socket
-                    if not self.resender_bound:
+                    if not self._resender_bound:
                         self.handle_first(data, addr)
                     self.handle_data(data, addr)
                     self.send(data)
