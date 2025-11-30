@@ -103,9 +103,35 @@ IGW sends telnet "$login token" → GatewayListener → TelnetProxy → Boiler
                                         Creates/updates MQTT sensor
 ```
 
-### **Restart Orchestration**
+### **Reconnection & Session Management**
 
-The application implements automatic restart capability:
+The TelnetProxy implements a multi-trigger reconnection system to handle IGW reconnections:
+
+#### **Reconnection Triggers**
+
+1. **TRIGGER 1: Socket Errors** - Automatic reconnection when network fails
+   - Socket read/write errors detected and logged
+   - Reconnection attempts with retry logic (up to 20 attempts)
+
+2. **TRIGGER 2: Protocol Violations** - Boiler responses indicating reconnection needed
+   - Detection of `$dhcp renew` and `$igw clear` commands
+   - These indicate the boiler received reconnection requests from IGW
+
+3. **TRIGGER 3: New HargaWebApp Broadcast** (experimental)
+   - Monitor for fresh IGW discovery broadcasts during active session
+   - **Current behavior (experimental)**: Wait for IGW to close connection naturally instead of forcing disconnect
+   - Rationale: Allows graceful handoff of session control without abruptly terminating the connection
+   - Checked periodically via `monitor_for_reconnection()` method
+
+#### **Session State Tracking**
+
+- `_telnet_session_active`: Boolean flag tracking if telnet session is currently active
+- `_session_end_requested`: Flag for detecting `$igw clear` commands that request session termination
+- `_discovery_complete`: Flag tracking when boiler discovery phase completes
+
+#### **System Restart Orchestration**
+
+The application also implements automatic restart capability:
 - Components can request system restart by publishing "RESTART_REQUESTED" to "system" channel
 - Main loop (`main.py`) monitors for restart requests via `wait_for_restart_trigger()`
 - On restart request, all components are gracefully shutdown via `request_shutdown()` method
