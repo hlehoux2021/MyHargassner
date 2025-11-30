@@ -726,7 +726,7 @@ class TelnetProxy(ShutdownAware, ChanelReceiver, MqttBase):
                         self._cleanup_and_exit('igw_clear_command')
                         return
                     if _login_done:
-                        logging.info('login done, call get_boiler_config')
+                        logging.log(15, 'TelnetProxy get_boiler_config()')
                         self.get_boiler_config()
 
         # Clean exit

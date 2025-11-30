@@ -58,7 +58,7 @@ class GatewayListenerSender(ListenerSender):
         self.gw_port = addr[1]
         self.gw_addr = addr[0].encode('utf-8')
 
-        logging.info('Publishing Gateway info on channel %s', self._channel)
+        logging.log(15, 'Publishing Gateway info on channel %s', self._channel)
         self._com.publish(self._channel, f"GW_ADDR:{addr[0]}")
         self._com.publish(self._channel, f"GW_PORT:{addr[1]}")
 
@@ -140,7 +140,7 @@ class GatewayListenerSender(ListenerSender):
         _str = data.decode()
         _str_parts = _str.split('\r\n')
         for part in _str_parts:
-            logging.info('UDP received: %s', part)
+            logging.log(15, 'UDP received: %s', part)
             if part.startswith('HargaWebApp'):
                 _subpart = part[13]  # Extract portion after the key
                 logging.info('HargaWebApp££%s', _subpart)

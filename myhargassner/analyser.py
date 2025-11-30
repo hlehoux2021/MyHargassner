@@ -176,7 +176,7 @@ class Analyser():
                 # b'zclient login (0)\r\n$ack\r\n'
                 if "zclient login" in _part:
                     logging.debug('zclient login detected')
-                    logging.info('login done, should get_boiler_config')
+                    logging.log(15, 'IGW login done')
                     _login_done = True
                 if _part.startswith('$ack'):
                     logging.debug('$login key $ack detected')
@@ -366,7 +366,7 @@ class Analyser():
             logging.debug('buffer complete (%d bytes): %s',len(_buffer), repr(_buffer))
             _mode = '' # revert to normal mode for next data
             if self.is_daq_desc(_buffer):
-                logging.info('dac desq detected (%d bytes), skipped',len(_buffer))
+                logging.log(15, 'daq desc detected (%d bytes), skipped',len(_buffer))
                 # do not process daq desc further and reset _state for next request
                 _state= ''
             else:

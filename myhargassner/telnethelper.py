@@ -105,11 +105,10 @@ class TelnetClient:
             logging.error(f"Failed to resolve interface to IP: {e}") # pylint: disable=logging-fstring-interpolation
             raise RuntimeError("Invalid address/interface:") from e
 
-        logging.debug('TelnetClient connecting to %s on port %d', repr(addr_str), self._port)
+        logging.log(15, 'TelnetClient connecting to %s on port %d', repr(addr_str), self._port)
         if not addr_str:
             raise RuntimeError("No address specified")
 
-        logging.info('TelnetClient connecting to %s on port %d', repr(addr_str), self._port)
         while not self._connected:
             try:
                 # we will now create the socket
@@ -119,7 +118,7 @@ class TelnetClient:
                 self._sock.settimeout(timeout_sec)
                 self._sock.connect((addr_str, self._port))
                 self._connected = True
-                logging.info('telnet connected to %s on port %d', repr(addr_str), self._port)
+                logging.log(15, 'TelnetClient connected to %s on port %d', repr(addr_str), self._port)
             except socket.error as e:
                 logging.error('telnet connection error: %s', e)
                 if self._sock:

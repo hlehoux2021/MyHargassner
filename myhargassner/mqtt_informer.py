@@ -204,7 +204,7 @@ class MqttInformer(ShutdownAware, MqttBase):
                     # device_info is not yes init
                     logging.debug("device_info not ready")
                     self._dict[_str_parts[0]] = _str_parts[1]
-                    logging.info('adding new value [%s:%s] to dict', _str_parts[0], _str_parts[1])
+                    logging.log(15, 'adding new value [%s:%s] to dict', _str_parts[0], _str_parts[1])
                     if 'BL_ADDR' in self._dict:
                         logging.debug("BL_ADDR:%s",self._dict["BL_ADDR"])
                     else:
