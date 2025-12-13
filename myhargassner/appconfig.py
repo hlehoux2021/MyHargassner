@@ -24,7 +24,7 @@ class AppConfig:
         self.defaults = {
             'network': {
                 'gw_iface': 'eth0',
-                'bl_iface': 'eth1',
+                'bl_iface': '10.0.0.1',  # Use IP address to avoid SO_BINDTODEVICE issues
                 'udp_port': '35601',
                 'socket_timeout': '20.0',  # Socket recv/send timeout (seconds)
                 'buff_size': '4096'
