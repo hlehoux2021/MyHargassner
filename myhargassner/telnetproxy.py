@@ -266,12 +266,13 @@ class TelnetProxy(ShutdownAware, ChanelReceiver, MqttBase):
     _active_sockets: set[socket.socket] # Track which sockets are still active
     _analyser: Analyser
     _service_lock: Lock
-    _session_end_requested: bool = False  # Flag for $igw clear detection
-    _discovery_complete: bool = False  # Flag to track discovery completion
-    _telnet_session_active: bool = False  # Flag to track if telnet session is active
+    _session_end_requested : bool # Flag for $igw clear detection
+    _discovery_complete: bool # Flag to track boiler discovery completion
+    _telnet_session_active: bool # Flag to track if telnet session is active
     # Note: _shutdown_requested is inherited from ShutdownAware mixin
 
-    def __init__(self, appconfig: AppConfig, communicator: PubSub, port, lock: Lock):
+    def __init__(self, appconfig: AppConfig, communicator: PubSub,
+                 port: Annotated[int, annotated_types.Gt(0)], lock: Lock):
         """
         Initialize the TelnetProxy with communication channel, interfaces, and port.
         """
@@ -288,6 +289,7 @@ class TelnetProxy(ShutdownAware, ChanelReceiver, MqttBase):
         self._active_sockets = set()
         self._session_end_requested = False
         self._discovery_complete = False
+        self._telnet_session_active= False
 
     def bind1(self):
         """
@@ -566,7 +568,7 @@ class TelnetProxy(ShutdownAware, ChanelReceiver, MqttBase):
 
         logging.debug('Active sockets: %d', len(self._active_sockets))
 
-        _telnet_session_active = False
+        self._telnet_session_active = False
         logging.info('TelnetProxy entering main loop, IGW session not yet active')
         while self._active_sockets and not self._shutdown_requested:  # Continue as long as we have active sockets
             # TRIGGER 3: Periodically check for reconnection signals (new HargaWebApp)
@@ -702,7 +704,7 @@ class TelnetProxy(ShutdownAware, ChanelReceiver, MqttBase):
                             elif _caller == 2:
                                 logging.debug('telnet sending response to service2')
                                 _sent = self._service2.send(_data)
-                                #todo experimental, send also to the IGW to inform about changes
+                                #send also to the IGW to inform about changes
                                 _sent = self._service1.send(_data)
                             else:
                                 logging.warning('Beware received a buffer with not registered caller %d', _caller)
@@ -732,7 +734,7 @@ class TelnetProxy(ShutdownAware, ChanelReceiver, MqttBase):
                         self._cleanup_and_exit('igw_clear_command')
                         return
                     if _login_done:
-                        logging.info('login done, call get_boiler_config')
+                        logging.log(15, 'TelnetProxy get_boiler_config()')
                         self.get_boiler_config()
 
         # Clean exit

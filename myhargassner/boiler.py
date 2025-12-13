@@ -116,8 +116,8 @@ class BoilerListenerSender(ListenerSender):
                 delta=-self.delta,
                 broadcast=False  # No broadcast for boiler listener
             )
-            self.bound = True
-            logging.info('BoilerListener bound successfully (gw_port=%d, delta=%d)', self.gw_port, self.delta)
+            self.setbound()
+            logging.log(15, 'BoilerListener bound successfully (gw_port=%d, delta=%d)', self.gw_port, self.delta)
         except (SocketBindError, InterfaceError) as e:
             logging.error('Failed to bind listener: %s', str(e))
             raise
