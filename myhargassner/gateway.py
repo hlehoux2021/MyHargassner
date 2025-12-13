@@ -93,7 +93,7 @@ class GatewayListenerSender(ListenerSender):
                 # if same machine we will send to 35601 + 100
                 delta=self.delta
             )
-            logging.debug('Successfully sent %d bytes', len(data))
+            logging.log(15,'Successfully sent %d bytes', len(data))
         except (SocketSendError, SocketTimeoutError, InterfaceError) as e:
             logging.error('Failed to send data: %s', str(e))
             raise

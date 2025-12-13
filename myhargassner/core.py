@@ -383,7 +383,7 @@ class ListenerSender(ShutdownAware, ChanelReceiver, ABC):
                 # Use socket manager to receive data with built-in timeout
                 data, addr = self.listen_manager.receive()
                 if data:  # Only process if we actually got data
-                    logging.debug('Received buffer of %d bytes from %s:%d', len(data), addr[0], addr[1])
+                    logging.log(15,'Received buffer of %d bytes from %s:%d', len(data), addr[0], addr[1])
                     logging.debug('Data: %s', data)
 
                     # If destination is not yet discovered, handle first packet and bind the resend socket
