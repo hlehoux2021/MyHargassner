@@ -43,7 +43,7 @@ class AppConfig:
             'timeouts': {
                 # Shutdown responsiveness timeouts (all in seconds)
                 'loop_timeout': '1.0',        # Main loop timeout (select/MQTT) - determines shutdown responsiveness
-                'queue_timeout': '3.0',       # Message queue timeout for inter-component communication
+                'queue_timeout': '1.0',       # Message queue timeout for inter-component communication
                 'retry_delay': '5.0',         # Delay before retrying failed operations
                 'service_lock_delay': '1.0'   # Delay when service is locked/paused
             }

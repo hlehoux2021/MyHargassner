@@ -508,6 +508,7 @@ class TelnetProxy(ShutdownAware, ChanelReceiver, MqttBase):
             bool: True if reconnection detected, False otherwise
         """
         if not self._msq or not self._discovery_complete:
+            logging.warning('monitor_for_reconnection called before discovery complete or without subscription')
             return False
 
         try:
@@ -520,8 +521,12 @@ class TelnetProxy(ShutdownAware, ChanelReceiver, MqttBase):
 
                 # Check for new "HargaWebApp" broadcast during active session
                 # only return True if telnet session is active
-                if 'HargaWebApp' in msg and self._telnet_session_active:
-                    logging.warning('Received new HargaWebApp during active session - IGW reconnected')
+                logging.info('monitor_for_reconnection received message: %s', msg)
+                if not self._telnet_session_active:
+                    logging.warning('Received new HargaWebApp but no active telnet session - ignoring restart')
+                    return False
+                if 'HargaWebApp' in msg:
+                    logging.critical('Received new HargaWebApp during active session - IGW reconnected')
                     return True
 
         except StopIteration:
@@ -562,6 +567,7 @@ class TelnetProxy(ShutdownAware, ChanelReceiver, MqttBase):
         logging.debug('Active sockets: %d', len(self._active_sockets))
 
         _telnet_session_active = False
+        logging.info('TelnetProxy entering main loop, IGW session not yet active')
         while self._active_sockets and not self._shutdown_requested:  # Continue as long as we have active sockets
             # TRIGGER 3: Periodically check for reconnection signals (new HargaWebApp)
             if self.monitor_for_reconnection():
@@ -602,13 +608,18 @@ class TelnetProxy(ShutdownAware, ChanelReceiver, MqttBase):
                         # ask the Analyser() to analyse the IGW request
                         _state, _session_end_requested = self._analyser.parse_request(_data)
                         logging.debug('_state-->%s', _state)
-                        # if _state is "$login token" then telnet session with IGW is active.
+                        # if _state is "$login token" then telnet session with IGW becomes active.
                         if _state == "$login token":
                             self._telnet_session_active = True
+                            logging.info('Telnet session with IGW is now active')
 
                         # TRIGGER 1: Update session end flag if $igw clear detected by analyser
                         if _session_end_requested:
                             self._session_end_requested = True
+                            # as soon as $igw clear is received, we trigger restart, even before receiving $ack
+                            logging.info('$igw clear command detected, cleaning up session')
+                            self._cleanup_and_exit('igw_clear_command')
+                            return
 
                         # Forward request to boiler
                         logging.debug('service1 resending %d bytes to %s:%d',
@@ -758,7 +769,6 @@ class TelnetProxy(ShutdownAware, ChanelReceiver, MqttBase):
         if not self.connect_client():
             raise RuntimeError("Failed to connect to boiler")
 
-        #todo should wait here HargaWebApp sequence begin from IGW before starting telnet
         # Run the main loop for this connection session
         logging.info('TelnetProxy: Running main loop')
         self.loop()

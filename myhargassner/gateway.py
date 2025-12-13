@@ -142,8 +142,8 @@ class GatewayListenerSender(ListenerSender):
         for part in _str_parts:
             logging.info('UDP received: %s', part)
             if part.startswith('HargaWebApp'):
-                _subpart = part[13]  # Extract portion after the key
-                logging.info('HargaWebApp££%s', _subpart)
+                _subpart = part[13:]  # Extract portion after the key
+                logging.info('HargaWebApp££%s published to %s', _subpart, self._channel)
                 self._com.publish(self._channel, f"HargaWebApp££{_subpart}")
 
             if part.startswith('SN:'):
