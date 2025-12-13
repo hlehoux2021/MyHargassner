@@ -118,7 +118,7 @@ class GatewayListenerSender(ListenerSender):
                 delta=0,  # Gateway listens on the actual port 35601, no adjustment needed
                 broadcast=True  # Gateway uses broadcast for discovery
             )
-            self.bound = True
+            self.setbound()
             logging.debug('Gateway listener bound successfully')
         except (SocketBindError, InterfaceError) as e:
             logging.error('Failed to bind listener: %s', str(e))
