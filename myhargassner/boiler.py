@@ -27,7 +27,11 @@ class BoilerListenerSender(ListenerSender):
     def __init__(self, appconfig: AppConfig, communicator: PubSub, delta: int = 0):
         # initiate a ListenerSender from bl_iface to gw_iface
         # Note: bl_iface is configured as IP address (10.0.0.1) to avoid SO_BINDTODEVICE issues
-        super().__init__(appconfig, communicator, appconfig.bl_iface(), appconfig.gw_iface())
+        # Use IP address for listening socket to avoid SO_BINDTODEVICE issues
+        #super().__init__(appconfig, communicator, appconfig.bl_iface(), appconfig.gw_iface())
+        bl_ip = bytes('10.0.0.1', 'ascii')
+
+        super().__init__(appconfig, communicator, bl_ip, appconfig.gw_iface() )
         # Add any additional initialization logic here
         self.delta = delta
 
