@@ -119,7 +119,7 @@ class GatewayListenerSender(ListenerSender):
                 broadcast=True  # Gateway uses broadcast for discovery
             )
             self.setbound()
-            logging.debug('Gateway listener bound successfully')
+            logging.log(15,'Gateway listener bound successfully')
         except (SocketBindError, InterfaceError) as e:
             logging.error('Failed to bind listener: %s', str(e))
             raise

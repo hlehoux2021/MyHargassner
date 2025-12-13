@@ -108,22 +108,22 @@ class NetworkData():
         logging.debug('decode_message called with %s', msg)
         if msg.startswith('GW_ADDR:'):
             self.gw_addr = bytes(msg.split(':')[1], 'ascii')
-            logging.debug('decode_message: gw_addr=%s', self.gw_addr)
+            logging.log(15,'decode_message: gw_addr=%s', self.gw_addr)
         elif msg.startswith('GW_PORT:'):
             self.gw_port = int(msg.split(':')[1])
-            logging.debug('decode_message: gw_port=%d', self.gw_port)
+            logging.log(15,'decode_message: gw_port=%d', self.gw_port)
         elif msg.startswith('BL_ADDR:'):
             self.bl_addr = bytes(msg.split(':')[1], 'ascii')
-            logging.debug('decode_message: bl_addr=%s', self.bl_addr)
+            logging.log(15,'decode_message: bl_addr=%s', self.bl_addr)
         elif msg.startswith('BL_PORT:'):
             self.bl_port = int(msg.split(':')[1])
-            logging.debug('decode_message: bl_port=%d', self.bl_port)
+            logging.log(15,'decode_message: bl_port=%d', self.bl_port)
         elif msg.startswith('GWT_PORT:'):
             self.gwt_port = int(msg.split(':')[1])
-            logging.debug('decode_message: gwt_port=%d', self.gwt_port)
+            logging.log(15,'decode_message: gwt_port=%d', self.gwt_port)
         else:
             # silently ignore other messages
-            logging.debug('decode_message: unknown message %s', msg)
+            logging.warning('decode_message: unknown message %s', msg)
 
 class ChanelReceiver(NetworkData, ABC):
     """
