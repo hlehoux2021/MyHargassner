@@ -3,8 +3,11 @@ Common socket management utilities and exceptions for the HARG project.
 """
 
 # Standard library imports
+import fcntl
+import ipaddress
 import logging
 import socket
+import struct
 import platform
 from typing import Tuple, Union, Optional
 
@@ -12,23 +15,50 @@ from typing import Tuple, Union, Optional
 from myhargassner.appconfig import AppConfig
 
 class HargSocketError(Exception):
-    """Base exception for socket operations."""
+    """
+    Base exception for socket operations.
+    
+    All socket-related exceptions in the Hargassner module
+    should inherit from this base class.
+    """
     pass
 
 class SocketTimeoutError(HargSocketError):
-    """Exception raised when a socket operation times out."""
+    """
+    Exception raised when a socket operation times out.
+    
+    This typically occurs when the remote device doesn't respond
+    within the configured timeout period.
+    """
     pass
 
 class SocketBindError(HargSocketError):
-    """Exception raised when socket binding fails."""
+    """
+    Exception raised when socket binding fails.
+    
+    Common causes include:
+    - Port already in use
+    - Insufficient permissions
+    - Invalid address/port combination
+    """
     pass
 
 class SocketSendError(HargSocketError):
-    """Exception raised when sending data fails."""
+    """
+    Exception raised when sending data fails.
+    
+    This can occur due to network issues, connection drops,
+    or buffer-related problems.
+    """
     pass
 
 class SocketReceiveError(HargSocketError):
-    """Exception raised when receiving data fails."""
+    """
+    Exception raised when receiving data fails.
+    
+    Common scenarios include connection timeouts, network errors,
+    or unexpected connection termination.
+    """
     pass
 
 class InterfaceError(HargSocketError):
@@ -101,6 +131,48 @@ class SocketManager:
                 f"MacOS requires IP address, got interface name: {self.dst_iface}. "
                 "Please provide IP address instead of interface name."
             )
+
+    @staticmethod
+    def get_interface_ip(interface_spec: str) -> str:
+        """
+        Get the IP address for the specified interface.
+        
+        Args:
+            interface_spec: Interface specification as string (e.g., 'eth0' or '10.0.0.1')
+            
+        Returns:
+            str: The IP address as string
+        
+        Raises:
+            InterfaceError: If the interface is invalid or has no IP address
+        """
+        # Check if it's already an IP address
+        try:
+            ipaddress.ip_address(interface_spec)
+            logging.debug('Interface spec is already an IP address: %s', interface_spec)
+            return interface_spec
+        except ValueError:
+            # It's an interface name, get its IP using fcntl.ioctl
+            pass
+
+        try:
+            # Use fcntl.ioctl to get the IP address of the specific interface
+            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+                # Use SIOCGIFADDR ioctl to get interface address
+                packed_iface = struct.pack('256s', interface_spec[:15].encode('utf-8'))
+                packed_addr = fcntl.ioctl(s.fileno(), 0x8915, packed_iface)[20:24]
+                # Convert packed address to dotted decimal notation
+                ip_addr = socket.inet_ntoa(packed_addr)
+
+            logging.debug('Found IP %s for interface %s', ip_addr, interface_spec)
+            return ip_addr
+
+        except (OSError, IOError) as e:
+            # Interface doesn't exist or has no IP
+            raise InterfaceError(f'Error getting IP for interface {interface_spec}: {str(e)}') from e
+        except Exception as e:
+            # Any other error
+            raise InterfaceError(f'Unexpected error getting IP for interface {interface_spec}: {str(e)}') from e
 
     @staticmethod
     def is_valid_ip(ip: str) -> bool:

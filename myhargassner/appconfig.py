@@ -157,11 +157,23 @@ class AppConfig:
         """
         return bytes(self.network.get('gw_iface', 'eth0'), 'ascii')
 
+    def gw_iface_str(self):
+        """
+        Return the gateway network interface as string (e.g., 'eth0').
+        """
+        return self.network.get('gw_iface', 'eth0')
+
     def bl_iface(self):
         """
         Return the boiler network interface as bytes (e.g., b'eth1').
         """
         return bytes(self.network.get('bl_iface', 'eth1'), 'ascii')
+
+    def bl_iface_str(self):
+        """
+        Return the boiler network interface as string (e.g., 'eth1').
+        """
+        return self.network.get('bl_iface', 'eth1')
 
     def udp_port(self):
         """

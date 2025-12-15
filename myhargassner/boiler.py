@@ -13,6 +13,7 @@ from myhargassner.pubsub.pubsub import PubSub
 from myhargassner.appconfig import AppConfig
 from myhargassner.core import ListenerSender, ThreadedListenerSender
 from myhargassner.socket_manager import (
+    SocketManager,
     SocketSendError,
     SocketTimeoutError,
     SocketBindError,
@@ -26,12 +27,13 @@ class BoilerListenerSender(ListenerSender):
 
     def __init__(self, appconfig: AppConfig, communicator: PubSub, delta: int = 0):
         # initiate a ListenerSender from bl_iface to gw_iface
-        # Note: bl_iface is configured as IP address (10.0.0.1) to avoid SO_BINDTODEVICE issues
-        # Use IP address for listening socket to avoid SO_BINDTODEVICE issues
-        #super().__init__(appconfig, communicator, appconfig.bl_iface(), appconfig.gw_iface())
-        bl_ip = bytes('10.0.0.1', 'ascii')
+        # we initialize the boiler side of the ListenerSender with the IP address of the interface
+        # to avoid SO_BINDTODEVICE issues.
+        # We will e.g. bind the socket to port 50000 on 10.0.0.1 IP (of eth1 interface) to listen to boiler UDP packets
 
-        super().__init__(appconfig, communicator, bl_ip, appconfig.gw_iface() )
+        bl_ip = SocketManager.get_interface_ip(appconfig.bl_iface_str())
+
+        super().__init__(appconfig, communicator, bl_ip, appconfig.gw_iface())
         # Add any additional initialization logic here
         self.delta = delta
 

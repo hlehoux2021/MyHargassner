@@ -40,6 +40,7 @@ class GatewayListenerSender(ListenerSender):
             delta (int, optional): Port offset for same-machine scenarios. Defaults to 0.
         """
         # initiate a ListenerSender from gw_iface to bl_iface
+        # todo check here if we need to bind to IP address instead of interface name for gw_iface() ; maybe it works only because we are on the default eth0 interface
         super().__init__(appconfig, communicator, appconfig.gw_iface(), appconfig.bl_iface())
         # Add any additional initialization logic here
 
