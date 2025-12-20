@@ -344,6 +344,7 @@ class MqttActuator(ShutdownAware, ChanelReceiver, MqttBase):
         """
         logging.debug("MqttActuator.callback_select called for topic: %s", message.topic)
         with self._service_lock:
+            param_id: Optional[str] = None
             try:
                 # Look up param_id from the message topic
                 param_id = self._topic_to_select_id.get(message.topic)
@@ -468,6 +469,7 @@ class MqttActuator(ShutdownAware, ChanelReceiver, MqttBase):
         """
         logging.debug("MqttActuator.callback_number called for topic: %s", message.topic)
         with self._service_lock:
+            param_id: Optional[str] = None
             try:
                 # Look up param_id from the message topic
                 param_id = self._topic_to_number_id.get(message.topic)
