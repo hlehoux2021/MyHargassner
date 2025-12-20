@@ -133,6 +133,31 @@ class MqttActuator(ShutdownAware, ChanelReceiver, MqttBase):
                     except Exception as e:
                         logging.error(f"Failed to parse numeric parameter: {response} ({e})")
                     continue
+                # $A parameter
+                # Example: $A6d;3;1.500;-6.000;6.000;0.500;°C;0.000;0;0;0;Zone 1 Corr.Amb. Télécommande;0
+                if items[0].startswith('$A') and items[0][2:].isalnum():
+                    try:
+                        key = items[0][1:]
+                        current = float(items[2])
+                        min_val = float(items[3])
+                        max_val = float(items[4])
+                        increment = float(items[5])
+                        unit = items[6]
+                        name = items[11] if len(items) > 11 else f"Param {key}"
+                        default = float(items[7])
+                        result[name] = {
+                            'type': 'number',
+                            'key': int(key),
+                            'current': current,
+                            'min': min_val,
+                            'max': max_val,
+                            'increment': increment,
+                            'unit': unit,
+                            'default': default
+                        }
+                    except Exception as e:
+                        logging.error(f"Failed to parse $A numeric parameter: {response} ({e})")
+                    continue
                 # Select parameter format (PR = Parameter Response):
                 # $PRxxx;6;current;max;default;0;0;0;name;value1;value2;...;0;
                 # Example: $PR011;6;0;5;1;0;0;0;Zone 1 Mode;Arr;Auto;Réduire;Confort;1x Confort;Refroid.;0;
