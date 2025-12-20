@@ -147,7 +147,7 @@ class MqttActuator(ShutdownAware, ChanelReceiver, MqttBase):
                         default = float(items[7])
                         result[name] = {
                             'type': 'number',
-                            'key': int(key),
+                            'key': key,
                             'current': current,
                             'min': min_val,
                             'max': max_val,
