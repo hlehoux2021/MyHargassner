@@ -94,6 +94,7 @@ class MqttActuator(ShutdownAware, ChanelReceiver, MqttBase):
                 response = response.strip().rstrip(';')
                 if not response or response == '$--':
                     continue
+                logging.log(15, "Param response: %s", response)
                 items = response.split(';')
                 # Numeric parameter format:
                 # $id;type;current;min;max;step;unit;default;0;0;0;name

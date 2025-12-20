@@ -429,7 +429,8 @@ class TelnetProxy(ShutdownAware, ChanelReceiver, MqttBase):
             b'$par get PR012\r\n', # Mode Zone 2
             b'$par get PR040\r\n', # démarrage Tampon.
             b'$par get 4\r\n', # parameter 4 : Temp. ambiante jour
-            b'$par get 5\r\n' # parameter 5 : Temp. ambiante de réduit
+            b'$par get 5\r\n', # parameter 5 : Temp. ambiante de réduit
+            b'$par get A6d\r\n' # parameter A6d : Correction d'ambiance télécommande (FR35)
         ]
         if not self._client.connected:
             logging.error('Client not connected')
