@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - feature-011
+
+### Added
+
+- **$A Parameter Support** (commits 548d2c9, 38d9784)
+  - Added request for A6d parameter in TelnetProxy parameter fetch list
+  - Added parsing logic in MqttActuator for $A parameter responses with format: `$Axx;type;current;min;max;increment;unit;default;...;name;...`
+  - Supports decimal values with min/max/increment constraints
+  - Creates MQTT Number entities for $A parameters with name, unit, current value, and adjustment range
+
+### Fixed
+
+- **Unbound param_id Variable** (commit 2efcf8f)
+  - Added explicit variable initialization (`param_id: Optional[str] = None`) in callback_select() and callback_number() methods
+- **$A Parameter Key Type** (commit 1da91b0)
+  - Changed key field from `int(key)` to `key` (string) in $A parameter parsing
+
+### Changed
+
+- **Logging Verbosity** (commit 548d2c9)
+  - Filtered out frequent `$setkomm` and `$erract` messages from verbose logging (log level 15)
+  - Added explicit debug logging for parameter responses in MqttActuator
+
 ## [1.0.0] - 2024
 
 ### Added
