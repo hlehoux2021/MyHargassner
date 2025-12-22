@@ -394,7 +394,7 @@ class MqttActuator(ShutdownAware, ChanelReceiver, MqttBase):
                     else:
                         logging.warning("No Select found for parameter ID: %s", param_id)
                 else:
-                    logging.warning('No new mode found for %s in response, keeping requested value: %s',
+                    logging.log(15, 'No new mode found for %s in response, keeping requested value: %s',
                                param_id, payload)
                     # If we don't get a response, keep the requested value
                     select = self._selects.get(param_id)
@@ -499,10 +499,10 @@ class MqttActuator(ShutdownAware, ChanelReceiver, MqttBase):
                     logging.error("Invalid payload for number entity: %s (%s)", payload, e)
                     return
                 command = f'$par set "{param_id};3;{value}"\r\n'
-                logging.info("Sending command: %s", command)
+                logging.debug("Sending command: %s", command)
                 new_value = self._send_command_and_parse(command, param_id, value_type='number')
                 if new_value is not None:
-                    logging.info('Final new value for param %s (id: %s): %s', param_id, param_id, new_value)
+                    logging.log(15,'New value for param %s (id: %s): %s', param_id, param_id, new_value)
                     number = self._numbers.get(param_id)
                     if number is not None:
                         try:
@@ -512,7 +512,7 @@ class MqttActuator(ShutdownAware, ChanelReceiver, MqttBase):
                     else:
                         logging.warning("No Number found for parameter ID: %s", param_id)
                 else:
-                    logging.info('No new value extracted for param %s (id: %s)', param_id, param_id)
+                    logging.log(15, 'No new value extracted for param %s (id: %s)', param_id, param_id)
             except Exception as e:
                 logging.error("Error in callback_number for %s: %s", param_id, str(e))
             logging.debug("MqttActuator.callback_number" \
@@ -888,7 +888,7 @@ class MqttActuator(ShutdownAware, ChanelReceiver, MqttBase):
                                 result_float = float(parts[1].strip())
                             else:
                                 result_str = parts[1].strip()
-                            logging.info('Extracted new value for %s: %s', param_id, parts[1].strip())
+                            logging.debug('Extracted new value for %s: %s', param_id, parts[1].strip())
                         except Exception:
                             pass
 
