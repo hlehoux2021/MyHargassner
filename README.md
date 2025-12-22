@@ -10,7 +10,7 @@ MyHargassner is a Python-based gateway that bridges Hargassner pellet boilers wi
 - **MQTT Integration**: Full Home Assistant MQTT Discovery support
 - **Bidirectional Control**: Control boiler from Home Assistant, changes reflected in Hargassner App
 - **Real-time Telemetry**: ~30 sensor values (temperatures, states, performance metrics)
-- **Controllable Parameters**: 6 parameters including boiler mode, zone modes, and temperature setpoints
+- **Controllable Parameters**: 9 parameters including boiler mode, zone modes, and temperature setpoints for both zones
 - **Automatic Discovery**: Dynamic parameter discovery system
 
 ## Quick Links
@@ -23,7 +23,6 @@ MyHargassner is a Python-based gateway that bridges Hargassner pellet boilers wi
 ## Known Limitations
 
 - Only Hargassner software version V14.0n3 is currently tested
-- Control limited to 6 parameters (PR001, PR011, PR012, PR040, parameter 4, parameter 5)
 
 See [CHANGELOG.md](docs/CHANGELOG.md) for planned features and recent improvements.
 

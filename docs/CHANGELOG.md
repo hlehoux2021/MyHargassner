@@ -5,7 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - feature-011
+## [Unreleased]
+
+### Added
+
+- Extended Zone 2 Temperature Parameters (commit b732665)
+  - Added parameters 7, 8 (Zone 2 temperatures) and A6d (ambient correction)
+  - Moved parameter command list to `HargConfig.commands` for centralized configuration
+
+### Changed
+
+- Logging Level Adjustments (commit 9b8a776)
+  - Reduced log verbosity: downgraded several messages from `warning`/`info` to `log(15)`/`debug`
+
+- Socket Platform Compatibility (commit 93dc754)
+  - Improved SO_BINDTODEVICE handling on macOS
+
+### Previous Unreleased Work - feature-011
 
 ### Added
 

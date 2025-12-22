@@ -49,10 +49,10 @@ The system consists of 5 main threaded components that communicate via PubSub ch
    - Subscribes to "info" channel to receive boiler mode configurations
    - Subscribes to "track" channel for bidirectional state synchronization
    - Creates MQTT Select entities for mode parameters (PR001, PR011, PR012, PR040)
-   - Creates MQTT Number entities for numeric setpoints (parameters 4, 5)
+   - Creates MQTT Number entities for numeric setpoints (parameters 4, 5, 7, 8, A6d)
    - Sends telnet "$par set" commands to boiler via TelnetProxy internal interface (port 4000)
    - Implements threaded callbacks for MQTT control messages
-   - Currently supports 6 parameters with dynamic discovery system
+   - Currently supports 9 parameters with dynamic discovery system
 
 ### **Key Classes and Inheritance**
 
@@ -154,6 +154,7 @@ The codebase supports both Linux and macOS (Darwin):
 - **[myhargassner/hargconfig.py](../../myhargassner/hargconfig.py)** - Boiler parameter definitions
   - Maps 180+ telemetry parameters (c0-c180) to names/units/descriptions
   - Configurable `wanted` list for selective monitoring
+  - `commands` list: telnet commands to fetch boiler parameters (PR001, PR011, PR012, PR040, 4, 5, 7, 8, A6d)
 - **[myhargassner/socket_manager.py](../../myhargassner/socket_manager.py)** - Cross-platform socket handling (Linux/MacOS)
 - **[myhargassner/telnethelper.py](../../myhargassner/telnethelper.py)** - Telnet client utilities
 - **[myhargassner/pubsub/](../../myhargassner/pubsub/)** - Internal message bus (from Thierry Maillard)
@@ -165,13 +166,13 @@ The codebase supports both Linux and macOS (Darwin):
 Based on the README's known limitations and current codebase state:
 
 ### **1. Configuration System** ([appconfig.py](myhargassner/appconfig.py))
-- **Status:** ⚠️ **NOT ADDRESSED** (remains on todo list)
-- **Current:** Hard-coded path to `myhargassner.ini` in current working directory (line 66)
-- **Issue:** When running as systemd service, config location is unclear
-- **Work needed:**
-  - Support config file path via CLI argument (`-c/--config`)
-  - Search standard locations (`/etc/myhargassner/`, `~/.config/`, etc.)
-  - Better validation of required fields (MQTT password now validated in main.py:40-42)
+- **Status:** ✅ **WORKING AS DESIGNED**
+- **Current Implementation:**
+  - Loads `myhargassner.ini` from current working directory (line 66)
+  - When run from CLI: searches in the directory where command is executed
+  - When run as systemd service: uses `/etc/myhargassner` (configured in `myhargassner.service` WorkingDirectory)
+  - Merges configuration: defaults → INI file → CLI arguments
+  - MQTT password validation in main.py:40-42
 
 ### **2. Error Handling** ([mqtt_actuator.py](myhargassner/mqtt_actuator.py:721-845))
 - **Status:** ⚠️ **PARTIALLY IMPLEMENTED**
@@ -190,14 +191,12 @@ Based on the README's known limitations and current codebase state:
 - **Status:** ✅ **COMPLETED**
 - **Implemented features:**
   - ✅ Dynamic parameter discovery - no longer hardcoded
-  - ✅ Supports 6 parameters: PR001, PR011, PR012, PR040, parameter 4, parameter 5
+  - ✅ Supports 9 parameters: PR001, PR011, PR012, PR040, parameter 4, parameter 5, parameter 7, parameter 8, parameter A6d
   - ✅ Generic parameter parsing via `_parse_parameter_response()`
   - ✅ Dual entity type support: Select (for modes) and Number (for numeric values)
   - ✅ Automatic MQTT entity creation based on parameter format
   - ✅ Bidirectional sync: receives parameter changes from boiler via "track" channel
-- **Future work:**
-  - Add more PRxxx parameters as needed by users
-  - Implement automatic parameter discovery from `$daq desc` response
+  - ✅ Parameter command list centralized in `HargConfig.commands` for easy maintenance
 
 ### **4. Software Version Support** ([hargconfig.py](myhargassner/hargconfig.py:245))
 - **Status:** ⚠️ **NOT ADDRESSED**
@@ -303,7 +302,10 @@ The code follows consistent patterns for threading, messaging, and MQTT integrat
 
 **Recent progress:**
 - ✅ 2 out of 5 major development areas completed (Boiler Control, MQTT Stability)
-- ✅ Dynamic parameter system now supports 6 parameters with extensibility
+- ✅ Dynamic parameter system now supports 9 parameters with extensibility (up from 6)
+- ✅ Extended Zone 2 temperature monitoring (parameters 7, 8, A6d)
+- ✅ Centralized parameter configuration in HargConfig.commands
+- ✅ Logging optimizations to reduce production noise
 - ✅ Bidirectional sync: Changes made via IGW/physical controls now reflected in Home Assistant
 - ✅ Socket-level error handling with reconnection completed
 - ⚠️ 3 areas remain: Configuration system, boiler error response handling, and multi-version support
