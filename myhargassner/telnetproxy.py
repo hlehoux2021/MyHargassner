@@ -194,7 +194,7 @@ class TelnetService:
         """
         self._listen = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         if platform.system() == 'Linux' and not SocketManager.is_valid_ip(src_iface.decode('utf-8')):
-            self._listen.setsockopt(socket.SOL_SOCKET, socket.SO_BINDTODEVICE, src_iface) #pylint: disable=E1101
+            self._listen.setsockopt(socket.SOL_SOCKET, socket.SO_BINDTODEVICE, src_iface) # type: ignore #pylint: disable=E1101
         self._listen.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
         self._listen.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self._buffer_size = buffer_size
