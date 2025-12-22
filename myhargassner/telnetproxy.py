@@ -20,6 +20,7 @@ from myhargassner.pubsub.pubsub import PubSub
 # Project imports
 from myhargassner.telnethelper import TelnetClient
 from myhargassner.appconfig import AppConfig
+from myhargassner import hargconfig
 from myhargassner.core import ChanelReceiver, ShutdownAware
 from myhargassner.analyser import Analyser
 from myhargassner.mqtt_actuator import ThreadedMqttActuator, MqttBase
@@ -421,23 +422,15 @@ class TelnetProxy(ShutdownAware, ChanelReceiver, MqttBase):
         Get the boiler configuration.
 
         """
+        config: hargconfig.HargConfig = hargconfig.HargConfig()
         message: str = 'BoilerConfig:'
-        # todo make this as an HargConfig parameter.
-        commands= [
-            b'$par get PR001\r\n', # Mode Boiler
-            b'$par get PR011\r\n', # Mode Zone 1
-            b'$par get PR012\r\n', # Mode Zone 2
-            b'$par get PR040\r\n', # démarrage Tampon.
-            b'$par get 4\r\n', # parameter 4 : Temp. ambiante jour
-            b'$par get 5\r\n', # parameter 5 : Temp. ambiante de réduit
-            b'$par get A6d\r\n' # parameter A6d : Correction d'ambiance télécommande (FR35)
-        ]
+
         if not self._client.connected:
             logging.error('Client not connected')
             return
         logging.debug('telnet getting boiler config from %s', repr(self.bl_addr))
 
-        for cmd in commands:
+        for cmd in config.commands:
             logging.debug('telnet sending command %s', cmd)
             try:
                 self._client.send(cmd)
