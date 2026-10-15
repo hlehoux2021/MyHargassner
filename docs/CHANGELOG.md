@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **IGW blocked after `$igw clear`** - After the in-process restart, the IGW kept sending `get services` every 20 s without ever receiving the boiler reply (branch fix-igw-clear)
+  - The boiler replies by unicast to the port the request came from, which is shared by the gateway resender and the boiler listener. The resender is now connected to `<broadcast>`, so the kernel never delivers anything to it and replies always reach the boiler listener
+  - The first packet is relayed to the boiler only once the boiler listener is bound (the boiler replies within a few ms)
+  - UDP sockets use `SO_REUSEADDR` instead of `SO_REUSEPORT` on Linux, which load-balanced unicast datagrams between sockets sharing a port
+  - All sockets are closed explicitly at the end of a session: UDP sockets, telnet listening sockets (ports 23 and 4000), MqttInformer MQTT clients
+  - Telnet `accept()` no longer blocks forever, and TelnetProxy no longer binds its ports when shutdown is requested during discovery
+- **bl_iface** - Can be set either to the interface name (`eth1`) or to its IP address (`10.0.0.1`), with the same socket configuration (`SO_BINDTODEVICE` always applied on Linux)
+
 ## [1.0.0] - 2024
 
 ### Added

@@ -10,7 +10,7 @@ import select
 import time
 import platform
 from threading import Thread, Lock
-from typing import Annotated,Tuple
+from typing import Annotated, Callable, Optional, Tuple
 import annotated_types
 
 
@@ -204,25 +204,50 @@ class TelnetService:
         logging.debug('TelnetService binding to port %d', port)
         self._listen.bind(('', port))
 
-    def listen(self):
+    def listen(self, timeout: float):
         """
         Start listening for a telnet connection.
+        Args:
+            timeout (float): accept() timeout, so that a waiting accept can notice a shutdown.
         """
         logging.debug('TelnetService listening')
+        self._listen.settimeout(timeout)
         self._listen.listen()
 
-    def accept(self) -> int:
+    def accept(self, should_stop: Callable[[], bool]) -> Optional[int]:
         """
         Accept a telnet connection and return the source port of the connecting client.
+        Args:
+            should_stop: called on each accept() timeout, waiting stops when it returns True.
         Returns:
-            int: The port number of the connecting client.
+            int: The port number of the connecting client, None if stopped or closed before a connection.
         """
         _addr: Tuple[str, int] = ('', 0)
         logging.info('TelnetService accepting a connection')
-        self._telnet, _addr = self._listen.accept()
+        while True:
+            try:
+                self._telnet, _addr = self._listen.accept()
+                break
+            except socket.timeout:
+                if should_stop():
+                    logging.info('TelnetService stopped accepting connections')
+                    return None
+            except OSError as err:
+                # listening socket closed by close()
+                logging.info('TelnetService accept interrupted: %s', err)
+                return None
         logging.info('TelnetService connection from %s:%d accepted', _addr[0], _addr[1])
         # reply the source port from which gateway is telneting
         return _addr[1]
+
+    def close(self) -> None:
+        """
+        Close the accepted connection and the listening socket.
+        """
+        if self.socket() is not None:
+            self._telnet.close()
+            self._telnet = None
+        self._listen.close()
 
     def send(self, data: bytes) -> int:
         """
@@ -310,14 +335,14 @@ class TelnetProxy(ShutdownAware, ChanelReceiver, MqttBase):
         Start listening for a telnet connection on the first service.
         """
         logging.debug('telnet listening')
-        self._service1.listen()
+        self._service1.listen(self._appconfig.loop_timeout())
 
     def listen2(self):
         """
         Start listening for a telnet connection on the second service.
         """
         logging.debug('telnet listening')
-        self._service2.listen()
+        self._service2.listen(self._appconfig.loop_timeout())
 
     def accept1(self):
         """
@@ -334,7 +359,10 @@ class TelnetProxy(ShutdownAware, ChanelReceiver, MqttBase):
                     pass
 
         # Accept new connection and remember the source port
-        self.gwt_port = self._service1.accept()
+        _port = self._service1.accept(lambda: self._shutdown_requested)
+        if _port is None:
+            return
+        self.gwt_port = _port
         _sock = self._service1.socket()
 
         # Add new socket to active set
@@ -357,7 +385,8 @@ class TelnetProxy(ShutdownAware, ChanelReceiver, MqttBase):
                     pass
 
         # Accept new connection
-        self._service2.accept()
+        if self._service2.accept(lambda: self._shutdown_requested) is None:
+            return
         _sock = self._service2.socket()
 
         # Add new socket to active set
@@ -475,16 +504,9 @@ class TelnetProxy(ShutdownAware, ChanelReceiver, MqttBase):
             except Exception as e:
                 logging.warning('Error closing client connection: %s', e)
 
-        # Close service sockets
-        for service in [self._service1, self._service2]:
-            sock = service.socket()
-            if sock:
-                try:
-                    sock.close()
-                    self._active_sockets.discard(sock)
-                    logging.debug('Closed service socket')
-                except Exception as e:
-                    logging.warning('Error closing service socket: %s', e)
+        # Close service sockets, including the listening ones:
+        # the IGW must reconnect to the listeners of the next session
+        self.close_services()
 
         # Clear active sockets set
         self._active_sockets.clear()
@@ -500,6 +522,21 @@ class TelnetProxy(ShutdownAware, ChanelReceiver, MqttBase):
 
         # Request restart
         self._request_restart(reason)
+
+    def close_services(self) -> None:
+        """
+        Close the accepted and listening sockets of both telnet services.
+        Safe to call several times.
+        """
+        for service in [self._service1, self._service2]:
+            sock = service.socket()
+            if sock:
+                self._active_sockets.discard(sock)
+            try:
+                service.close()
+                logging.debug('Closed service sockets')
+            except Exception as e:
+                logging.warning('Error closing service socket: %s', e)
 
     def monitor_for_reconnection(self) -> bool:
         """
@@ -827,6 +864,9 @@ class ThreadedTelnetProxy(Thread):
         try:
             # Discover the boiler
             self.tp.discover()
+            if self.tp.is_shutdown_requested:
+                # do not bind, listen and accept for a session that is ending
+                return
 
             # Create and start MqttActuator
             if not self._ma:
@@ -871,4 +911,6 @@ class ThreadedTelnetProxy(Thread):
                     logging.warning("MqttActuator did not exit cleanly")
                 self._ma = None
 
+            # Always release the telnet ports for the next session
+            self.tp.close_services()
             logging.info("ThreadedTelnetProxy: Run completed")

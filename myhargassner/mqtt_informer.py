@@ -157,6 +157,25 @@ class MqttInformer(ShutdownAware, MqttBase):
             self._sensors[_part]= _sensor
 
 
+    def _cleanup_sensors(self) -> None:
+        """
+        Disconnect the MQTT client of every sensor and stop its network thread.
+        Each sensor owns a paho client running in its own thread: without this,
+        clients and threads accumulate at each session restart.
+        """
+        sensors = [getattr(self, attr, None) for attr in ('_msg', '_web_app', '_token', '_key', '_kt')]
+        sensors += list(self._sensors.values())
+        for sensor in sensors:
+            client = getattr(sensor, 'mqtt_client', None)
+            if client is None:
+                continue
+            try:
+                client.disconnect()
+                client.loop_stop()
+            except Exception as e: # pylint: disable=broad-except
+                logging.warning('MqttInformer: error disconnecting sensor client: %s', e)
+        self._sensors = {}
+
     def start(self) -> None:
         """This method runs the MqttInformer, waiting for message on _info_queue"""
         _stage: str = ''
@@ -230,7 +249,7 @@ class MqttInformer(ShutdownAware, MqttBase):
                 logging.critical(traceback.format_exc())
                 _stage = ''
                 self._dict = {}
-                self._sensors = {}
+                # sensors are cleaned up after the loop
                 # whenever we exit the loop, we unsubscribe from the channel
                 self._com.unsubscribe(self._channel, self._msq)
                 self._msq = None
@@ -241,6 +260,7 @@ class MqttInformer(ShutdownAware, MqttBase):
         if self._msq:
             self._com.unsubscribe(self._channel, self._msq)
             self._msq = None
+        self._cleanup_sensors()
 
 
 class ThreadedMqttInformer(threading.Thread):

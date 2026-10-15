@@ -4,7 +4,8 @@ This module implements the boiler proxy
 
 # Standard library imports
 import logging
-from typing import Tuple
+import threading
+from typing import Optional, Tuple
 
 # Third party imports
 from myhargassner.pubsub.pubsub import PubSub
@@ -13,7 +14,6 @@ from myhargassner.pubsub.pubsub import PubSub
 from myhargassner.appconfig import AppConfig
 from myhargassner.core import ListenerSender, ThreadedListenerSender
 from myhargassner.socket_manager import (
-    SocketManager,
     SocketSendError,
     SocketTimeoutError,
     SocketBindError,
@@ -25,17 +25,17 @@ class BoilerListenerSender(ListenerSender):
     This class implements the boiler proxy
     """
 
-    def __init__(self, appconfig: AppConfig, communicator: PubSub, delta: int = 0):
+    _boiler_ready: Optional[threading.Event]
+
+    def __init__(self, appconfig: AppConfig, communicator: PubSub, delta: int = 0,
+                 boiler_ready: Optional[threading.Event] = None):
         # initiate a ListenerSender from bl_iface to gw_iface
-        # we initialize the boiler side of the ListenerSender with the IP address of the interface
-        # to avoid SO_BINDTODEVICE issues.
-        # We will e.g. bind the socket to port 50000 on 10.0.0.1 IP (of eth1 interface) to listen to boiler UDP packets
-
-        bl_ip = SocketManager.get_interface_ip(appconfig.bl_iface_str())
-
-        super().__init__(appconfig, communicator, bl_ip, appconfig.gw_iface())
+        # bl_iface can be the interface name (eth1) or its IP address (10.0.0.1),
+        # SocketManager resolves both to the same socket configuration
+        super().__init__(appconfig, communicator, appconfig.bl_iface(), appconfig.gw_iface())
         # Add any additional initialization logic here
         self.delta = delta
+        self._boiler_ready = boiler_ready  # set once bound, so the gateway can relay to the boiler
 
     def publish_discovery(self, addr):
         """
@@ -124,6 +124,8 @@ class BoilerListenerSender(ListenerSender):
                 broadcast=False  # No broadcast for boiler listener
             )
             self.setbound()
+            if self._boiler_ready is not None:
+                self._boiler_ready.set()
             logging.log(15, 'BoilerListener bound successfully (gw_port=%d, delta=%d)', self.gw_port, self.delta)
         except (SocketBindError, InterfaceError) as e:
             logging.error('Failed to bind listener: %s', str(e))
@@ -149,7 +151,8 @@ class ThreadedBoilerListenerSender(ThreadedListenerSender):
     This class implements a Thread to run the boiler proxy
     """
     _bls: BoilerListenerSender
-    def __init__(self, appconfig: AppConfig, communicator: PubSub, delta: int = 0):
+    def __init__(self, appconfig: AppConfig, communicator: PubSub, delta: int = 0,
+                 boiler_ready: Optional[threading.Event] = None):
         """
         Initialize the threaded boiler listener.
 
@@ -157,8 +160,9 @@ class ThreadedBoilerListenerSender(ThreadedListenerSender):
             appconfig: Application configuration
             communicator: PubSub instance for inter-component communication
             delta: Port delta for same-machine scenarios
+            boiler_ready: Event set once the listener is bound
         """
-        self._bls = BoilerListenerSender(appconfig, communicator, delta)
+        self._bls = BoilerListenerSender(appconfig, communicator, delta, boiler_ready)
         super().__init__(self._bls, 'BoilerListener')
 
     def run(self):

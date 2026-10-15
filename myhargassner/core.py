@@ -361,6 +361,18 @@ class ListenerSender(ShutdownAware, ChanelReceiver, ABC):
 
     # request_shutdown() inherited from ShutdownAware mixin
 
+    def close(self) -> None:
+        """
+        Close the listener and resender sockets.
+        Must be called at the end of a session so that the next session
+        does not share the UDP ports with sockets nobody reads anymore.
+        """
+        self.listen_manager.close()
+        self.send_manager.close()
+        self._bound = False
+        self._resender_bound = False
+        logging.debug('%s: sockets closed', self.name())
+
     def loop(self) -> None:
         """
         This method is the main loop of the class.
@@ -430,6 +442,10 @@ class ThreadedListenerSender(Thread, ABC):
     def request_shutdown(self) -> None:
         """Request graceful shutdown of the listener thread."""
         self._listener_sender.request_shutdown()
+
+    def close(self) -> None:
+        """Close the sockets of the listener. Call once the thread has exited."""
+        self._listener_sender.close()
 
     @abstractmethod
     def run(self) -> None:

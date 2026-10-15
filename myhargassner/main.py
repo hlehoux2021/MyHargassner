@@ -133,8 +133,10 @@ def main():
             # Create all components
 
             mi = ThreadedMqttInformer(app_config, session_pub)
-            bls = ThreadedBoilerListenerSender(app_config, session_pub, delta=100)
-            gls = ThreadedGatewayListenerSender(app_config, session_pub, delta=100)
+            # the gateway listener relays to the boiler only once the boiler listener is bound
+            boiler_ready = threading.Event()
+            bls = ThreadedBoilerListenerSender(app_config, session_pub, delta=100, boiler_ready=boiler_ready)
+            gls = ThreadedGatewayListenerSender(app_config, session_pub, delta=100, boiler_ready=boiler_ready)
             tln = ThreadedTelnetProxy(app_config, session_pub, port=23)
 
             # Start all threads
@@ -176,6 +178,10 @@ def main():
                 logging.warning("TelnetProxy did not exit cleanly")
             if mi.is_alive():
                 logging.warning("MqttInformer did not exit cleanly")
+
+            # Release the UDP ports explicitly: do not rely on garbage collection
+            gls.close()
+            bls.close()
 
             logging.info("All components stopped")
             logging.info("Waiting for next IGW connection...")
