@@ -295,6 +295,7 @@ class TelnetProxy(ShutdownAware, ChanelReceiver, MqttBase):
     _session_end_requested : bool # Flag for $igw clear detection
     _discovery_complete: bool # Flag to track boiler discovery completion
     _telnet_session_active: bool # Flag to track if telnet session is active
+    _restart_requested: bool # Flag to request the session restart only once
     # Note: _shutdown_requested is inherited from ShutdownAware mixin
 
     def __init__(self, appconfig: AppConfig, communicator: PubSub,
@@ -314,6 +315,7 @@ class TelnetProxy(ShutdownAware, ChanelReceiver, MqttBase):
         self._service_lock = lock
         self._active_sockets = set()
         self._session_end_requested = False
+        self._restart_requested = False
         self._discovery_complete = False
         self._telnet_session_active= False
 
@@ -397,14 +399,26 @@ class TelnetProxy(ShutdownAware, ChanelReceiver, MqttBase):
 
     # request_shutdown() inherited from ShutdownAware mixin
 
+    @property
+    def is_restart_requested(self) -> bool:
+        """
+        Check if a restart has already been requested for this session.
+        """
+        return self._restart_requested
+
     def _request_restart(self, reason: str):
         """
         Request restart by publishing to 'system' channel for main.py to handle.
-        Called only once per session from _cleanup_and_exit().
+        Called from _cleanup_and_exit(), or by ThreadedTelnetProxy if the proxy
+        ended without requesting it. Only the first request of the session is published.
 
         Args:
             reason: Reason for restart (for logging)
         """
+        if self._restart_requested:
+            logging.debug('TelnetProxy restart already requested, ignoring: %s', reason)
+            return
+        self._restart_requested = True
         logging.info('TelnetProxy requesting restart: %s', reason)
         self._com.publish('system', 'RESTART_REQUESTED')
 
@@ -498,8 +512,8 @@ class TelnetProxy(ShutdownAware, ChanelReceiver, MqttBase):
         """
         logging.info('TelnetProxy cleaning up and exiting: %s', reason)
 
-        # Close client connection to boiler
-        if self._client:
+        # Close client connection to boiler (not created if the connection failed)
+        if getattr(self, '_client', None):
             try:
                 self._client.close()
             except Exception as e:
@@ -802,16 +816,22 @@ class TelnetProxy(ShutdownAware, ChanelReceiver, MqttBase):
         """
         Main service - run once per IGW connection session.
         No restart logic - let main.py handle restarts.
+        Any unexpected error ends the session with a restart request,
+        otherwise the system would wait forever for a restart.
         """
         logging.debug('TelnetProxy::service starting')
 
-        # Initial setup - connect to boiler
-        if not self.connect_client():
-            raise RuntimeError("Failed to connect to boiler")
+        try:
+            # Initial setup - connect to boiler
+            if not self.connect_client():
+                raise RuntimeError("Failed to connect to boiler")
 
-        # Run the main loop for this connection session
-        logging.info('TelnetProxy: Running main loop')
-        self.loop()
+            # Run the main loop for this connection session
+            logging.info('TelnetProxy: Running main loop')
+            self.loop()
+        except Exception as err:
+            logging.critical('TelnetProxy: unexpected error in service: %s', err, exc_info=True)
+            self._cleanup_and_exit('unexpected_error_in_service')
 
         # Clean exit (no restart logic)
         logging.info('TelnetProxy: Connection ended, exiting service')
@@ -906,7 +926,15 @@ class ThreadedTelnetProxy(Thread):
             _accept1_thread.join(timeout=2)
             _accept2_thread.join(timeout=2)
 
+        except Exception as err:
+            logging.critical('ThreadedTelnetProxy: unexpected error: %s', err, exc_info=True)
         finally:
+            # Safety net: a proxy that ends on its own must request a restart,
+            # otherwise main.py waits forever and the IGW cannot reconnect
+            if not self.tp.is_restart_requested and not self.tp.is_shutdown_requested:
+                logging.error('TelnetProxy ended without requesting a restart')
+                self.tp._request_restart('telnet_proxy_ended')  # pylint: disable=protected-access
+
             # Always cleanup MqttActuator when TelnetProxy exits
             logging.info("TelnetProxy exiting, shutting down MqttActuator...")
             if self._ma:
