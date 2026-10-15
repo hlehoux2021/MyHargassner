@@ -247,7 +247,7 @@ class TelnetService:
         """
         if self.socket() is not None:
             self._telnet.close()
-            self._telnet = None
+            del self._telnet  # socket() returns None again
         self._listen.close()
 
     def send(self, data: bytes) -> int:
@@ -853,6 +853,10 @@ class ThreadedTelnetProxy(Thread):
         # Also shutdown MqttActuator if running
         if self._ma:
             self._ma.request_shutdown()
+
+    def close(self) -> None:
+        """Close the telnet sockets, also if the thread was never started. Safe to call several times."""
+        self.tp.close_services()
 
     def run(self) -> None:
         """

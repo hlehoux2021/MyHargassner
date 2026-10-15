@@ -115,6 +115,43 @@ def wait_for_restart_trigger(pub: PubSub) -> str:
         pub.unsubscribe('system', system_queue)
 
 
+def stop_components(components: list[threading.Thread]) -> None:
+    """
+    Stop the components of a session and release their resources.
+
+    Requests shutdown of every component, waits for the started ones to exit,
+    then closes their sockets. Safe to call with components that were created
+    but not started (e.g. when the session failed while starting).
+
+    Args:
+        components: Threaded components of the session, in creation order
+    """
+    logging.info("Orchestrating shutdown of all components...")
+    for component in components:
+        component.request_shutdown()  # type: ignore[attr-defined]
+    # Note: PubSubListener doesn't have request_shutdown yet
+
+    # Wait for all threads to exit cleanly (with timeout)
+    logging.info("Waiting for threads to exit...")
+    for component in components:
+        if component.ident is None:
+            continue  # never started
+        component.join(timeout=5)
+        if component.is_alive():
+            logging.warning("%s did not exit cleanly", component.name)
+
+    # Release the sockets explicitly: do not rely on garbage collection
+    for component in components:
+        close = getattr(component, 'close', None)
+        if close is None:
+            continue
+        try:
+            close()
+        except Exception as e:
+            logging.warning("Error closing %s: %s", component.name, e)
+    logging.info("All components stopped")
+
+
 def main():
     """Main entry point with restart orchestration."""
     restart_count = 0
@@ -125,19 +162,24 @@ def main():
     while True: # restart_count < max_restarts:
         restart_count += 1
         logging.info("System session starting (session #%d)", restart_count)
+        components: list[threading.Thread] = []  # stopped at the end of the session, whatever happens
+        pause = 2  # Brief pause before restart
 
         try:
             # Create fresh PubSub for this session
             session_pub = PubSub(max_queue_in_a_channel=9999)
 
             # Create all components
-
             mi = ThreadedMqttInformer(app_config, session_pub)
+            components.append(mi)
             # the gateway listener relays to the boiler only once the boiler listener is bound
             boiler_ready = threading.Event()
             bls = ThreadedBoilerListenerSender(app_config, session_pub, delta=100, boiler_ready=boiler_ready)
+            components.append(bls)
             gls = ThreadedGatewayListenerSender(app_config, session_pub, delta=100, boiler_ready=boiler_ready)
+            components.append(gls)
             tln = ThreadedTelnetProxy(app_config, session_pub, port=23)
+            components.append(tln)
 
             # Start all threads
             logging.info("Starting all components...")
@@ -152,47 +194,19 @@ def main():
             restart_reason = wait_for_restart_trigger(session_pub)
             logging.info("Restart requested: %s", restart_reason)
 
-            # Orchestrate graceful shutdown of ALL components
-            logging.info("Orchestrating shutdown of all components...")
-
-            # Request shutdown via request_shutdown() method
-            gls.request_shutdown()
-            bls.request_shutdown()
-            tln.request_shutdown()
-            mi.request_shutdown()
-            # Note: PubSubListener doesn't have request_shutdown yet
-
-            # Wait for all threads to exit cleanly (with timeout)
-            logging.info("Waiting for threads to exit...")
-            gls.join(timeout=5)
-            bls.join(timeout=5)
-            tln.join(timeout=5)
-            mi.join(timeout=5)
-
-            # Check for zombie threads
-            if gls.is_alive():
-                logging.warning("GatewayListener did not exit cleanly")
-            if bls.is_alive():
-                logging.warning("BoilerListener did not exit cleanly")
-            if tln.is_alive():
-                logging.warning("TelnetProxy did not exit cleanly")
-            if mi.is_alive():
-                logging.warning("MqttInformer did not exit cleanly")
-
-            # Release the UDP ports explicitly: do not rely on garbage collection
-            gls.close()
-            bls.close()
-
-            logging.info("All components stopped")
-            logging.info("Waiting for next IGW connection...")
-            time.sleep(2)  # Brief pause before restart
-
         except KeyboardInterrupt:
             logging.info("Keyboard interrupt, exiting...")
             break
         except Exception as e:
             logging.error("Unexpected error: %s", e, exc_info=True)
-            time.sleep(5)  # Wait before retry on error
+            pause = 5  # Wait before retry on error
+        finally:
+            # Orchestrate graceful shutdown of ALL components, also after an error,
+            # so that the next session does not compete with this one
+            stop_components(components)
+
+        logging.info("Waiting for next IGW connection...")
+        time.sleep(pause)
 
     logging.info("System exiting after %d sessions", restart_count)
 
