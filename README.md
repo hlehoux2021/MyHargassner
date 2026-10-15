@@ -110,14 +110,16 @@ sudo -E env -S PATH=$PATH python3 -m myhargassner.main
 ```
 
 **Command-line Arguments:**
-- `-g/--GW_IFACE` - Source interface (gateway side)
-- `-b/--BL_IFACE` - Destination interface (boiler side)
-- `-p/--port` - Source port
-- `-d/--debug` - Enable debug logging
-- `-i/--info` - Info logging level
-- `-w/--warning` - Warning logging level
-- `-e/--error` - Error logging level
-- `-c/--critical` - Critical logging level
+
+Every option of `myhargassner.ini` (except the MQTT password) can be overridden with `--<option> <value>`:
+- `--gw_iface` - Interface connected to the IGW (gateway side), e.g. `eth0`
+- `--bl_iface` - Interface connected to the boiler, by name (`eth1`) or by IP address (`10.0.0.1`)
+- `--udp_port`, `--socket_timeout`, `--buff_size` - Network settings
+- `--host`, `--port`, `--username`, `--topic_prefix` - MQTT settings (`--port` is the MQTT broker port)
+- `--log_path`, `--log_level` - Logging settings, e.g. `--log_level DEBUG`
+- `--loop_timeout`, `--queue_timeout`, `--retry_delay`, `--service_lock_delay` - Timeouts (seconds)
+
+The `-d/--debug`, `-i/--info`, `-w/--warning`, `-e/--error` and `-c/--critical` flags are accepted but currently have no effect: use `--log_level` instead.
 
 ### Step 5: Setting up as a System Service (Optional)
 
@@ -163,7 +165,7 @@ Edit `myhargassner.ini` to configure all settings:
 ```ini
 [network]
 gw_iface = eth0           # Interface connected to IGW (home network)
-bl_iface = eth1           # Interface connected to boiler
+bl_iface = eth1           # Interface connected to boiler (name, or its IP address e.g. 10.0.0.1)
 udp_port = 35601
 socket_timeout = 5
 buff_size = 4096

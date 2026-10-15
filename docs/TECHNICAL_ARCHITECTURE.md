@@ -20,16 +20,16 @@ For network setup details, see [../NETWORK_SETUP.md](../NETWORK_SETUP.md).
 
 The system consists of 5 main threaded components that communicate via PubSub channels:
 
-1. **GatewayListenerSender** ([gateway.py](../../myhargassner/gateway.py))
-   - Listens on the gateway interface for UDP broadcasts from IGW (port 50000, 50002)
-   - Relays packets to the boiler
+1. **GatewayListenerSender** ([gateway.py](../myhargassner/gateway.py))
+   - Listens on the gateway interface for the UDP broadcasts of the IGW (`HargaWebApp`, `get services`, sent from port 50000 to port 35601)
+   - Relays them as broadcasts to the boiler, from port 50000 on the boiler interface
    - Publishes gateway discovery info (address/port) to "bootstrap" channel
 
-2. **BoilerListenerSender** ([boiler.py](../../myhargassner/boiler.py))
-   - Listens on the boiler interface for UDP broadcasts from boiler (port 35601)
-   - Relays packets to the gateway
+2. **BoilerListenerSender** ([boiler.py](../myhargassner/boiler.py))
+   - Listens on the boiler interface, port 50000, for the boiler replies (unicast `HSV/CL ...` services description)
+   - Relays them by unicast to the IGW, from port 35601 on the gateway interface
    - Publishes boiler discovery info (address/port) to "bootstrap" channel
-   - Analyzes boiler "pm" telemetry buffers sent every second
+   - The "pm" telemetry buffers are not UDP: they come through the telnet session and are analysed by the `Analyser`
 
 3. **TelnetProxy** ([telnetproxy.py](../../myhargassner/telnetproxy.py))
    - Acts as a telnet relay between IGW and boiler (port 23)
@@ -103,6 +103,36 @@ IGW sends telnet "$login token" → GatewayListener → TelnetProxy → Boiler
                                         Creates/updates MQTT sensor
 ```
 
+### **UDP Socket Design**
+
+Wireshark captures of the original setup (IGW and boiler on the same LAN) and of the proxy show the discovery dialog:
+
+```
+IGW    50000 → 255.255.255.255:35601   HargaWebApp / SN          (broadcast)
+IGW    50000 → 255.255.255.255:35601   get services              (broadcast)
+Boiler 35601 → IGW:50000               HSV/CL 9-60KW V14.0n3 ... (unicast, within 2-25 ms)
+IGW    → Boiler:23                     telnet session
+```
+
+A healthy IGW sends `get services`, gets the reply, sends a second one a few seconds later, then opens the telnet session. An IGW repeating `get services` **every 20 s** does not receive the replies.
+
+Each UDP port is shared by a listener and a sender socket:
+
+| Port | Interface | Listener | Sender |
+|------|-----------|----------|--------|
+| 35601 | gateway (eth0) | GatewayListener: receives the IGW broadcasts | BoilerListener resender: relays the boiler replies to the IGW (unicast) |
+| 50000 | boiler (eth1) | BoilerListener: receives the boiler replies | GatewayListener resender: relays the IGW broadcasts to the boiler |
+
+Rules that make sure the boiler replies always reach the BoilerListener:
+
+- **The gateway resender is connected to `<broadcast>`** (`SocketManager.connect_with_delta()`). A connected UDP socket only receives datagrams coming from its peer, and nothing comes from 255.255.255.255: the kernel never delivers anything to it, whatever the binding order.
+- **`SO_REUSEADDR`, not `SO_REUSEPORT`, on Linux.** Both are enough to share a port, but `SO_REUSEPORT` load-balances unicast datagrams between the sockets of the port. MacOS keeps `SO_REUSEPORT`, which it needs to share a unicast port.
+- **`SO_BINDTODEVICE` and binding to all addresses on Linux.** Binding a socket to an IP address would prevent it from receiving broadcasts.
+- **The first IGW packet is relayed only once the BoilerListener is bound.** The BoilerListener binds when it receives `GW_PORT`, while the boiler replies within a few ms: a `threading.Event` created by `main.py` is set by the BoilerListener once bound, and the GatewayListener waits for it (at most `queue_timeout`) before relaying.
+- **Sockets are closed explicitly at the end of each session** (`ListenerSender.close()`), so that the next session never shares a port with sockets nobody reads.
+
+The IGW also broadcasts diagnostics from port 50001 to port 50002 (e.g. `type:error / message:control.tcp.recv.timeout / code:30017`). They are not relayed, the boiler does not answer them, but they are useful in a capture to understand why the IGW is unhappy.
+
 ### **Reconnection & Session Management**
 
 The TelnetProxy implements a multi-trigger reconnection system to handle IGW reconnections:
@@ -128,20 +158,27 @@ The TelnetProxy implements a multi-trigger reconnection system to handle IGW rec
 - `_telnet_session_active`: Boolean flag tracking if telnet session is currently active
 - `_session_end_requested`: Flag for detecting `$igw clear` commands that request session termination
 - `_discovery_complete`: Flag tracking when boiler discovery phase completes
+- `_restart_requested`: Flag making sure the restart is requested only once per session
 
 #### **System Restart Orchestration**
 
-The application also implements automatic restart capability:
-- Components can request system restart by publishing "RESTART_REQUESTED" to "system" channel
+The application restarts all its components in-process at the end of each IGW session (e.g. after `$igw clear`):
+- The TelnetProxy requests a restart by publishing "RESTART_REQUESTED" to the "system" channel, from `_cleanup_and_exit()`
+- If the TelnetProxy ends without requesting it (unexpected exception, boiler connection failure, port already in use), `TelnetProxy.service()` and `ThreadedTelnetProxy.run()` log the error and request the restart anyway: otherwise `main.py` would wait forever and the IGW could not reconnect
 - Main loop (`main.py`) monitors for restart requests via `wait_for_restart_trigger()`
-- On restart request, all components are gracefully shutdown via `request_shutdown()` method
+- Whatever ends the session (restart request, unexpected error, keyboard interrupt), `stop_components()` runs in a `finally` block:
+  - requests shutdown of all components via `request_shutdown()`
+  - waits for the started threads to exit (5 s timeout each, a warning is logged otherwise)
+  - closes their sockets explicitly via `close()`: UDP sockets, telnet listening sockets (ports 23 and 4000). MqttInformer disconnects the MQTT clients of its sensors when exiting
 - System creates fresh PubSub instance and restarts all components
+
+Nothing must survive a session: a socket left open on a shared port, a listener left accepting connections or an MQTT client left running are only cleared by restarting the process, which hides the problem (`systemctl restart` "fixes" it).
 
 ### **Platform Compatibility**
 
 The codebase supports both Linux and macOS (Darwin):
-- **Linux**: Uses network interface names (eth0, eth1)
-- **macOS**: Uses IP addresses for interface binding
+- **Linux**: Interfaces can be configured by name (`eth1`) or by IP address (`10.0.0.1`): `SocketManager.resolve_interface()` resolves both to the same (device, IP) pair, and `SO_BINDTODEVICE` is always applied
+- **macOS**: Uses IP addresses for interface binding (no `SO_BINDTODEVICE`)
 - `SocketManager` class abstracts platform differences
 - Platform detection via `platform.system()`
 
@@ -246,6 +283,7 @@ Based on the README's known limitations and current codebase state:
    - First packet triggers binding of sender socket
    - Discovery info published to `bootstrap` channel
    - Pattern: `handle_first()` → `publish_discovery()` → `handle_data()` → `send()`
+   - The GatewayListener `handle_first()` also connects its sender to `<broadcast>` and waits for the BoilerListener to be bound (see UDP Socket Design)
 
 4. **Configuration Management**
    - Three-tier precedence: Defaults → INI file → CLI args
@@ -298,6 +336,7 @@ The codebase is well-structured with clear separation of concerns:
 3. ✅ MQTT stability fixes (dual-loop bug resolved)
 4. ✅ ha-mqtt-discoverable library upgraded to >=0.22.0
 5. ✅ Bidirectional state synchronization via "track" channel (PR #8)
+6. ✅ IGW reconnection after `$igw clear`: boiler replies always reach the BoilerListener, sessions are fully cleaned up, and a crashed TelnetProxy still triggers a restart (branch fix-igw-clear)
 
 The code follows consistent patterns for threading, messaging, and MQTT integration, making it straightforward to extend with new features.
 

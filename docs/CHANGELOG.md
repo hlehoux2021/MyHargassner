@@ -15,7 +15,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - UDP sockets use `SO_REUSEADDR` instead of `SO_REUSEPORT` on Linux, which load-balanced unicast datagrams between sockets sharing a port
   - All sockets are closed explicitly at the end of a session: UDP sockets, telnet listening sockets (ports 23 and 4000), MqttInformer MQTT clients
   - Telnet `accept()` no longer blocks forever, and TelnetProxy no longer binds its ports when shutdown is requested during discovery
-- **bl_iface** - Can be set either to the interface name (`eth1`) or to its IP address (`10.0.0.1`), with the same socket configuration (`SO_BINDTODEVICE` always applied on Linux)
+  - Telnet sockets use `SO_REUSEADDR` only: with `SO_REUSEPORT`, a stale listener could silently take part of the IGW connections
+- **bl_iface** - Can be set either to the interface name (`eth1`) or to its IP address (`10.0.0.1`), with the same socket configuration (`SO_BINDTODEVICE` always applied on Linux). Default is back to `eth1`
+- **Session cleanup after an error** - An unexpected error during a session no longer leaves its threads and sockets running next to the new session: components are always stopped and closed, whatever ends the session
+- **System stuck waiting for a restart** - When the TelnetProxy ended without requesting a restart (e.g. a pm buffer decode error, a failed boiler connection, a telnet port already in use), the system waited forever. The error is now logged with its traceback and a restart is requested
+
+### Changed
+
+- **Documentation** - Added the UDP socket design and the restart orchestration to [TECHNICAL_ARCHITECTURE.md](TECHNICAL_ARCHITECTURE.md), a troubleshooting section for an IGW repeating `get services` to [NETWORK_SETUP.md](NETWORK_SETUP.md), corrected the command-line arguments in the README
 
 ## [1.0.0] - 2024
 
