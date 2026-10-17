@@ -43,6 +43,14 @@ This document describes the organization of MyHargassner documentation files and
 - Troubleshooting common issues
 - Security considerations
 
+#### [docs/TROUBLESHOOTING.md](TROUBLESHOOTING.md)
+**Audience:** Users running MyHargassner on the Raspberry Pi
+**Purpose:** Diagnostic commands for known problems
+
+**Contents:**
+- IGW stuck after a session end (`$igw clear`): log checks, UDP sockets, leftover sockets and threads
+- How to force a session end for testing
+
 ### Developer Documentation
 
 #### [CLAUDE.md](../CLAUDE.md)

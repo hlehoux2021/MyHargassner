@@ -17,6 +17,7 @@ MyHargassner is a Python-based gateway that bridges Hargassner pellet boilers wi
 
 - 📋 [Changelog](docs/CHANGELOG.md) - Version history and recent changes
 - 🔧 [Network Setup Guide](docs/NETWORK_SETUP.md) - Detailed network configuration
+- 🩺 [Troubleshooting](docs/TROUBLESHOOTING.md) - Diagnostic commands (e.g. IGW stuck after `$igw clear`)
 - 🐛 [Bug Tracker](https://github.com/hlehoux2021/MyHargassner/issues) - Report issues and request features
 - 📖 [Architecture Details](CLAUDE.md) - Technical architecture and development guide
 
@@ -152,6 +153,8 @@ To debug problems, use:
 ```bash
 journalctl -u myhargassner.service -n 50 --no-pager
 ```
+
+For more diagnostic commands, see [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).
 
 ---
 
