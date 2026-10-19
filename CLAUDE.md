@@ -108,7 +108,10 @@ Based on reverse engineering work from https://github.com/Jahislove/Hargassner
 
 - Uses `SocketManager` class for platform-agnostic socket operations
 - Implements custom exceptions: `HargSocketError`, `SocketBindError`, `InterfaceError`, `SocketTimeoutError`
-- UDP sockets use `SO_BROADCAST` and `SO_REUSEADDR`
+- UDP sockets use `SO_BROADCAST` and `SO_REUSEADDR`. Do not use `SO_REUSEPORT` on Linux: it load-balances unicast datagrams between sockets sharing a port
+- Each UDP port is shared by a listener and a sender; send-only sockets are connected to `<broadcast>` so the kernel never delivers anything to them (see "UDP Socket Design" in [docs/TECHNICAL_ARCHITECTURE.md](docs/TECHNICAL_ARCHITECTURE.md))
+- Interfaces can be configured by name (`eth1`) or IP (`10.0.0.1`); on Linux `SO_BINDTODEVICE` is always applied and sockets bind to all addresses (binding to an IP prevents receiving broadcasts)
+- Close sockets explicitly at the end of a session (`close()`): never rely on garbage collection, a leftover socket only goes away with a process restart
 - Telnet uses standard TCP sockets with `select()` for non-blocking I/O
 
 ### Thread Safety
@@ -122,6 +125,8 @@ Based on reverse engineering work from https://github.com/Jahislove/Hargassner
 
 - Components should catch and log exceptions without crashing threads
 - Use `try/except` blocks in main loops to allow recovery
+- A TelnetProxy session must always end with a restart request (`_request_restart()`, published once per session), even after an unexpected error, otherwise `main.py` waits forever
+- `main.py` stops and closes all components of a session in a `finally` block (`stop_components()`), whatever ends the session
 - Socket errors trigger automatic reconnection with retry logic (up to 20 attempts)
 - Boiler error responses (`$err`, `$permission denied`, `zERR`) are detected and logged but not yet properly handled as failures
 

@@ -6,7 +6,8 @@ and forwards messages from the IGW to the boiler.
 
 # Standard library imports
 import logging
-from typing import Annotated, Tuple
+import threading
+from typing import Annotated, Optional, Tuple
 
 # Third party imports
 import annotated_types
@@ -29,8 +30,10 @@ class GatewayListenerSender(ListenerSender):
     This class extends ListenerSender class to implement the gateway listener.
     """
     udp_port: Annotated[int, annotated_types.Gt(0)]
+    _boiler_ready: Optional[threading.Event]
 
-    def __init__(self, appconfig: AppConfig, communicator: PubSub, delta: int = 0):
+    def __init__(self, appconfig: AppConfig, communicator: PubSub, delta: int = 0,
+                 boiler_ready: Optional[threading.Event] = None):
         """
         Initialize the gateway listener.
 
@@ -38,6 +41,8 @@ class GatewayListenerSender(ListenerSender):
             appconfig (AppConfig): Application configuration
             communicator (PubSub): Communication instance
             delta (int, optional): Port offset for same-machine scenarios. Defaults to 0.
+            boiler_ready (Event, optional): Set by the boiler listener once bound.
+                The first packet is relayed to the boiler only after it is set.
         """
         # initiate a ListenerSender from gw_iface to bl_iface
         # todo check here if we need to bind to IP address instead of interface name for gw_iface() ; maybe it works only because we are on the default eth0 interface
@@ -46,6 +51,25 @@ class GatewayListenerSender(ListenerSender):
 
         self.udp_port = self._appconfig.udp_port()  # destination port to which gateway is broadcasting
         self.delta = delta
+        self._boiler_ready = boiler_ready
+
+    def handle_first(self, data: bytes, addr: Tuple[str, int]) -> None:
+        """
+        Handle the first packet from the gateway: publish discovery and bind the resender,
+        then make sure the boiler replies can only reach the boiler listener.
+
+        The resender shares its port with the boiler listener (the boiler replies
+        to the port it received the request from). Connecting the resender to
+        <broadcast> makes the kernel never deliver anything to it.
+        We also wait for the boiler listener to be bound, as the boiler replies within a few ms.
+        """
+        super().handle_first(data, addr)
+        self.send_manager.connect_with_delta(port=self.udp_port, delta=self.delta)
+        if self._boiler_ready is not None:
+            if self._boiler_ready.wait(timeout=self._appconfig.queue_timeout()):
+                logging.debug('Boiler listener is ready')
+            else:
+                logging.warning('Boiler listener not ready, relaying to boiler anyway')
 
     def publish_discovery(self, addr: Tuple[str, int]) -> None:
         """
@@ -155,7 +179,8 @@ class GatewayListenerSender(ListenerSender):
 class ThreadedGatewayListenerSender(ThreadedListenerSender):
     """This class implements a Thread to run the gateway."""
 
-    def __init__(self, appconfig: AppConfig, communicator: PubSub, delta=0):
+    def __init__(self, appconfig: AppConfig, communicator: PubSub, delta=0,
+                 boiler_ready: Optional[threading.Event] = None):
         """
         Initialize the threaded gateway listener.
 
@@ -163,8 +188,9 @@ class ThreadedGatewayListenerSender(ThreadedListenerSender):
             appconfig: Application configuration
             communicator: PubSub instance for inter-component communication
             delta: Port delta for same-machine scenarios
+            boiler_ready: Event set by the boiler listener once bound
         """
-        gls = GatewayListenerSender(appconfig, communicator, delta)
+        gls = GatewayListenerSender(appconfig, communicator, delta, boiler_ready)
         super().__init__(gls, 'GatewayListener')
 
     def run(self):

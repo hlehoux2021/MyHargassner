@@ -158,3 +158,13 @@ cython_debug/
 #  and can be added to the global gitignore or merged into this file.  For a more nuclear
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
+.github/.DS_Store
+captures/capture-confort.pcapng
+captures/capture-start-gw.pcapng
+captures/capture.pcapng
+captures/dump
+captures/dump2
+captures/dump3
+captures/dump5
+captures/dump7
+myhargassner/.DS_Store

@@ -3,13 +3,14 @@ Common socket management utilities and exceptions for the HARG project.
 """
 
 # Standard library imports
-import fcntl
 import ipaddress
 import logging
 import socket
-import struct
 import platform
 from typing import Tuple, Union, Optional
+
+# Third party imports
+import psutil
 
 # Project imports
 from myhargassner.appconfig import AppConfig
@@ -112,7 +113,11 @@ class SocketManager:
 
         self.is_broadcast = is_broadcast
         self._socket: Optional[socket.socket] = None
+        self._peer: Optional[Tuple[str, int]] = None  # destination set by connect_with_delta()
         self._validate_interface()
+        # src_iface may be an interface name (eth1) or its IP address (10.0.0.1):
+        # resolve both so the socket is configured the same way in either case
+        self.device, self.ip = self.resolve_interface(self.src_iface)
 
     def _validate_interface(self) -> None:
         """
@@ -133,46 +138,44 @@ class SocketManager:
             )
 
     @staticmethod
-    def get_interface_ip(interface_spec: str) -> str:
+    def resolve_interface(interface_spec: str) -> Tuple[Optional[str], Optional[str]]:
         """
-        Get the IP address for the specified interface.
-        
+        Resolve an interface specification into its device name and IPv4 address.
+
+        The specification can be either an interface name (e.g. 'eth1') or
+        the IPv4 address of an interface (e.g. '10.0.0.1').
+
         Args:
-            interface_spec: Interface specification as string (e.g., 'eth0' or '10.0.0.1')
-            
+            interface_spec: Interface name or IPv4 address
+
         Returns:
-            str: The IP address as string
-        
+            Tuple of (device, ip). device is None if no local interface owns the IP
+            (e.g. 127.0.0.1 used with simulators), ip is None if the device has no IPv4 address.
+
         Raises:
-            InterfaceError: If the interface is invalid or has no IP address
+            InterfaceError: If interface_spec is an interface name that does not exist
         """
-        # Check if it's already an IP address
+        addrs = psutil.net_if_addrs()
         try:
             ipaddress.ip_address(interface_spec)
-            logging.debug('Interface spec is already an IP address: %s', interface_spec)
-            return interface_spec
         except ValueError:
-            # It's an interface name, get its IP using fcntl.ioctl
-            pass
-
-        try:
-            # Use fcntl.ioctl to get the IP address of the specific interface
-            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
-                # Use SIOCGIFADDR ioctl to get interface address
-                packed_iface = struct.pack('256s', interface_spec[:15].encode('utf-8'))
-                packed_addr = fcntl.ioctl(s.fileno(), 0x8915, packed_iface)[20:24]
-                # Convert packed address to dotted decimal notation
-                ip_addr = socket.inet_ntoa(packed_addr)
-
-            logging.debug('Found IP %s for interface %s', ip_addr, interface_spec)
-            return ip_addr
-
-        except (OSError, IOError) as e:
-            # Interface doesn't exist or has no IP
-            raise InterfaceError(f'Error getting IP for interface {interface_spec}: {str(e)}') from e
-        except Exception as e:
-            # Any other error
-            raise InterfaceError(f'Unexpected error getting IP for interface {interface_spec}: {str(e)}') from e
+            # It's an interface name, look for its IPv4 address
+            if interface_spec not in addrs:
+                raise InterfaceError(f'Interface {interface_spec} not found')  # pylint: disable=raise-missing-from
+            for addr in addrs[interface_spec]:
+                if addr.family == socket.AF_INET:
+                    logging.debug('Found IP %s for interface %s', addr.address, interface_spec)
+                    return interface_spec, addr.address
+            logging.warning('Interface %s has no IPv4 address', interface_spec)
+            return interface_spec, None
+        # It's an IP address, look for the interface owning it
+        for device, device_addrs in addrs.items():
+            for addr in device_addrs:
+                if addr.family == socket.AF_INET and addr.address == interface_spec:
+                    logging.debug('Found interface %s for IP %s', device, interface_spec)
+                    return device, interface_spec
+        logging.debug('No local interface owns IP %s', interface_spec)
+        return None, interface_spec
 
     @staticmethod
     def is_valid_ip(ip: str) -> bool:
@@ -212,23 +215,30 @@ class SocketManager:
         try:
             logging.debug('SocketManager: Creating UDP socket')
             self._socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
-            self._socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
-            logging.debug('SocketManager: Set SO_REUSEPORT')
+            # A listener and a sender share each UDP port (e.g. 50000 on the boiler side).
+            # On Linux SO_REUSEADDR is enough to share the port. We avoid SO_REUSEPORT there
+            # because it load-balances unicast datagrams between the sockets.
+            # MacOS needs SO_REUSEPORT to share a unicast port.
+            self._socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            logging.debug('SocketManager: Set SO_REUSEADDR')
+            if platform.system() == 'Darwin':
+                self._socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+                logging.debug('SocketManager: Set SO_REUSEPORT')
             if self.is_broadcast:
                 self._socket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
                 logging.debug('SocketManager: Set SO_BROADCAST')
             timeout = self.appconfig.socket_timeout
             self._socket.settimeout(timeout)
             logging.debug('SocketManager: Set socket timeout to %s', timeout)
-            if platform.system() == 'Linux' and not self.is_valid_ip(self.src_iface):
-                # On Linux, bind to interface name
+            if platform.system() == 'Linux' and self.device:
+                # On Linux, bind to the device whether it was configured by name or by IP
                 # SO_BINDTODEVICE = 25 from Linux <socket.h>
                 self._socket.setsockopt(
                     socket.SOL_SOCKET,
                     25,  # SO_BINDTODEVICE
-                    self.src_iface.encode('utf-8')
+                    self.device.encode('utf-8')
                 )
-                logging.debug('SocketManager: Set SO_BINDTODEVICE to %s', self.src_iface)
+                logging.debug('SocketManager: Set SO_BINDTODEVICE to %s', self.device)
             # On MacOS, binding to IP is done during bind() call
             logging.debug('SocketManager: Socket created successfully')
             return self._socket
@@ -303,6 +313,7 @@ class SocketManager:
                     self._socket.bind((self.src_iface, adjusted_port))
             else:
                 # assuming we're on Linux, we bind to any because we have set SO_BINDTODEVICE
+                # (binding to the IP would prevent receiving broadcasts)
                 logging.debug('SocketManager: Binding to all on port %d (original port %d with delta %d)',
                           adjusted_port, port, delta)
                 self._socket.bind(('', adjusted_port))
@@ -310,6 +321,35 @@ class SocketManager:
         except socket.error as e:
             logging.error('SocketManager: Failed to bind_with_delta: %s', str(e))
             raise SocketBindError(f"Failed to bind socket: {str(e)}") from e
+
+    def connect_with_delta(self, port: int, delta: int = 0, dest: str = '<broadcast>') -> None:
+        """
+        Connect the socket to its destination, with port delta adjustment.
+
+        A connected UDP socket only receives datagrams coming from its peer.
+        Connecting a send-only socket to '<broadcast>' therefore guarantees it never
+        receives anything: datagrams sent to its port are delivered to the listener
+        sharing that port, whatever the binding order.
+
+        Args:
+            port: Base port number (e.g. 35601)
+            delta: Port adjustment used if same machine (e.g. +100 to connect to 35701)
+            dest: Destination address (defaults to broadcast)
+
+        Raises:
+            SocketBindError: If connecting fails
+        """
+        if not self._socket:
+            logging.error('SocketManager: Cannot connect_with_delta, socket not created')
+            raise SocketBindError("Socket not created")
+        adjusted_port = port + delta if self.is_same_machine() else port
+        try:
+            logging.debug('SocketManager: Connecting to %s on port %d', dest, adjusted_port)
+            self._socket.connect((dest, adjusted_port))
+            self._peer = (dest, adjusted_port)
+        except socket.error as e:
+            logging.error('SocketManager: Failed to connect_with_delta: %s', str(e))
+            raise SocketBindError(f"Failed to connect socket: {str(e)}") from e
 
     def send_with_delta(self, data: bytes, port: int, delta: int = 0, dest: str = '<broadcast>') -> None:
         """
@@ -351,7 +391,11 @@ class SocketManager:
 
             logging.debug('SocketManager: Sending from %s to %s on port %d',
                           self.src_iface, dest, adjusted_port)
-            self._socket.sendto(data, (dest, adjusted_port))
+            if self._peer == (dest, adjusted_port):
+                # MacOS refuses sendto() on a connected socket
+                self._socket.send(data)
+            else:
+                self._socket.sendto(data, (dest, adjusted_port))
             logging.debug('SocketManager: send_with_delta successful')
         except socket.timeout as e:
             logging.error('SocketManager: Send operation timed out')
@@ -419,6 +463,7 @@ class SocketManager:
         if self._socket:
             self._socket.close()
             self._socket = None
+            self._peer = None
 
     def __del__(self) -> None:
         """Ensure socket is closed on deletion."""

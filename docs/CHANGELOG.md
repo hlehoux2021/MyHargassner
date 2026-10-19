@@ -13,7 +13,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Added parameters 7, 8 (Zone 2 temperatures) and A6d (ambient correction)
   - Moved parameter command list to `HargConfig.commands` for centralized configuration
 
+### Fixed
+
+- **IGW blocked after `$igw clear`** - After the in-process restart, the IGW kept sending `get services` every 20 s without ever receiving the boiler reply (branch fix-igw-clear)
+  - The boiler replies by unicast to the port the request came from, which is shared by the gateway resender and the boiler listener. The resender is now connected to `<broadcast>`, so the kernel never delivers anything to it and replies always reach the boiler listener
+  - The first packet is relayed to the boiler only once the boiler listener is bound (the boiler replies within a few ms)
+  - UDP sockets use `SO_REUSEADDR` instead of `SO_REUSEPORT` on Linux, which load-balanced unicast datagrams between sockets sharing a port
+  - All sockets are closed explicitly at the end of a session: UDP sockets, telnet listening sockets (ports 23 and 4000), MqttInformer MQTT clients
+  - Telnet `accept()` no longer blocks forever, and TelnetProxy no longer binds its ports when shutdown is requested during discovery
+  - Telnet sockets use `SO_REUSEADDR` only: with `SO_REUSEPORT`, a stale listener could silently take part of the IGW connections
+- **bl_iface** - Can be set either to the interface name (`eth1`) or to its IP address (`10.0.0.1`), with the same socket configuration (`SO_BINDTODEVICE` always applied on Linux). Default is back to `eth1`
+- **Session cleanup after an error** - An unexpected error during a session no longer leaves its threads and sockets running next to the new session: components are always stopped and closed, whatever ends the session
+- **System stuck waiting for a restart** - When the TelnetProxy ended without requesting a restart (e.g. a pm buffer decode error, a failed boiler connection, a telnet port already in use), the system waited forever. The error is now logged with its traceback and a restart is requested
+
 ### Changed
+
+- **Documentation** - Added the UDP socket design and the restart orchestration to [TECHNICAL_ARCHITECTURE.md](TECHNICAL_ARCHITECTURE.md), a troubleshooting section for an IGW repeating `get services` to [NETWORK_SETUP.md](NETWORK_SETUP.md), corrected the command-line arguments in the README
 
 - Logging Level Adjustments (commit 9b8a776)
   - Reduced log verbosity: downgraded several messages from `warning`/`info` to `log(15)`/`debug`

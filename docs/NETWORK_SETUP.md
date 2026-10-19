@@ -151,6 +151,24 @@ If you experience routing issues:
 2. Verify the IGW is on the home network (eth0), not directly connected to eth1
 3. Check firewall rules aren't blocking traffic: `sudo iptables -L`
 
+### IGW Repeating `get services` Every 20 Seconds
+
+If the log shows `UDP received: get services` every 20 s and the IGW never opens its telnet session, the IGW does not receive the boiler replies. Check where the replies go:
+
+```bash
+# Does the boiler (e.g. 10.0.0.72) reply? Its reply is a 318-byte unicast to 10.0.0.1:50000
+sudo tcpdump -eni eth1 'udp and (port 50000 or port 35601)'
+
+# Sockets of the service: the gateway resender must be connected to 255.255.255.255:35601,
+# device-bound sockets show up as 0.0.0.0%eth1:50000
+sudo ss -uapn '( sport = :50000 or sport = :35601 )'
+
+# What the IGW complains about (diagnostics broadcasts, e.g. control.tcp.recv.timeout)
+sudo tcpdump -ni eth0 -A 'udp port 50002'
+```
+
+If the boiler replies but the log never shows `Received buffer of 318 bytes from 10.0.0.x:35601`, the reply is delivered to another socket than the BoilerListener. See "UDP Socket Design" in [TECHNICAL_ARCHITECTURE.md](TECHNICAL_ARCHITECTURE.md).
+
 ## Advanced Configuration
 
 ### Using Different IP Ranges
@@ -165,7 +183,7 @@ If 10.0.0.0/24 conflicts with your network, you can use a different range:
 
 If you have more than two interfaces, ensure:
 - Primary interface (connected to home network) is correctly specified in `myhargassner.ini` (gw_iface)
-- Secondary interface (connected to boiler) is correctly specified in `myhargassner.ini` (bl_iface)
+- Secondary interface (connected to boiler) is correctly specified in `myhargassner.ini` (bl_iface), by name (`eth1`) or by its IP address (`10.0.0.1`)
 
 See the main [README.md](../README.md) for configuration file details.
 
