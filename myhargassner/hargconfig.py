@@ -256,3 +256,15 @@ class HargConfig():
 			90 :'c147', 91:'c148', 92:'c149', 93:'c150', 94:'c151', 95:'c152', 96:'c153', 97:'c169', 98:'c170', 99:'c171',
 			100:'c172',101:'c173',102:'c174',103:'c182',104:'c181' ,105:'c165',106:'c166',107:'c167'
         }
+        # List of commands to get boiler parameters via telnetproxy
+        self.commands= [
+            b'$par get PR001\r\n', # Mode Boiler
+            b'$par get PR011\r\n', # Mode Zone 1
+            b'$par get PR012\r\n', # Mode Zone 2
+            b'$par get PR040\r\n', # démarrage Tampon.
+            b'$par get 4\r\n', # parameter 4 : Zone 1, Temp. ambiante jour
+            b'$par get 5\r\n', # parameter 5 : Zone 1, Temp. ambiante de réduit
+            b'$par get 7\r\n', # parameter 7 : Zone 2, Temp. ambiante jour
+            b'$par get 8\r\n', # parameter 8 : Zone 2, Temp. ambiante de réduit
+            b'$par get A6d\r\n' # parameter A6d : Correction d'ambiance télécommande (FR35)
+        ]

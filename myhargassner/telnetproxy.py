@@ -20,6 +20,7 @@ from myhargassner.pubsub.pubsub import PubSub
 # Project imports
 from myhargassner.telnethelper import TelnetClient
 from myhargassner.appconfig import AppConfig
+from myhargassner import hargconfig
 from myhargassner.core import ChanelReceiver, ShutdownAware
 from myhargassner.analyser import Analyser
 from myhargassner.mqtt_actuator import ThreadedMqttActuator, MqttBase
@@ -193,7 +194,7 @@ class TelnetService:
         """
         self._listen = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         if platform.system() == 'Linux' and not SocketManager.is_valid_ip(src_iface.decode('utf-8')):
-            self._listen.setsockopt(socket.SOL_SOCKET, socket.SO_BINDTODEVICE, src_iface) #pylint: disable=E1101
+            self._listen.setsockopt(socket.SOL_SOCKET, socket.SO_BINDTODEVICE, src_iface) # type: ignore #pylint: disable=E1101
         # SO_REUSEADDR allows rebinding while old connections are in TIME_WAIT.
         # No SO_REUSEPORT: it would let a stale listener silently take part of the connections
         self._listen.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -465,22 +466,15 @@ class TelnetProxy(ShutdownAware, ChanelReceiver, MqttBase):
         Get the boiler configuration.
 
         """
+        config: hargconfig.HargConfig = hargconfig.HargConfig()
         message: str = 'BoilerConfig:'
-        # todo make this as an HargConfig parameter.
-        commands= [
-            b'$par get PR001\r\n', # Mode Boiler
-            b'$par get PR011\r\n', # Mode Zone 1
-            b'$par get PR012\r\n', # Mode Zone 2
-            b'$par get PR040\r\n', # démarrage Tampon.
-            b'$par get 4\r\n', # parameter 4 : Temp. ambiante jour
-            b'$par get 5\r\n' # parameter 5 : Temp. ambiante de réduit
-        ]
+
         if not self._client.connected:
             logging.error('Client not connected')
             return
         logging.debug('telnet getting boiler config from %s', repr(self.bl_addr))
 
-        for cmd in commands:
+        for cmd in config.commands:
             logging.debug('telnet sending command %s', cmd)
             try:
                 self._client.send(cmd)

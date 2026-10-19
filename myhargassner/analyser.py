@@ -64,7 +64,9 @@ class Analyser():
         _str_parts: list[str] = []
         _session_end_requested: bool = False
 
-        logging.log(15, 'Analyser: request=%s', repr(data))
+        #log verbose the request except for $setkomm and $erract which occur too frequently
+        if b'$setkomm' not in data and b'$erract' not in data:
+            logging.log(15, 'Analyser: request=%s', repr(data))
         _str_parts = data.decode('ascii').split('\r\n')
         for _part in _str_parts:
             #logging.debug('_part=%s',_part)

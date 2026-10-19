@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Extended Zone 2 Temperature Parameters (commit b732665)
+  - Added parameters 7, 8 (Zone 2 temperatures) and A6d (ambient correction)
+  - Moved parameter command list to `HargConfig.commands` for centralized configuration
+
 ### Fixed
 
 - **IGW blocked after `$igw clear`** - After the in-process restart, the IGW kept sending `get services` every 20 s without ever receiving the boiler reply (branch fix-igw-clear)
@@ -23,6 +29,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **Documentation** - Added the UDP socket design and the restart orchestration to [TECHNICAL_ARCHITECTURE.md](TECHNICAL_ARCHITECTURE.md), a troubleshooting section for an IGW repeating `get services` to [NETWORK_SETUP.md](NETWORK_SETUP.md), corrected the command-line arguments in the README
+
+- Logging Level Adjustments (commit 9b8a776)
+  - Reduced log verbosity: downgraded several messages from `warning`/`info` to `log(15)`/`debug`
+
+- Socket Platform Compatibility (commit 93dc754)
+  - Improved SO_BINDTODEVICE handling on macOS
+
+### Previous Unreleased Work - feature-011
+
+### Added
+
+- **$A Parameter Support** (commits 548d2c9, 38d9784)
+  - Added request for A6d parameter in TelnetProxy parameter fetch list
+  - Added parsing logic in MqttActuator for $A parameter responses with format: `$Axx;type;current;min;max;increment;unit;default;...;name;...`
+  - Supports decimal values with min/max/increment constraints
+  - Creates MQTT Number entities for $A parameters with name, unit, current value, and adjustment range
+
+### Fixed
+
+- **Unbound param_id Variable** (commit 2efcf8f)
+  - Added explicit variable initialization (`param_id: Optional[str] = None`) in callback_select() and callback_number() methods
+- **$A Parameter Key Type** (commit 1da91b0)
+  - Changed key field from `int(key)` to `key` (string) in $A parameter parsing
+
+### Changed
+
+- **Logging Verbosity** (commit 548d2c9)
+  - Filtered out frequent `$setkomm` and `$erract` messages from verbose logging (log level 15)
+  - Added explicit debug logging for parameter responses in MqttActuator
 
 ## [1.0.0] - 2024
 

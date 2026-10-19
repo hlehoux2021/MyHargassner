@@ -94,6 +94,7 @@ class MqttActuator(ShutdownAware, ChanelReceiver, MqttBase):
                 response = response.strip().rstrip(';')
                 if not response or response == '$--':
                     continue
+                logging.log(15, "Param response: %s", response)
                 items = response.split(';')
                 # Numeric parameter format:
                 # $id;type;current;min;max;step;unit;default;0;0;0;name
@@ -131,6 +132,31 @@ class MqttActuator(ShutdownAware, ChanelReceiver, MqttBase):
                         }
                     except Exception as e:
                         logging.error(f"Failed to parse numeric parameter: {response} ({e})")
+                    continue
+                # $A parameter
+                # Example: $A6d;3;1.500;-6.000;6.000;0.500;°C;0.000;0;0;0;Zone 1 Corr.Amb. Télécommande;0
+                if items[0].startswith('$A') and items[0][2:].isalnum():
+                    try:
+                        key = items[0][1:]
+                        current = float(items[2])
+                        min_val = float(items[3])
+                        max_val = float(items[4])
+                        increment = float(items[5])
+                        unit = items[6]
+                        name = items[11] if len(items) > 11 else f"Param {key}"
+                        default = float(items[7])
+                        result[name] = {
+                            'type': 'number',
+                            'key': key,
+                            'current': current,
+                            'min': min_val,
+                            'max': max_val,
+                            'increment': increment,
+                            'unit': unit,
+                            'default': default
+                        }
+                    except Exception as e:
+                        logging.error(f"Failed to parse $A numeric parameter: {response} ({e})")
                     continue
                 # Select parameter format (PR = Parameter Response):
                 # $PRxxx;6;current;max;default;0;0;0;name;value1;value2;...;0;
@@ -318,6 +344,7 @@ class MqttActuator(ShutdownAware, ChanelReceiver, MqttBase):
         """
         logging.debug("MqttActuator.callback_select called for topic: %s", message.topic)
         with self._service_lock:
+            param_id: Optional[str] = None
             try:
                 # Look up param_id from the message topic
                 param_id = self._topic_to_select_id.get(message.topic)
@@ -367,7 +394,7 @@ class MqttActuator(ShutdownAware, ChanelReceiver, MqttBase):
                     else:
                         logging.warning("No Select found for parameter ID: %s", param_id)
                 else:
-                    logging.warning('No new mode found for %s in response, keeping requested value: %s',
+                    logging.log(15, 'No new mode found for %s in response, keeping requested value: %s',
                                param_id, payload)
                     # If we don't get a response, keep the requested value
                     select = self._selects.get(param_id)
@@ -442,6 +469,7 @@ class MqttActuator(ShutdownAware, ChanelReceiver, MqttBase):
         """
         logging.debug("MqttActuator.callback_number called for topic: %s", message.topic)
         with self._service_lock:
+            param_id: Optional[str] = None
             try:
                 # Look up param_id from the message topic
                 param_id = self._topic_to_number_id.get(message.topic)
@@ -471,10 +499,10 @@ class MqttActuator(ShutdownAware, ChanelReceiver, MqttBase):
                     logging.error("Invalid payload for number entity: %s (%s)", payload, e)
                     return
                 command = f'$par set "{param_id};3;{value}"\r\n'
-                logging.info("Sending command: %s", command)
+                logging.debug("Sending command: %s", command)
                 new_value = self._send_command_and_parse(command, param_id, value_type='number')
                 if new_value is not None:
-                    logging.info('Final new value for param %s (id: %s): %s', param_id, param_id, new_value)
+                    logging.log(15,'New value for param %s (id: %s): %s', param_id, param_id, new_value)
                     number = self._numbers.get(param_id)
                     if number is not None:
                         try:
@@ -484,7 +512,7 @@ class MqttActuator(ShutdownAware, ChanelReceiver, MqttBase):
                     else:
                         logging.warning("No Number found for parameter ID: %s", param_id)
                 else:
-                    logging.info('No new value extracted for param %s (id: %s)', param_id, param_id)
+                    logging.log(15, 'No new value extracted for param %s (id: %s)', param_id, param_id)
             except Exception as e:
                 logging.error("Error in callback_number for %s: %s", param_id, str(e))
             logging.debug("MqttActuator.callback_number" \
@@ -860,7 +888,7 @@ class MqttActuator(ShutdownAware, ChanelReceiver, MqttBase):
                                 result_float = float(parts[1].strip())
                             else:
                                 result_str = parts[1].strip()
-                            logging.info('Extracted new value for %s: %s', param_id, parts[1].strip())
+                            logging.debug('Extracted new value for %s: %s', param_id, parts[1].strip())
                         except Exception:
                             pass
 
