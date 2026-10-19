@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-10-19
+
 ### Added
 
 - Extended Zone 2 Temperature Parameters (commit b732665)
@@ -59,7 +61,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Filtered out frequent `$setkomm` and `$erract` messages from verbose logging (log level 15)
   - Added explicit debug logging for parameter responses in MqttActuator
 
-## [1.0.0] - 2024
+## [0.6] - 2025-11-08
 
 ### Added
 
