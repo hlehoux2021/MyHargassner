@@ -64,8 +64,8 @@ class Analyser():
         _str_parts: list[str] = []
         _session_end_requested: bool = False
 
-        #log verbose the request except for $setkomm and $erract which occur too frequently
-        if b'$setkomm' not in data and b'$erract' not in data:
+        # log verbose the request except for some which occur too frequently
+        if (b'$setkomm' not in data and b'$erract' not in data and b'$igw set' not in data):
             logging.log(15, 'Analyser: request=%s', repr(data))
         _str_parts = data.decode('ascii').split('\r\n')
         for _part in _str_parts:
@@ -139,7 +139,7 @@ class Analyser():
                 #logging.debug('empty _part')
                 pass
             else:
-                logging.debug('Analyser received unhandled request %s - treating as passthrough', _part)
+                logging.info('Analyser received unhandled request %s - treating as passthrough', _part)
                 _state = 'passthrough'  # mark it as passthrough
         logging.debug('_state/_part: %s/%s', _state, _part)
         return _state, _session_end_requested
